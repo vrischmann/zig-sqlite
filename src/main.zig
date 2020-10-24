@@ -500,7 +500,7 @@ test "sqlite: statement exec" {
     }
 }
 
-pub fn dbMode() Db.Mode {
+fn dbMode() Db.Mode {
     return if (build_options.is_ci) blk: {
         break :blk .{ .Memory = {} };
     } else blk: {
