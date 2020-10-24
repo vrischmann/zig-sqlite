@@ -133,16 +133,18 @@ pub const Db = struct {
 ///     var stmt = try db.prepare("SELECT name FROM foo WHERE id = ?", .{ .id = 200 });
 ///     defer stmt.deinit();
 ///
-///     const Row = struct { id: usize };
-///     const row = try stmt.one(Row .{});
+///     const name = try stmt.one([]const u8, .{});
 ///
 /// The all function can be used to select all rows:
 ///
-///     var stmt = try db.prepare("SELECT name FROM foo", .{});
+///     var stmt = try db.prepare("SELECT id, name FROM foo", .{});
 ///     defer stmt.deinit();
 ///
-///     const Row = struct { id: usize };
-///     const rows = try stmt.all(Row .{});
+///     const Row = struct {
+///         id: usize,
+///         name: []const u8,
+///     };
+///     const rows = try stmt.all(Row, .{ .allocator = allocator });
 ///
 /// Look at aach function for more complete documentation.
 ///
