@@ -254,6 +254,9 @@ pub const Statement = struct {
     /// an allocator used to read text and blobs.
     ///
     pub fn one(self: *Self, comptime Type: type, options: anytype) !?Type {
+        if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            @compileError("options passed to all must be a struct");
+        }
         const TypeInfo = @typeInfo(Type);
 
         var result = c.sqlite3_step(self.stmt);
@@ -295,6 +298,9 @@ pub const Statement = struct {
     /// Note that for this function the allocator is mandatory.
     ///
     pub fn all(self: *Self, comptime Type: type, options: anytype) ![]Type {
+        if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            @compileError("options passed to all must be a struct");
+        }
         const TypeInfo = @typeInfo(Type);
 
         var rows = std.ArrayList(Type).init(options.allocator);
