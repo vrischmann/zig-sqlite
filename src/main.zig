@@ -10,7 +10,7 @@ const c = @cImport({
 
 const logger = std.log.scoped(.sqlite);
 
-/// Db is a wrapper around a SQLite database, providing high-level functions to executing queries.
+/// Db is a wrapper around a SQLite database, providing high-level functions for executing queries.
 /// A Db can be opened with a file database or a in-memory database:
 ///
 ///     // File database
