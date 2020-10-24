@@ -15,11 +15,11 @@ const logger = std.log.scoped(.sqlite);
 ///
 ///     // File database
 ///     var db: sqlite.Db = undefined;
-///     try db.init(allocator, .{ .File = "/tmp/data.db" });
+///     try db.init(allocator, .{ .mode = { .File = "/tmp/data.db" } });
 ///
 ///     // In memory database
 ///     var db: sqlite.Db = undefined;
-///     try db.init(allocator, .{ .Memory={} });
+///     try db.init(allocator, .{ .mode = { .Memory = {} } });
 ///
 pub const Db = struct {
     const Self = @This();
@@ -34,8 +34,10 @@ pub const Db = struct {
     };
 
     /// init creates a database with the provided `mode`.
-    pub fn init(self: *Self, allocator: *mem.Allocator, mode: Mode) !void {
+    pub fn init(self: *Self, allocator: *mem.Allocator, options: anytype) !void {
         self.allocator = allocator;
+
+        const mode = if (@hasField(@TypeOf(options), "mode")) options.mode else .Memory;
 
         switch (mode) {
             .File => |path| {
@@ -388,7 +390,7 @@ test "sqlite: statement exec" {
     var allocator = &arena.allocator;
 
     var db: Db = undefined;
-    try db.init(testing.allocator, dbMode());
+    try db.init(testing.allocator, .{ .mode = dbMode() });
 
     // Create the tables
 
