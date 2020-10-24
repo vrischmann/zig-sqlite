@@ -117,6 +117,11 @@ pub const Db = struct {
     }
 };
 
+pub const Bytes = union(enum) {
+    Blob: []const u8,
+    Text: []const u8,
+};
+
 /// Statement is a wrapper around a SQLite statement, providing high-level functions to execute
 /// a statement and retrieve rows for SELECT queries.
 ///
@@ -153,11 +158,17 @@ pub const Statement = struct {
 
     stmt: *c.sqlite3_stmt,
 
+    const BytesType = enum {
+        Text,
+        Blob,
+    };
+
     fn prepare(db: *Db, flags: c_uint, comptime query: []const u8, values: anytype) !Self {
-        const StructType = @typeInfo(@TypeOf(values)).Struct;
+        const StructType = @TypeOf(values);
+        const StructTypeInfo = @typeInfo(StructType).Struct;
         comptime {
             const bind_parameter_count = std.mem.count(u8, query, "?");
-            if (bind_parameter_count != StructType.fields.len) {
+            if (bind_parameter_count != StructTypeInfo.fields.len) {
                 @compileError("bind parameter count != number of fields in tuple/struct");
             }
         }
@@ -183,7 +194,7 @@ pub const Statement = struct {
 
         // Bind
 
-        inline for (StructType.fields) |struct_field, _i| {
+        inline for (StructTypeInfo.fields) |struct_field, _i| {
             const i = @as(usize, _i);
             const field_type_info = @typeInfo(struct_field.field_type);
             const field_value = @field(values, struct_field.name);
@@ -192,6 +203,10 @@ pub const Statement = struct {
             switch (struct_field.field_type) {
                 []const u8, []u8 => {
                     _ = c.sqlite3_bind_text(stmt, column, field_value.ptr, @intCast(c_int, field_value.len), null);
+                },
+                Bytes => switch (field_value) {
+                    .Text => |v| _ = c.sqlite3_bind_text(stmt, column, v.ptr, @intCast(c_int, v.len), null),
+                    .Blob => |v| _ = c.sqlite3_bind_blob(stmt, column, v.ptr, @intCast(c_int, v.len), null),
                 },
                 else => switch (field_type_info) {
                     .Int, .ComptimeInt => _ = c.sqlite3_bind_int64(stmt, column, @intCast(c_longlong, field_value)),
@@ -511,6 +526,16 @@ test "sqlite: statement exec" {
         testing.expect(age != null);
 
         testing.expectEqual(@as(usize, 33), age.?);
+    }
+
+    // Test with a Bytes struct
+
+    {
+        // try db.exec("INSERT INTO user(id, name, age) VALUES(?, ?, ?)", .{
+        //     .id = 200,
+        //     .name = Bytes{ .Text = "hello" },
+        //     .age = 20,
+        // });
     }
 }
 
