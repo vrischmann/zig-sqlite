@@ -531,11 +531,18 @@ test "sqlite: statement exec" {
     // Test with a Bytes struct
 
     {
-        // try db.exec("INSERT INTO user(id, name, age) VALUES(?, ?, ?)", .{
-        //     .id = 200,
-        //     .name = Bytes{ .Text = "hello" },
-        //     .age = 20,
-        // });
+        // NOTE(vincent): can't yet pass an anonymous struct, the compiler crashes.
+        const Params = struct {
+            id: usize,
+            name: Bytes,
+            age: usize,
+        };
+
+        try db.exec("INSERT INTO user(id, name, age) VALUES(?, ?, ?)", Params{
+            .id = 200,
+            .name = .{ .Text = "hello" },
+            .age = 20,
+        });
     }
 }
 
