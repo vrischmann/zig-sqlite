@@ -37,7 +37,7 @@ pub const Db = struct {
     pub fn init(self: *Self, allocator: *mem.Allocator, options: anytype) !void {
         self.allocator = allocator;
 
-        const mode = if (@hasField(@TypeOf(options), "mode")) options.mode else .Memory;
+        const mode: Mode = if (@hasField(@TypeOf(options), "mode")) options.mode else .Memory;
 
         switch (mode) {
             .File => |path| {
@@ -385,6 +385,12 @@ pub const Statement = struct {
         return value;
     }
 };
+
+test "sqlite: db init" {
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, .{});
+}
 
 test "sqlite: statement exec" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
