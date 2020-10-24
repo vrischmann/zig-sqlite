@@ -9,14 +9,14 @@ fn linkAll(obj: *std.build.LibExeObjStep) void {
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
-    const lib = b.addStaticLibrary("zig-sqlite", "src/main.zig");
+    const lib = b.addStaticLibrary("zig-sqlite", "sqlite.zig");
     lib.setBuildMode(mode);
     linkAll(lib);
     lib.install();
 
     const is_ci = b.option(bool, "is_ci", "Identifies if it runs in a CI environment") orelse false;
 
-    var main_tests = b.addTest("src/main.zig");
+    var main_tests = b.addTest("sqlite.zig");
     main_tests.setBuildMode(mode);
     main_tests.addBuildOption(bool, "is_ci", is_ci);
     linkAll(main_tests);
