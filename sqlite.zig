@@ -117,6 +117,12 @@ pub const Db = struct {
     }
 };
 
+/// Bytes is used to represent a byte slice with its SQLite datatype.
+///
+/// Since Zig doesn't have strings we can't tell if a []u8 must be stored as a SQLite TEXT or BLOB,
+/// this type can be used to communicate this when executing a statement.
+///
+/// If a []u8 or []const u8 is passed as bind parameter it will be treated as TEXT.
 pub const Bytes = union(enum) {
     Blob: []const u8,
     Text: []const u8,
