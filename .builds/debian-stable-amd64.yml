@@ -1,0 +1,25 @@
+image: debian/stable
+arch: amd64
+packages:
+  - curl
+  - jq
+  - libsqlite3-dev
+sources:
+  - https://git.sr.ht/~vrischmann/zig-sqlite
+secrets: []
+
+tasks:
+  - install_zig: |
+      curl -L -s "https://ziglang.org/download/index.json" | jq '.master["x86_64-linux"].tarball' -r >> ~/zig_master_url
+      curl -J -o ~/zig.tar.xz $(cat ~/zig_master_url)
+      tar xJf ~/zig.tar.xz
+      mv ~/zig-linux-* ~/zig-master
+      echo "export PATH=$PATH:~/zig-master" >> ~/.buildenv
+  - test: |
+      cd zig-sqlite
+      TERM=dumb zig build test -Dis_ci
+
+triggers:
+  - action: email
+    condition: failure
+    to: "Vincent Rischmann <vincent@rischmann.fr>"
