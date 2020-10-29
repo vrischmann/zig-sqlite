@@ -9,6 +9,11 @@ This package is a thin wrapper around [sqlite](https://sqlite.org/index.html)'s 
  * `libsqlite3-dev` for Debian and derivatives
  * `sqlite3-devel` for Fedora
 
+## Features
+
+* Preparing, executing statements
+* comptime checked bind parameters
+
 ## Installation
 
 Since there's no package manager for Zig yet, the recommended way is to use a git submodule:
@@ -118,3 +123,9 @@ Here are the resules for resultset rows:
 * `TEXT` can be read into a `[]const u8` or `[]u8`.
 * `TEXT` can be read into any array of `u8` provided the data fits.
 * `BLOB` follows the same rules as `TEXT`.
+
+### Comptime checked statements
+
+Prepared statements contain _comptime_ metadata which is used to validate that every call to `exec`, `one` and `all` provides the appropriate number of bind parameters.
+
+Right now there's no _type_ checking of bind parameters but it could probably be done.
