@@ -178,11 +178,6 @@ pub fn Statement(comptime opts: StatementOptions) type {
 
         stmt: *c.sqlite3_stmt,
 
-        const BytesType = enum {
-            Text,
-            Blob,
-        };
-
         fn prepare(db: *Db, flags: c_uint, comptime query: []const u8) !Self {
             var stmt = blk: {
                 var tmp: ?*c.sqlite3_stmt = undefined;
