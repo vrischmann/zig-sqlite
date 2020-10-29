@@ -6,8 +6,8 @@ This package is a thin wrapper around [sqlite](https://sqlite.org/index.html)'s 
 
 * Linux
 * the system and development package for sqlite
- * `libsqlite3-dev` for Debian and derivatives
- * `sqlite3-devel` for Fedora
+  * `libsqlite3-dev` for Debian and derivatives
+  * `sqlite3-devel` for Fedora
 
 ## Features
 
