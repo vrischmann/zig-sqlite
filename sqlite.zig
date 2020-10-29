@@ -103,6 +103,9 @@ pub const Db = struct {
     ///     var stmt = try db.prepare("INSERT INTO foo(id, name) VALUES(?, ?)");
     ///     defer stmt.deinit();
     ///
+    /// The statement returned is only compatible with the number of bind markers in the input query.
+    /// This is done because we type check the bind parameters when executing the statement later.
+    ///
     pub fn prepare(self: *Self, comptime query: []const u8) !Statement(StatementOptions.from(query)) {
         return Statement(comptime StatementOptions.from(query)).prepare(self, 0, query);
     }
@@ -251,6 +254,11 @@ pub fn Statement(comptime opts: StatementOptions) type {
             }
         }
 
+        /// exec executes a statement which does not return data.
+        ///
+        /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+        /// in the input query string.
+        ///
         pub fn exec(self: *Self, values: anytype) !void {
             self.bind(values);
 
@@ -284,7 +292,8 @@ pub fn Statement(comptime opts: StatementOptions) type {
         /// The `options` tuple is used to provide additional state in some cases, for example
         /// an allocator used to read text and blobs.
         ///
-        /// The `values` tuple is used for the bind parameters.
+        /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+        /// in the input query string.
         ///
         pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
@@ -333,7 +342,8 @@ pub fn Statement(comptime opts: StatementOptions) type {
         /// The `options` tuple is used to provide additional state in some cases.
         /// Note that for this function the allocator is mandatory.
         ///
-        /// The `values` tuple is used for the bind parameters.
+        /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+        /// in the input query string.
         ///
         /// Note that this allocates all rows into a single slice: if you read a lot of data this can
         /// use a lot of memory.
