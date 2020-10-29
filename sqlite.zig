@@ -100,13 +100,9 @@ pub const Db = struct {
     ///
     /// Example usage:
     ///
-    ///     var stmt = try db.prepare("INSERT INTO foo(id, name) VALUES(?, ?)", .{
-    ///         .id = 3540,
-    ///         .name = "Eminem",
-    ///     });
+    ///     var stmt = try db.prepare("INSERT INTO foo(id, name) VALUES(?, ?)");
     ///     defer stmt.deinit();
     ///
-    /// Note that the name of the fields in the tuple are irrelevant, only the types are.
     pub fn prepare(self: *Self, comptime query: []const u8) !Statement(StatementOptions.from(query)) {
         return Statement(comptime StatementOptions.from(query)).prepare(self, 0, query);
     }
@@ -145,29 +141,31 @@ pub const StatementOptions = struct {
 ///
 /// The exec function can be used to execute a query which does not return rows:
 ///
-///     var stmt = try db.prepare("UPDATE foo SET id = ? WHERE name = ?", .{
+///     var stmt = try db.prepare("UPDATE foo SET id = ? WHERE name = ?");
+///     defer stmt.deinit();
+///
+///     try stmt.exec(.{
 ///         .id = 200,
 ///         .name = "José",
 ///     });
-///     defer stmt.deinit();
 ///
 /// The one function can be used to select a single row:
 ///
-///     var stmt = try db.prepare("SELECT name FROM foo WHERE id = ?", .{ .id = 200 });
+///     var stmt = try db.prepare("SELECT name FROM foo WHERE id = ?");
 ///     defer stmt.deinit();
 ///
-///     const name = try stmt.one([]const u8, .{});
+///     const name = try stmt.one([]const u8, .{}, .{ .id = 200 });
 ///
 /// The all function can be used to select all rows:
 ///
-///     var stmt = try db.prepare("SELECT id, name FROM foo", .{});
+///     var stmt = try db.prepare("SELECT id, name FROM foo");
 ///     defer stmt.deinit();
 ///
 ///     const Row = struct {
 ///         id: usize,
 ///         name: []const u8,
 ///     };
-///     const rows = try stmt.all(Row, .{ .allocator = allocator });
+///     const rows = try stmt.all(Row, .{ .allocator = allocator }, .{});
 ///
 /// Look at aach function for more complete documentation.
 ///
@@ -183,7 +181,6 @@ pub fn Statement(comptime opts: StatementOptions) type {
         };
 
         fn prepare(db: *Db, flags: c_uint, comptime query: []const u8) !Self {
-            // prepare
             var stmt = blk: {
                 var tmp: ?*c.sqlite3_stmt = undefined;
                 const result = c.sqlite3_prepare_v3(
@@ -281,10 +278,13 @@ pub fn Statement(comptime opts: StatementOptions) type {
         ///             age: usize,
         ///         },
         ///         .{ .allocator = allocator },
+        ///         .{ .foo = "bar", .age = 500 },
         ///     );
         ///
         /// The `options` tuple is used to provide additional state in some cases, for example
         /// an allocator used to read text and blobs.
+        ///
+        /// The `values` tuple is used for the bind parameters.
         ///
         pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
@@ -327,10 +327,16 @@ pub fn Statement(comptime opts: StatementOptions) type {
         ///             age: usize,
         ///         },
         ///         .{ .allocator = allocator },
+        ///         .{ .foo = "bar", .age = 500 },
         ///     );
         ///
         /// The `options` tuple is used to provide additional state in some cases.
         /// Note that for this function the allocator is mandatory.
+        ///
+        /// The `values` tuple is used for the bind parameters.
+        ///
+        /// Note that this allocates all rows into a single slice: if you read a lot of data this can
+        /// use a lot of memory.
         ///
         pub fn all(self: *Self, comptime Type: type, options: anytype, values: anytype) ![]Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
