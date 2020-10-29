@@ -46,20 +46,10 @@ sqlite works exclusively by using prepared statements. The wrapper type is `sqli
         \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
     ;
 
-    var stmt = try db.prepare(query, .{
-        .age1 = 20,
-        .age2 = 40,
-    });
+    var stmt = try db.prepare(query);
     defer stmt.deinit();
 
-The `Db.prepare` method takes a `comptime` query string and a tuple of bind parameters.
-
-The number of bind parameters is comptime checked against the number of bind markers in the query string, so if you have 2 bind markers
-you must provide 2 bind parameters.
-
-Note that the fields name is irrelevant, only their order is relevant.
-
-See the section "Bind parameters and resultset rows" for more information on the types mapping rules.
+The `Db.prepare` method takes a `comptime` query string.
 
 ### Executing a statement
 
@@ -69,13 +59,15 @@ For queries which do not return data (`INSERT`, `UPDATE`) you can use the `exec`
         \\UPDATE foo SET salary = ? WHERE id = ?
     ;
 
-    var stmt = try db.prepare(query, .{
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    try stmt.exec({
         .salary = 20000,
         .id = 40,
     });
-    defer stmt.deinit();
 
-    try stmt.exec();
+See the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
 ### Reading data
 
@@ -85,10 +77,7 @@ For queries which do return data you can use the `all` method:
         \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
     ;
 
-    var stmt = try db.prepare(query, .{
-        .age1 = 20,
-        .age2 = 40,
-    });
+    var stmt = try db.prepare(query);
     defer stmt.deinit();
 
     const rows = try stmt.all(
@@ -99,6 +88,7 @@ For queries which do return data you can use the `all` method:
             salary: u32,
         },
         .{ .allocator = allocator },
+        .{ .age1 = 20, .age2 = 40 },
     );
     for (rows) |row| {
         std.log.debug("id: {} ; name: {}; age: {}; salary: {}", .{ row.id, row.name, row.age, row.salary });
