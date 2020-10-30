@@ -240,7 +240,7 @@ pub fn Statement(comptime opts: StatementOptions) type {
 
                                     _ = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
                                 },
-                                else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
+                                else => @compileError("cannot bind field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
                             }
                         },
                         else => @compileError("cannot bind field " ++ struct_field.name ++ " of type " ++ @typeName(struct_field.field_type)),
