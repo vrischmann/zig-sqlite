@@ -117,7 +117,7 @@ Here are the rules for bind parameters:
 * `[]const u8`, `[]u8` or any array of `u8` is treated as a `TEXT`.
 * The custom `sqlite.Bytes` type is treated as a `TEXT` or `BLOB`.
 
-Here are the resules for resultset rows:
+Here are the rules for resultset rows:
 * `INTEGER` can be read into any Zig `Int` provided the data fits.
 * `REAL` can be read into any Zig `Float` provided the data fits.
 * `TEXT` can be read into a `[]const u8` or `[]u8`.
