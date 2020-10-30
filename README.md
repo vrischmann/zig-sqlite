@@ -4,6 +4,7 @@ This package is a thin wrapper around [sqlite](https://sqlite.org/index.html)'s 
 
 ## Requirements
 
+* [Zig master](https://ziglang.org/download/)
 * Linux
 * the system and development package for sqlite
   * `libsqlite3-dev` for Debian and derivatives
