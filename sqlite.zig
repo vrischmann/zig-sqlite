@@ -109,6 +109,7 @@ pub const Db = struct {
     /// This is done because we type check the bind parameters when executing the statement later.
     ///
     pub fn prepare(self: *Self, comptime query: []const u8) !Statement(.{}, ParsedQuery.from(query)) {
+        @setEvalBranchQuota(3000);
         const parsed_query = ParsedQuery.from(query);
         return Statement(.{}, comptime parsed_query).prepare(self, 0);
     }
@@ -371,6 +372,39 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             return @intCast(Type, n);
         }
 
+        const ReadBytesMode = enum {
+            Blob,
+            Text,
+        };
+
+        fn readBytes(self: *Self, allocator: *mem.Allocator, mode: ReadBytesMode, _i: usize) !?[]const u8 {
+            const i = @intCast(c_int, _i);
+            switch (mode) {
+                .Blob => {
+                    const data = c.sqlite3_column_blob(self.stmt, i);
+                    if (data == null) return null;
+
+                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+
+                    var tmp = try allocator.alloc(u8, size);
+                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
+
+                    return tmp;
+                },
+                .Text => {
+                    const data = c.sqlite3_column_text(self.stmt, i);
+                    if (data == null) return null;
+
+                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+
+                    var tmp = try allocator.alloc(u8, size);
+                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
+
+                    return tmp;
+                },
+            }
+        }
+
         fn readStruct(self: *Self, comptime Type: type, options: anytype) !Type {
             var value: Type = undefined;
 
@@ -379,18 +413,20 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                 const field_type_info = @typeInfo(field.field_type);
 
                 switch (field.field_type) {
-                    []const u8, []u8 => {
-                        const data = c.sqlite3_column_blob(self.stmt, i);
-                        if (data == null) {
-                            @field(value, field.name) = "";
-                        } else {
-                            const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-
-                            var tmp = try options.allocator.alloc(u8, size);
-                            mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
-
-                            @field(value, field.name) = tmp;
-                        }
+                    []const u8, []u8 => if (try self.readBytes(options.allocator, .Blob, i)) |tmp| {
+                        @field(value, field.name) = tmp;
+                    } else {
+                        @field(value, field.name) = "";
+                    },
+                    Blob => if (try self.readBytes(options.allocator, .Blob, i)) |tmp| {
+                        @field(value, field.name).data = tmp;
+                    } else {
+                        @field(value, field.name).data = "";
+                    },
+                    Text => if (try self.readBytes(options.allocator, .Text, i)) |tmp| {
+                        @field(value, field.name).data = tmp;
+                    } else {
+                        @field(value, field.name).data = "";
                     },
                     else => switch (field_type_info) {
                         .Int => {
@@ -549,14 +585,44 @@ test "sqlite: statement exec" {
         testing.expectEqual(@as(usize, 33), age.?);
     }
 
-    // Test with a Bytes struct
-
+    // Test with a Blob struct
     {
         try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{blob}, ?{u32})", .{
             .id = @as(usize, 200),
             .name = Blob{ .data = "hello" },
             .age = @as(u32, 20),
         });
+    }
+
+    // Test with a Text struct
+    {
+        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{text}, ?{u32})", .{
+            .id = @as(usize, 201),
+            .name = Text{ .data = "hello" },
+            .age = @as(u32, 20),
+        });
+    }
+
+    // Read in a Text struct
+    {
+        var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+        defer stmt.deinit();
+
+        var row = try stmt.one(
+            struct {
+                id: usize,
+                name: Text,
+                age: usize,
+            },
+            .{ .allocator = allocator },
+            .{@as(usize, 20)},
+        );
+        testing.expect(row != null);
+
+        const exp = users[0];
+        testing.expectEqual(exp.id, row.?.id);
+        testing.expectEqualStrings(exp.name, row.?.name.data);
+        testing.expectEqual(exp.age, row.?.age);
     }
 }
 
