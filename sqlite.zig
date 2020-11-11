@@ -377,30 +377,30 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             Text,
         };
 
-        fn readBytes(self: *Self, allocator: *mem.Allocator, mode: ReadBytesMode, _i: usize) !?[]const u8 {
+        fn readBytes(self: *Self, allocator: *mem.Allocator, mode: ReadBytesMode, _i: usize, ptr: *[]const u8) !void {
             const i = @intCast(c_int, _i);
             switch (mode) {
                 .Blob => {
                     const data = c.sqlite3_column_blob(self.stmt, i);
-                    if (data == null) return null;
+                    if (data == null) ptr.* = "";
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
 
                     var tmp = try allocator.alloc(u8, size);
                     mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
 
-                    return tmp;
+                    ptr.* = tmp;
                 },
                 .Text => {
                     const data = c.sqlite3_column_text(self.stmt, i);
-                    if (data == null) return null;
+                    if (data == null) ptr.* = "";
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
 
                     var tmp = try allocator.alloc(u8, size);
                     mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
 
-                    return tmp;
+                    ptr.* = tmp;
                 },
             }
         }
@@ -413,20 +413,14 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                 const field_type_info = @typeInfo(field.field_type);
 
                 switch (field.field_type) {
-                    []const u8, []u8 => if (try self.readBytes(options.allocator, .Blob, i)) |tmp| {
-                        @field(value, field.name) = tmp;
-                    } else {
-                        @field(value, field.name) = "";
+                    []const u8, []u8 => {
+                        try self.readBytes(options.allocator, .Blob, i, &@field(value, field.name));
                     },
-                    Blob => if (try self.readBytes(options.allocator, .Blob, i)) |tmp| {
-                        @field(value, field.name).data = tmp;
-                    } else {
-                        @field(value, field.name).data = "";
+                    Blob => {
+                        try self.readBytes(options.allocator, .Blob, i, &@field(value, field.name).data);
                     },
-                    Text => if (try self.readBytes(options.allocator, .Text, i)) |tmp| {
-                        @field(value, field.name).data = tmp;
-                    } else {
-                        @field(value, field.name).data = "";
+                    Text => {
+                        try self.readBytes(options.allocator, .Text, i, &@field(value, field.name).data);
                     },
                     else => switch (field_type_info) {
                         .Int => {
