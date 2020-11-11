@@ -10,8 +10,8 @@ pub const Blob = struct { data: []const u8 };
 pub const Text = struct { data: []const u8 };
 
 const BindMarker = union(enum) {
-    Type: type,
-    None: void,
+    Typed: type,
+    Untyped: void,
 };
 
 pub const ParsedQuery = struct {
@@ -59,7 +59,14 @@ pub const ParsedQuery = struct {
                         current_bind_marker_type_pos = 0;
                     },
                     else => {
-                        @compileError("a bind marker start (the character ?) must be followed by a bind marker type, eg {integer}");
+                        // This is a bind marker without a type.
+                        state = .Start;
+
+                        parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{ .Untyped = {} };
+                        parsed_query.nb_bind_markers += 1;
+
+                        buf[pos] = c;
+                        pos += 1;
                     },
                 },
                 .BindMarkerType => switch (c) {
@@ -68,7 +75,7 @@ pub const ParsedQuery = struct {
 
                         const typ = parsed_query.parseType(current_bind_marker_type[0..current_bind_marker_type_pos]);
 
-                        parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{ .Type = typ };
+                        parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{ .Typed = typ };
                         parsed_query.nb_bind_markers += 1;
                     },
                     else => {
@@ -81,9 +88,13 @@ pub const ParsedQuery = struct {
                 },
             }
         }
+
+        // The last character was ? so this must be an untyped bind marker.
         if (state == .BindMarker) {
-            @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote a ? in last position without a bind marker type");
+            parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{ .Untyped = {} };
+            parsed_query.nb_bind_markers += 1;
         }
+
         if (state == .BindMarkerType) {
             @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type");
         }
@@ -148,6 +159,10 @@ test "parsed query: query" {
             .query = "SELECT id, name, age FROM user WHER age > ?{u32} AND age < ?{u32}",
             .expected_query = "SELECT id, name, age FROM user WHER age > ? AND age < ?",
         },
+        .{
+            .query = "SELECT id, name, age FROM user WHER age > ? AND age < ?",
+            .expected_query = "SELECT id, name, age FROM user WHER age > ? AND age < ?",
+        },
     };
 
     inline for (testCases) |tc| {
@@ -166,15 +181,19 @@ test "parsed query: bind markers types" {
     const testCases = &[_]testCase{
         .{
             .query = "foobar ?{usize}",
-            .expected_marker = .{ .Type = usize },
+            .expected_marker = .{ .Typed = usize },
         },
         .{
             .query = "foobar ?{text}",
-            .expected_marker = .{ .Type = Text },
+            .expected_marker = .{ .Typed = Text },
         },
         .{
             .query = "foobar ?{blob}",
-            .expected_marker = .{ .Type = Blob },
+            .expected_marker = .{ .Typed = Blob },
+        },
+        .{
+            .query = "foobar ?",
+            .expected_marker = .{ .Untyped = {} },
         },
     };
 
@@ -185,6 +204,9 @@ test "parsed query: bind markers types" {
         testing.expectEqual(1, parsed_query.nb_bind_markers);
 
         const bind_marker = parsed_query.bind_markers[0];
-        testing.expectEqual(tc.expected_marker.Type, bind_marker.Type);
+        switch (tc.expected_marker) {
+            .Typed => |typ| testing.expectEqual(typ, bind_marker.Typed),
+            .Untyped => |typ| testing.expectEqual(typ, bind_marker.Untyped),
+        }
     }
 }

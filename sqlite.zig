@@ -202,8 +202,12 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             }
 
             inline for (StructTypeInfo.fields) |struct_field, _i| {
-                if (struct_field.field_type != query.bind_markers[_i].Type) {
-                    @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(query.bind_markers[_i].Type));
+                const bind_marker = query.bind_markers[_i];
+                switch (bind_marker) {
+                    .Typed => |typ| if (struct_field.field_type != typ) {
+                        @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
+                    },
+                    .Untyped => {},
                 }
 
                 const i = @as(usize, _i);
