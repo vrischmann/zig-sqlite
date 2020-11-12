@@ -120,6 +120,28 @@ pub const Db = struct {
     }
 };
 
+/// Iterator allows iterating over a result set.
+///
+/// Each call to `next` returns the next row of the result set, or null if the result set is exhausted.
+/// Each row will have the type `Type` so the columns returned in the result set must be compatible with this type.
+///
+/// Here is an example of how to use the iterator:
+///
+///     const User = struct {
+///         name: Text,
+///         age: u16,
+///     };
+///
+///     var stmt = try db.prepare("SELECT name, age FROM user");
+///     defer stmt.deinit();
+///
+///     var iter = try stmt.iterator(User, .{});
+///     while (true) {
+///         const row: User = (try iter.next(.{})) orelse break;
+///         ...
+///     }
+///
+/// The iterator _must not_ outlive the statement.
 pub fn Iterator(comptime Type: type) type {
     return struct {
         const Self = @This();
@@ -418,6 +440,25 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             }
         }
 
+        /// iterator returns an iterator to read data from the result set, one row at a time.
+        ///
+        /// The data in the row is used to populate a value of the type `Type`.
+        /// This means that `Type` must have as many fields as is returned in the query
+        /// executed by this statement.
+        /// This also means that the type of each field must be compatible with the SQLite type.
+        ///
+        /// Here is an example of how to use the iterator:
+        ///
+        ///     var iter = try stmt.iterator(usize, .{});
+        ///     while (true) {
+        ///         const row = (try iter.next(.{})) orelse break;
+        ///         ...
+        ///     }
+        ///
+        /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+        /// in the input query string.
+        ///
+        /// The iterator _must not_ outlive the statement.
         pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
             self.bind(values);
 
