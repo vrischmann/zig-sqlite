@@ -326,6 +326,11 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     c.SQLITE_DONE => null,
                     else => std.debug.panic("invalid result {}", .{result}),
                 },
+                .Float => return switch (result) {
+                    c.SQLITE_ROW => try self.readFloat(Type, options),
+                    c.SQLITE_DONE => null,
+                    else => std.debug.panic("invalid result {}", .{result}),
+                },
                 .Struct => return switch (result) {
                     c.SQLITE_ROW => try self.readStruct(Type, options),
                     c.SQLITE_DONE => null,
@@ -382,6 +387,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                         debug.assert(columns == 1);
                         break :blk try self.readInt(Type, options);
                     },
+                    .Float => blk: {
+                        debug.assert(columns == 1);
+                        break :blk try self.readFloat(Type, options);
+                    },
                     .Struct => blk: {
                         std.debug.assert(columns == @typeInfo(Type).Struct.fields.len);
                         break :blk try self.readStruct(Type, options);
@@ -403,6 +412,11 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         fn readInt(self: *Self, comptime Type: type, options: anytype) !Type {
             const n = c.sqlite3_column_int64(self.stmt, 0);
             return @intCast(Type, n);
+        }
+
+        fn readFloat(self: *Self, comptime Type: type, options: anytype) !Type {
+            const d = c.sqlite3_column_double(self.stmt, 0);
+            return @floatCast(Type, d);
         }
 
         const ReadBytesMode = enum {
@@ -597,18 +611,34 @@ test "sqlite: statement exec" {
         testing.expectEqual(exp.age, row.?.age);
     }
 
-    // Test with a single integer
+    // Test with a single integer or float
 
     {
-        const query = "SELECT age FROM user WHERE id = ?{usize}";
+        const types = &[_]type{
+            u8,
+            u16,
+            u32,
+            u64,
+            u128,
+            usize,
+            f16,
+            f32,
+            f64,
+            f128,
+        };
 
-        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
-        defer stmt.deinit();
+        inline for (types) |typ| {
+            const query = "SELECT age FROM user WHERE id = ?{usize}";
 
-        var age = try stmt.one(usize, .{}, .{ .id = @as(usize, 20) });
-        testing.expect(age != null);
+            @setEvalBranchQuota(5000);
+            var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+            defer stmt.deinit();
 
-        testing.expectEqual(@as(usize, 33), age.?);
+            var age = try stmt.one(typ, .{}, .{ .id = @as(usize, 20) });
+            testing.expect(age != null);
+
+            testing.expectEqual(@as(typ, 33), age.?);
+        }
     }
 
     // Test with a Blob struct
