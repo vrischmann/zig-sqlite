@@ -120,6 +120,139 @@ pub const Db = struct {
     }
 };
 
+pub fn Iterator(comptime Type: type) type {
+    return struct {
+        const Self = @This();
+
+        const TypeInfo = @typeInfo(Type);
+
+        stmt: *c.sqlite3_stmt,
+
+        pub fn next(self: *Self, options: anytype) !?Type {
+            var result = c.sqlite3_step(self.stmt);
+            if (result == c.SQLITE_DONE) {
+                return null;
+            }
+
+            if (result != c.SQLITE_ROW) {
+                logger.err("unable to iterate, result: {}", .{result});
+                return error.SQLiteStepError;
+            }
+
+            const columns = c.sqlite3_column_count(self.stmt);
+
+            return switch (TypeInfo) {
+                .Int => blk: {
+                    debug.assert(columns == 1);
+                    break :blk try self.readInt(options);
+                },
+                .Float => blk: {
+                    debug.assert(columns == 1);
+                    break :blk try self.readFloat(options);
+                },
+                .Struct => blk: {
+                    std.debug.assert(columns == TypeInfo.Struct.fields.len);
+                    break :blk try self.readStruct(options);
+                },
+                else => @compileError("cannot read into type " ++ @typeName(Type)),
+            };
+        }
+
+        fn readInt(self: *Self, options: anytype) !Type {
+            const n = c.sqlite3_column_int64(self.stmt, 0);
+            return @intCast(Type, n);
+        }
+
+        fn readFloat(self: *Self, options: anytype) !Type {
+            const d = c.sqlite3_column_double(self.stmt, 0);
+            return @floatCast(Type, d);
+        }
+
+        const ReadBytesMode = enum {
+            Blob,
+            Text,
+        };
+
+        fn readBytes(self: *Self, options: anytype, mode: ReadBytesMode, _i: usize, ptr: *[]const u8) !void {
+            const i = @intCast(c_int, _i);
+            switch (mode) {
+                .Blob => {
+                    const data = c.sqlite3_column_blob(self.stmt, i);
+                    if (data == null) ptr.* = "";
+
+                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+
+                    var tmp = try options.allocator.alloc(u8, size);
+                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
+
+                    ptr.* = tmp;
+                },
+                .Text => {
+                    const data = c.sqlite3_column_text(self.stmt, i);
+                    if (data == null) ptr.* = "";
+
+                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+
+                    var tmp = try options.allocator.alloc(u8, size);
+                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
+
+                    ptr.* = tmp;
+                },
+            }
+        }
+
+        fn readStruct(self: *Self, options: anytype) !Type {
+            var value: Type = undefined;
+
+            inline for (@typeInfo(Type).Struct.fields) |field, _i| {
+                const i = @as(usize, _i);
+                const field_type_info = @typeInfo(field.field_type);
+
+                switch (field.field_type) {
+                    []const u8, []u8 => {
+                        try self.readBytes(options, .Blob, i, &@field(value, field.name));
+                    },
+                    Blob => {
+                        try self.readBytes(options, .Blob, i, &@field(value, field.name).data);
+                    },
+                    Text => {
+                        try self.readBytes(options, .Text, i, &@field(value, field.name).data);
+                    },
+                    else => switch (field_type_info) {
+                        .Int => {
+                            const n = c.sqlite3_column_int64(self.stmt, i);
+                            @field(value, field.name) = @intCast(field.field_type, n);
+                        },
+                        .Float => {
+                            const f = c.sqlite3_column_double(self.stmt, i);
+                            @field(value, field.name) = f;
+                        },
+                        .Void => {
+                            @field(value, field.name) = {};
+                        },
+                        .Array => |arr| {
+                            switch (arr.child) {
+                                u8 => {
+                                    const data = c.sqlite3_column_blob(self.stmt, i);
+                                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+
+                                    if (size > @as(usize, arr.len)) return error.ArrayTooSmall;
+
+                                    mem.copy(u8, @field(value, field.name)[0..], @ptrCast([*c]const u8, data)[0..size]);
+                                },
+                                else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
+                            }
+                        },
+                        else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
+                    },
+                }
+            }
+
+            return value;
+        }
+    };
+}
+
 pub const StatementOptions = struct {};
 
 /// Statement is a wrapper around a SQLite statement, providing high-level functions to execute
@@ -222,7 +355,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///   }
         ///
         /// The types are checked at comptime.
-        pub fn bind(self: *Self, values: anytype) void {
+        fn bind(self: *Self, values: anytype) void {
             const StructType = @TypeOf(values);
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
@@ -285,6 +418,15 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             }
         }
 
+        pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
+            self.bind(values);
+
+            var res: Iterator(Type) = undefined;
+            res.stmt = self.stmt;
+
+            return res;
+        }
+
         /// one reads a single row from the result set of this statement.
         ///
         /// The data in the row is used to populate a value of the type `Type`.
@@ -312,32 +454,13 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///
         pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
-                @compileError("options passed to all must be a struct");
+                @compileError("options passed to iterator must be a struct");
             }
-            const TypeInfo = @typeInfo(Type);
 
-            self.bind(values);
+            var iter = try self.iterator(Type, values);
 
-            var result = c.sqlite3_step(self.stmt);
-
-            switch (TypeInfo) {
-                .Int => return switch (result) {
-                    c.SQLITE_ROW => try self.readInt(Type, options),
-                    c.SQLITE_DONE => null,
-                    else => std.debug.panic("invalid result {}", .{result}),
-                },
-                .Float => return switch (result) {
-                    c.SQLITE_ROW => try self.readFloat(Type, options),
-                    c.SQLITE_DONE => null,
-                    else => std.debug.panic("invalid result {}", .{result}),
-                },
-                .Struct => return switch (result) {
-                    c.SQLITE_ROW => try self.readStruct(Type, options),
-                    c.SQLITE_DONE => null,
-                    else => std.debug.panic("invalid result {}", .{result}),
-                },
-                else => @compileError("cannot read into type " ++ @typeName(Type)),
-            }
+            const row = (try iter.next(options)) orelse return null;
+            return row;
         }
 
         /// all reads all rows from the result set of this statement.
@@ -370,136 +493,17 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///
         pub fn all(self: *Self, comptime Type: type, options: anytype, values: anytype) ![]Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
-                @compileError("options passed to all must be a struct");
+                @compileError("options passed to iterator must be a struct");
             }
-            const TypeInfo = @typeInfo(Type);
-
-            self.bind(values);
+            var iter = try self.iterator(Type, values);
 
             var rows = std.ArrayList(Type).init(options.allocator);
-
-            var result = c.sqlite3_step(self.stmt);
-            while (result == c.SQLITE_ROW) : (result = c.sqlite3_step(self.stmt)) {
-                const columns = c.sqlite3_column_count(self.stmt);
-
-                var value = switch (TypeInfo) {
-                    .Int => blk: {
-                        debug.assert(columns == 1);
-                        break :blk try self.readInt(Type, options);
-                    },
-                    .Float => blk: {
-                        debug.assert(columns == 1);
-                        break :blk try self.readFloat(Type, options);
-                    },
-                    .Struct => blk: {
-                        std.debug.assert(columns == @typeInfo(Type).Struct.fields.len);
-                        break :blk try self.readStruct(Type, options);
-                    },
-                    else => @compileError("cannot read into type " ++ @typeName(Type)),
-                };
-
-                try rows.append(value);
-            }
-
-            if (result != c.SQLITE_DONE) {
-                logger.err("unable to iterate, result: {}", .{result});
-                return error.SQLiteStepError;
+            while (true) {
+                const row = (try iter.next(options)) orelse break;
+                try rows.append(row);
             }
 
             return rows.span();
-        }
-
-        fn readInt(self: *Self, comptime Type: type, options: anytype) !Type {
-            const n = c.sqlite3_column_int64(self.stmt, 0);
-            return @intCast(Type, n);
-        }
-
-        fn readFloat(self: *Self, comptime Type: type, options: anytype) !Type {
-            const d = c.sqlite3_column_double(self.stmt, 0);
-            return @floatCast(Type, d);
-        }
-
-        const ReadBytesMode = enum {
-            Blob,
-            Text,
-        };
-
-        fn readBytes(self: *Self, allocator: *mem.Allocator, mode: ReadBytesMode, _i: usize, ptr: *[]const u8) !void {
-            const i = @intCast(c_int, _i);
-            switch (mode) {
-                .Blob => {
-                    const data = c.sqlite3_column_blob(self.stmt, i);
-                    if (data == null) ptr.* = "";
-
-                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-
-                    var tmp = try allocator.alloc(u8, size);
-                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
-
-                    ptr.* = tmp;
-                },
-                .Text => {
-                    const data = c.sqlite3_column_text(self.stmt, i);
-                    if (data == null) ptr.* = "";
-
-                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-
-                    var tmp = try allocator.alloc(u8, size);
-                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
-
-                    ptr.* = tmp;
-                },
-            }
-        }
-
-        fn readStruct(self: *Self, comptime Type: type, options: anytype) !Type {
-            var value: Type = undefined;
-
-            inline for (@typeInfo(Type).Struct.fields) |field, _i| {
-                const i = @as(usize, _i);
-                const field_type_info = @typeInfo(field.field_type);
-
-                switch (field.field_type) {
-                    []const u8, []u8 => {
-                        try self.readBytes(options.allocator, .Blob, i, &@field(value, field.name));
-                    },
-                    Blob => {
-                        try self.readBytes(options.allocator, .Blob, i, &@field(value, field.name).data);
-                    },
-                    Text => {
-                        try self.readBytes(options.allocator, .Text, i, &@field(value, field.name).data);
-                    },
-                    else => switch (field_type_info) {
-                        .Int => {
-                            const n = c.sqlite3_column_int64(self.stmt, i);
-                            @field(value, field.name) = @intCast(field.field_type, n);
-                        },
-                        .Float => {
-                            const f = c.sqlite3_column_double(self.stmt, i);
-                            @field(value, field.name) = f;
-                        },
-                        .Void => {
-                            @field(value, field.name) = {};
-                        },
-                        .Array => |arr| {
-                            switch (arr.child) {
-                                u8 => {
-                                    const data = c.sqlite3_column_blob(self.stmt, i);
-                                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-
-                                    if (size > @as(usize, arr.len)) return error.ArrayTooSmall;
-
-                                    mem.copy(u8, @field(value, field.name)[0..], @ptrCast([*c]const u8, data)[0..size]);
-                                },
-                                else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
-                            }
-                        },
-                        else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
-                    },
-                }
-            }
-
-            return value;
         }
     };
 }
@@ -712,6 +716,65 @@ test "sqlite: statement reset" {
 
         const rows_inserted = db.rowsAffected();
         testing.expectEqual(@as(usize, 1), rows_inserted);
+    }
+}
+
+test "sqlite: statement iterator" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var allocator = &arena.allocator;
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+
+    // Create the tables
+    inline for (AllDDL) |ddl| {
+        try db.exec(ddl, .{});
+    }
+
+    // Add data
+    var stmt = try db.prepare("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})");
+    defer stmt.deinit();
+
+    var expected_rows = std.ArrayList(TestUser).init(allocator);
+    var i: usize = 0;
+    while (i < 20) : (i += 1) {
+        const name = try std.fmt.allocPrint(allocator, "Vincent {}", .{i});
+        const user = TestUser{ .id = i, .name = name, .age = i + 200 };
+
+        try expected_rows.append(user);
+
+        stmt.reset();
+        try stmt.exec(user);
+
+        const rows_inserted = db.rowsAffected();
+        testing.expectEqual(@as(usize, 1), rows_inserted);
+    }
+
+    // Get the data with an iterator
+    var stmt2 = try db.prepare("SELECT name, age FROM user");
+    defer stmt2.deinit();
+
+    const Type = struct {
+        name: Text,
+        age: usize,
+    };
+
+    var iter = try stmt2.iterator(Type, .{});
+
+    var rows = std.ArrayList(Type).init(allocator);
+    while (true) {
+        const row = (try iter.next(.{ .allocator = allocator })) orelse break;
+        try rows.append(row);
+    }
+
+    // Check the data
+    testing.expectEqual(expected_rows.span().len, rows.span().len);
+
+    for (rows.span()) |row, j| {
+        const exp_row = expected_rows.span()[j];
+        testing.expectEqualStrings(exp_row.name, row.name.data);
+        testing.expectEqual(exp_row.age, row.age);
     }
 }
 
