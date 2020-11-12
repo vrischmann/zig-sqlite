@@ -186,6 +186,9 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             };
         }
 
+        /// deinit releases the prepared statement.
+        ///
+        /// After a call to `deinit` the statement must not be used.
         pub fn deinit(self: *Self) void {
             const result = c.sqlite3_finalize(self.stmt);
             if (result != c.SQLITE_OK) {
@@ -193,6 +196,32 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             }
         }
 
+        /// reset resets the prepared statement to make it reusable.
+        pub fn reset(self: *Self) void {
+            const result = c.sqlite3_clear_bindings(self.stmt);
+            if (result != c.SQLITE_OK) {
+                logger.err("unable to clear prepared statement bindings, result: {}", .{result});
+            }
+
+            const result2 = c.sqlite3_reset(self.stmt);
+            if (result2 != c.SQLITE_OK) {
+                logger.err("unable to reset prepared statement, result: {}", .{result2});
+            }
+        }
+
+        /// bind binds values to every bind marker in the prepared statement.
+        ///
+        /// The `values` variable must be a struct where each field has the type of the corresponding bind marker.
+        /// For example this query:
+        ///   SELECT 1 FROM user WHERE name = ?{text} AND age < ?{u32}
+        ///
+        /// Has two bind markers, so `values` must have at least the following fields:
+        ///   struct {
+        ///     name: Text,
+        ///     age: u32
+        ///   }
+        ///
+        /// The types are checked at comptime.
         pub fn bind(self: *Self, values: anytype) void {
             const StructType = @TypeOf(values);
             const StructTypeInfo = @typeInfo(StructType).Struct;
@@ -242,7 +271,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 
         /// exec executes a statement which does not return data.
         ///
-        /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+        /// The `values` variable is used for the bind parameters. It must have as many fields as there are bind markers
         /// in the input query string.
         ///
         pub fn exec(self: *Self, values: anytype) !void {
@@ -461,6 +490,27 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
     };
 }
 
+const AllDDL = &[_][]const u8{
+    \\CREATE TABLE user(
+    \\ id integer PRIMARY KEY,
+    \\ name text,
+    \\ age integer
+    \\)
+    ,
+    \\CREATE TABLE article(
+    \\  id integer PRIMARY KEY,
+    \\  author_id integer,
+    \\  data text,
+    \\  FOREIGN KEY(author_id) REFERENCES user(id)
+    \\)
+};
+
+const TestUser = struct {
+    id: usize,
+    name: []const u8,
+    age: usize,
+};
+
 test "sqlite: db init" {
     var db: Db = undefined;
     try db.init(testing.allocator, .{ .mode = dbMode() });
@@ -476,34 +526,12 @@ test "sqlite: statement exec" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
 
     // Create the tables
-
-    comptime const all_ddl = &[_][]const u8{
-        \\CREATE TABLE user(
-        \\ id integer PRIMARY KEY,
-        \\ name text,
-        \\ age integer
-        \\)
-        ,
-        \\CREATE TABLE article(
-        \\  id integer PRIMARY KEY,
-        \\  author_id integer,
-        \\  data text,
-        \\  FOREIGN KEY(author_id) REFERENCES user(id)
-        \\)
-    };
-    inline for (all_ddl) |ddl| {
+    inline for (AllDDL) |ddl| {
         try db.exec(ddl, .{});
     }
 
     // Add data
-
-    const User = struct {
-        id: usize,
-        name: []const u8,
-        age: usize,
-    };
-
-    const users = &[_]User{
+    const users = &[_]TestUser{
         .{ .id = 20, .name = "Vincent", .age = 33 },
         .{ .id = 40, .name = "Julien", .age = 35 },
         .{ .id = 60, .name = "José", .age = 40 },
@@ -522,7 +550,7 @@ test "sqlite: statement exec" {
         var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
         defer stmt.deinit();
 
-        var rows = try stmt.all(User, .{ .allocator = allocator }, .{ .id = @as(usize, 20) });
+        var rows = try stmt.all(TestUser, .{ .allocator = allocator }, .{ .id = @as(usize, 20) });
         for (rows) |row| {
             testing.expectEqual(users[0].id, row.id);
             testing.expectEqualStrings(users[0].name, row.name);
@@ -536,7 +564,7 @@ test "sqlite: statement exec" {
         var stmt = try db.prepare("SELECT id, name, age FROM user");
         defer stmt.deinit();
 
-        var rows = try stmt.all(User, .{ .allocator = allocator }, .{});
+        var rows = try stmt.all(TestUser, .{ .allocator = allocator }, .{});
         testing.expectEqual(@as(usize, 3), rows.len);
         for (rows) |row, i| {
             const exp = users[i];
@@ -621,6 +649,39 @@ test "sqlite: statement exec" {
         testing.expectEqual(exp.id, row.?.id);
         testing.expectEqualStrings(exp.name, row.?.name.data);
         testing.expectEqual(exp.age, row.?.age);
+    }
+}
+
+test "sqlite: statement reset" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var allocator = &arena.allocator;
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+
+    // Create the tables
+    inline for (AllDDL) |ddl| {
+        try db.exec(ddl, .{});
+    }
+
+    // Add data
+
+    var stmt = try db.prepare("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})");
+    defer stmt.deinit();
+
+    const users = &[_]TestUser{
+        .{ .id = 20, .name = "Vincent", .age = 33 },
+        .{ .id = 40, .name = "Julien", .age = 35 },
+        .{ .id = 60, .name = "José", .age = 40 },
+    };
+
+    for (users) |user| {
+        stmt.reset();
+        try stmt.exec(user);
+
+        const rows_inserted = db.rowsAffected();
+        testing.expectEqual(@as(usize, 1), rows_inserted);
     }
 }
 
