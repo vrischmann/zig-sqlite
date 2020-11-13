@@ -88,6 +88,36 @@ pub const Db = struct {
         _ = c.sqlite3_close(self.db);
     }
 
+    /// pragma is a convenience function to use the PRAGMA statement.
+    ///
+    /// Here is how to set a pragma value:
+    ///
+    ///     try db.pragma(void, "foreign_keys", .{}, .{1});
+    ///
+    /// Here is how to query a pragama value:
+    ///
+    ///     const journal_mode = try db.pragma(
+    ///         []const u8,
+    ///         "journal_mode",
+    ///         .{ .allocator = allocator },
+    ///         .{},
+    ///     );
+    ///
+    /// The pragma name must be known at comptime.
+    pub fn pragma(self: *Self, comptime Type: type, comptime name: []const u8, options: anytype, arg: anytype) !?Type {
+        comptime var buf: [1024]u8 = undefined;
+        comptime var query = if (arg.len == 1) blk: {
+            break :blk try std.fmt.bufPrint(&buf, "PRAGMA {} = {}", .{ name, arg[0] });
+        } else blk: {
+            break :blk try std.fmt.bufPrint(&buf, "PRAGMA {}", .{name});
+        };
+
+        var stmt = try self.prepare(query);
+        defer stmt.deinit();
+
+        return try stmt.one(Type, options, .{});
+    }
+
     /// exec is a convenience function which prepares a statement and executes it directly.
     pub fn exec(self: *Self, comptime query: []const u8, values: anytype) !void {
         var stmt = try self.prepare(query);
@@ -616,6 +646,38 @@ test "sqlite: db init" {
     var db: Db = undefined;
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try db.init(testing.allocator, .{});
+}
+
+test "sqlite: db pragma" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+
+    const foreign_keys = try db.pragma(usize, "foreign_keys", .{}, .{});
+    testing.expect(foreign_keys != null);
+    testing.expectEqual(@as(usize, 0), foreign_keys.?);
+
+    if (build_options.is_ci) {
+        const journal_mode = try db.pragma(
+            []const u8,
+            "journal_mode",
+            .{ .allocator = &arena.allocator },
+            .{"wal"},
+        );
+        testing.expect(journal_mode != null);
+        testing.expectEqualStrings("memory", journal_mode.?);
+    } else {
+        const journal_mode = try db.pragma(
+            []const u8,
+            "journal_mode",
+            .{ .allocator = &arena.allocator },
+            .{"wal"},
+        );
+        testing.expect(journal_mode != null);
+        testing.expectEqualStrings("wal", journal_mode.?);
+    }
 }
 
 test "sqlite: statement exec" {
