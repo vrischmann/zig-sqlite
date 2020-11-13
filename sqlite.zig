@@ -659,14 +659,25 @@ test "sqlite: db pragma" {
     testing.expect(foreign_keys != null);
     testing.expectEqual(@as(usize, 0), foreign_keys.?);
 
-    const journal_mode = try db.pragma(
-        []const u8,
-        "journal_mode",
-        .{ .allocator = &arena.allocator },
-        .{"wal"},
-    );
-    testing.expect(journal_mode != null);
-    testing.expectEqualStrings("wal", journal_mode.?);
+    if (build_options.is_ci) {
+        const journal_mode = try db.pragma(
+            []const u8,
+            "journal_mode",
+            .{ .allocator = &arena.allocator },
+            .{"wal"},
+        );
+        testing.expect(journal_mode != null);
+        testing.expectEqualStrings("memory", journal_mode.?);
+    } else {
+        const journal_mode = try db.pragma(
+            []const u8,
+            "journal_mode",
+            .{ .allocator = &arena.allocator },
+            .{"wal"},
+        );
+        testing.expect(journal_mode != null);
+        testing.expectEqualStrings("wal", journal_mode.?);
+    }
 }
 
 test "sqlite: statement exec" {
