@@ -125,6 +125,13 @@ pub const Db = struct {
         try stmt.exec(values);
     }
 
+    /// one is a convenience function which prepares a statement and reads a single row from the result set.
+    pub fn one(self: *Self, comptime Type: type, comptime query: []const u8, options: anytype, values: anytype) !?Type {
+        var stmt = try self.prepare(query);
+        defer stmt.deinit();
+        return try stmt.one(Type, options, values);
+    }
+
     /// prepare prepares a statement for the `query` provided.
     ///
     /// The query is analysed at comptime to search for bind markers.
@@ -852,6 +859,26 @@ test "sqlite: read a single user into a struct" {
         testing.expectEqual(test_users[0].id, row.id);
         testing.expectEqualStrings(test_users[0].name, row.name);
         testing.expectEqual(test_users[0].age, row.age);
+    }
+
+    // Read a row with db.one()
+    {
+        var row = try db.one(
+            struct {
+                id: usize,
+                name: Text,
+                age: usize,
+            },
+            "SELECT id, name, age FROM user WHERE id = ?{usize}",
+            .{ .allocator = &arena.allocator },
+            .{@as(usize, 20)},
+        );
+        testing.expect(row != null);
+
+        const exp = test_users[0];
+        testing.expectEqual(exp.id, row.?.id);
+        testing.expectEqualStrings(exp.name, row.?.name.data);
+        testing.expectEqual(exp.age, row.?.age);
     }
 }
 
