@@ -109,7 +109,7 @@ pub const Db = struct {
     /// This is done because we type check the bind parameters when executing the statement later.
     ///
     pub fn prepare(self: *Self, comptime query: []const u8) !Statement(.{}, ParsedQuery.from(query)) {
-        @setEvalBranchQuota(3000);
+        @setEvalBranchQuota(10000);
         const parsed_query = ParsedQuery.from(query);
         return Statement(.{}, comptime parsed_query).prepare(self, 0);
     }
@@ -163,21 +163,43 @@ pub fn Iterator(comptime Type: type) type {
 
             const columns = c.sqlite3_column_count(self.stmt);
 
-            return switch (TypeInfo) {
-                .Int => blk: {
+            switch (Type) {
+                []const u8, []u8 => {
                     debug.assert(columns == 1);
-                    break :blk try self.readInt(options);
+                    var ret: Type = undefined;
+                    try self.readBytes(options, .Text, 0, &ret);
+                    return ret;
                 },
-                .Float => blk: {
+                Blob => {
                     debug.assert(columns == 1);
-                    break :blk try self.readFloat(options);
+                    var ret: Type = undefined;
+                    try self.readBytes(options, .Blob, 0, &ret.data);
+                    return ret;
                 },
-                .Struct => blk: {
+                Text => {
+                    debug.assert(columns == 1);
+                    var ret: Type = undefined;
+                    try self.readBytes(options, .Text, 0, &ret.data);
+                    return ret;
+                },
+                else => {},
+            }
+
+            switch (TypeInfo) {
+                .Int => {
+                    debug.assert(columns == 1);
+                    return try self.readInt(options);
+                },
+                .Float => {
+                    debug.assert(columns == 1);
+                    return try self.readFloat(options);
+                },
+                .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
-                    break :blk try self.readStruct(options);
+                    return try self.readStruct(options);
                 },
                 else => @compileError("cannot read into type " ++ @typeName(Type)),
-            };
+            }
         }
 
         fn readInt(self: *Self, options: anytype) !Type {
@@ -549,26 +571,46 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
     };
 }
 
-const AllDDL = &[_][]const u8{
-    \\CREATE TABLE user(
-    \\ id integer PRIMARY KEY,
-    \\ name text,
-    \\ age integer
-    \\)
-    ,
-    \\CREATE TABLE article(
-    \\  id integer PRIMARY KEY,
-    \\  author_id integer,
-    \\  data text,
-    \\  FOREIGN KEY(author_id) REFERENCES user(id)
-    \\)
-};
-
 const TestUser = struct {
     id: usize,
     name: []const u8,
     age: usize,
 };
+
+const test_users = &[_]TestUser{
+    .{ .id = 20, .name = "Vincent", .age = 33 },
+    .{ .id = 40, .name = "Julien", .age = 35 },
+    .{ .id = 60, .name = "José", .age = 40 },
+};
+
+fn addTestData(db: *Db) !void {
+    const AllDDL = &[_][]const u8{
+        \\CREATE TABLE user(
+        \\ id integer PRIMARY KEY,
+        \\ name text,
+        \\ age integer
+        \\)
+        ,
+        \\CREATE TABLE article(
+        \\  id integer PRIMARY KEY,
+        \\  author_id integer,
+        \\  data text,
+        \\  FOREIGN KEY(author_id) REFERENCES user(id)
+        \\)
+    };
+
+    // Create the tables
+    inline for (AllDDL) |ddl| {
+        try db.exec(ddl, .{});
+    }
+
+    for (test_users) |user| {
+        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})", user);
+
+        const rows_inserted = db.rowsAffected();
+        testing.expectEqual(@as(usize, 1), rows_inserted);
+    }
+}
 
 test "sqlite: db init" {
     var db: Db = undefined;
@@ -577,114 +619,9 @@ test "sqlite: db init" {
 }
 
 test "sqlite: statement exec" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    var allocator = &arena.allocator;
-
     var db: Db = undefined;
     try db.init(testing.allocator, .{ .mode = dbMode() });
-
-    // Create the tables
-    inline for (AllDDL) |ddl| {
-        try db.exec(ddl, .{});
-    }
-
-    // Add data
-    const users = &[_]TestUser{
-        .{ .id = 20, .name = "Vincent", .age = 33 },
-        .{ .id = 40, .name = "Julien", .age = 35 },
-        .{ .id = 60, .name = "José", .age = 40 },
-    };
-
-    for (users) |user| {
-        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})", user);
-
-        const rows_inserted = db.rowsAffected();
-        testing.expectEqual(@as(usize, 1), rows_inserted);
-    }
-
-    // Read a single user
-
-    {
-        var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
-        defer stmt.deinit();
-
-        var rows = try stmt.all(TestUser, .{ .allocator = allocator }, .{ .id = @as(usize, 20) });
-        for (rows) |row| {
-            testing.expectEqual(users[0].id, row.id);
-            testing.expectEqualStrings(users[0].name, row.name);
-            testing.expectEqual(users[0].age, row.age);
-        }
-    }
-
-    // Read all users
-
-    {
-        var stmt = try db.prepare("SELECT id, name, age FROM user");
-        defer stmt.deinit();
-
-        var rows = try stmt.all(TestUser, .{ .allocator = allocator }, .{});
-        testing.expectEqual(@as(usize, 3), rows.len);
-        for (rows) |row, i| {
-            const exp = users[i];
-            testing.expectEqual(exp.id, row.id);
-            testing.expectEqualStrings(exp.name, row.name);
-            testing.expectEqual(exp.age, row.age);
-        }
-    }
-
-    // Test with anonymous structs
-
-    {
-        var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
-        defer stmt.deinit();
-
-        var row = try stmt.one(
-            struct {
-                id: usize,
-                name: []const u8,
-                age: usize,
-            },
-            .{ .allocator = allocator },
-            .{ .id = @as(usize, 20) },
-        );
-        testing.expect(row != null);
-
-        const exp = users[0];
-        testing.expectEqual(exp.id, row.?.id);
-        testing.expectEqualStrings(exp.name, row.?.name);
-        testing.expectEqual(exp.age, row.?.age);
-    }
-
-    // Test with a single integer or float
-
-    {
-        const types = &[_]type{
-            u8,
-            u16,
-            u32,
-            u64,
-            u128,
-            usize,
-            f16,
-            f32,
-            f64,
-            f128,
-        };
-
-        inline for (types) |typ| {
-            const query = "SELECT age FROM user WHERE id = ?{usize}";
-
-            @setEvalBranchQuota(5000);
-            var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
-            defer stmt.deinit();
-
-            var age = try stmt.one(typ, .{}, .{ .id = @as(usize, 20) });
-            testing.expect(age != null);
-
-            testing.expectEqual(@as(typ, 33), age.?);
-        }
-    }
+    try addTestData(&db);
 
     // Test with a Blob struct
     {
@@ -703,42 +640,186 @@ test "sqlite: statement exec" {
             .age = @as(u32, 20),
         });
     }
+}
 
-    // Read in a Text struct
-    {
-        var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+test "sqlite: read a single user into a struct" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+    defer stmt.deinit();
+
+    var rows = try stmt.all(
+        TestUser,
+        .{ .allocator = &arena.allocator },
+        .{ .id = @as(usize, 20) },
+    );
+    for (rows) |row| {
+        testing.expectEqual(test_users[0].id, row.id);
+        testing.expectEqualStrings(test_users[0].name, row.name);
+        testing.expectEqual(test_users[0].age, row.age);
+    }
+}
+
+test "sqlite: read all users into a struct" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    var stmt = try db.prepare("SELECT id, name, age FROM user");
+    defer stmt.deinit();
+
+    var rows = try stmt.all(
+        TestUser,
+        .{ .allocator = &arena.allocator },
+        .{},
+    );
+    testing.expectEqual(@as(usize, 3), rows.len);
+    for (rows) |row, i| {
+        const exp = test_users[i];
+        testing.expectEqual(exp.id, row.id);
+        testing.expectEqualStrings(exp.name, row.name);
+        testing.expectEqual(exp.age, row.age);
+    }
+}
+
+test "sqlite: read in an anonymous struct" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+    defer stmt.deinit();
+
+    var row = try stmt.one(
+        struct {
+            id: usize,
+            name: []const u8,
+            age: usize,
+        },
+        .{ .allocator = &arena.allocator },
+        .{ .id = @as(usize, 20) },
+    );
+    testing.expect(row != null);
+
+    const exp = test_users[0];
+    testing.expectEqual(exp.id, row.?.id);
+    testing.expectEqualStrings(exp.name, row.?.name);
+    testing.expectEqual(exp.age, row.?.age);
+}
+
+test "sqlite: read in a Text struct" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+    defer stmt.deinit();
+
+    var row = try stmt.one(
+        struct {
+            id: usize,
+            name: Text,
+            age: usize,
+        },
+        .{ .allocator = &arena.allocator },
+        .{@as(usize, 20)},
+    );
+    testing.expect(row != null);
+
+    const exp = test_users[0];
+    testing.expectEqual(exp.id, row.?.id);
+    testing.expectEqualStrings(exp.name, row.?.name.data);
+    testing.expectEqual(exp.age, row.?.age);
+}
+
+test "sqlite: read a single text value" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    const types = &[_]type{
+        []const u8,
+        []u8,
+        Text,
+        Blob,
+    };
+
+    inline for (types) |typ| {
+        const query = "SELECT name FROM user WHERE id = ?{usize}";
+
+        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
         defer stmt.deinit();
 
-        var row = try stmt.one(
-            struct {
-                id: usize,
-                name: Text,
-                age: usize,
-            },
-            .{ .allocator = allocator },
-            .{@as(usize, 20)},
+        const name = try stmt.one(
+            typ,
+            .{ .allocator = &arena.allocator },
+            .{ .id = @as(usize, 20) },
         );
-        testing.expect(row != null);
+        testing.expect(name != null);
+        switch (typ) {
+            Text, Blob => {
+                testing.expectEqualStrings("Vincent", name.?.data);
+            },
+            else => {
+                testing.expectEqualStrings("Vincent", name.?);
+            },
+        }
+    }
+}
 
-        const exp = users[0];
-        testing.expectEqual(exp.id, row.?.id);
-        testing.expectEqualStrings(exp.name, row.?.name.data);
-        testing.expectEqual(exp.age, row.?.age);
+test "sqlite: read a single integer value" {
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    const types = &[_]type{
+        u8,
+        u16,
+        u32,
+        u64,
+        u128,
+        usize,
+        f16,
+        f32,
+        f64,
+        f128,
+    };
+
+    inline for (types) |typ| {
+        const query = "SELECT age FROM user WHERE id = ?{usize}";
+
+        @setEvalBranchQuota(5000);
+        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+        defer stmt.deinit();
+
+        var age = try stmt.one(typ, .{}, .{ .id = @as(usize, 20) });
+        testing.expect(age != null);
+
+        testing.expectEqual(@as(typ, 33), age.?);
     }
 }
 
 test "sqlite: statement reset" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    var allocator = &arena.allocator;
-
     var db: Db = undefined;
     try db.init(testing.allocator, .{ .mode = dbMode() });
-
-    // Create the tables
-    inline for (AllDDL) |ddl| {
-        try db.exec(ddl, .{});
-    }
+    try addTestData(&db);
 
     // Add data
 
@@ -746,9 +827,9 @@ test "sqlite: statement reset" {
     defer stmt.deinit();
 
     const users = &[_]TestUser{
-        .{ .id = 20, .name = "Vincent", .age = 33 },
-        .{ .id = 40, .name = "Julien", .age = 35 },
-        .{ .id = 60, .name = "José", .age = 40 },
+        .{ .id = 200, .name = "Vincent", .age = 33 },
+        .{ .id = 400, .name = "Julien", .age = 35 },
+        .{ .id = 600, .name = "José", .age = 40 },
     };
 
     for (users) |user| {
@@ -767,11 +848,10 @@ test "sqlite: statement iterator" {
 
     var db: Db = undefined;
     try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
 
-    // Create the tables
-    inline for (AllDDL) |ddl| {
-        try db.exec(ddl, .{});
-    }
+    // Cleanup first
+    try db.exec("DELETE FROM user", .{});
 
     // Add data
     var stmt = try db.prepare("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})");
