@@ -224,6 +224,9 @@ pub fn Iterator(comptime Type: type) type {
                     debug.assert(columns == 1);
                     return try self.readFloat(options);
                 },
+                .Void => {
+                    debug.assert(columns == 1);
+                },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
                     return try self.readStruct(options);
@@ -876,6 +879,19 @@ test "sqlite: read a single integer value" {
 
         testing.expectEqual(@as(typ, 33), age.?);
     }
+}
+
+test "sqlite: read a single value into void" {
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    const query = "SELECT age FROM user WHERE id = ?{usize}";
+
+    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    defer stmt.deinit();
+
+    _ = try stmt.one(void, .{}, .{ .id = @as(usize, 20) });
 }
 
 test "sqlite: statement reset" {
