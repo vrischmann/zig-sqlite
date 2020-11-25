@@ -599,7 +599,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                 try rows.append(row);
             }
 
-            return rows.span();
+            return rows.toOwnedSlice();
         }
     };
 }
