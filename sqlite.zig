@@ -968,10 +968,10 @@ test "sqlite: statement iterator" {
     }
 
     // Check the data
-    testing.expectEqual(expected_rows.span().len, rows.span().len);
+    testing.expectEqual(expected_rows.items.len, rows.items.len);
 
-    for (rows.span()) |row, j| {
-        const exp_row = expected_rows.span()[j];
+    for (rows.items) |row, j| {
+        const exp_row = expected_rows.items[j];
         testing.expectEqualStrings(exp_row.name, row.name.data);
         testing.expectEqual(exp_row.age, row.age);
     }
