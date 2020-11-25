@@ -115,7 +115,7 @@ pub const ParsedQuery = struct {
         if (type_info[0] == 'u' or type_info[0] == 'i') {
             return @Type(builtin.TypeInfo{
                 .Int = builtin.TypeInfo.Int{
-                    .is_signed = type_info[0] == 'i',
+                    .signedness = if (type_info[0] == 'i') .signed else .unsigned,
                     .bits = std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
                         @compileError("invalid type info " ++ type_info);
                     },
