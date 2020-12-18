@@ -227,11 +227,43 @@ pub fn Iterator(comptime Type: type) type {
                 .Void => {
                     debug.assert(columns == 1);
                 },
+                .Array => {
+                    debug.assert(columns == 1);
+                    var ret: Type = undefined;
+                    try self.readArray(Type, &ret);
+                    return ret;
+                },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
                     return try self.readStruct(options);
                 },
                 else => @compileError("cannot read into type " ++ @typeName(Type)),
+            }
+        }
+
+        fn readArray(self: *Self, comptime ArrayType: type, array: anytype) !void {
+            const array_type_info = @typeInfo(ArrayType);
+
+            switch (array_type_info) {
+                .Array => |arr| {
+                    comptime if (arr.sentinel == null) {
+                        @compileError("cannot populate array of " ++ @typeName(arr.child) ++ ", arrays must have a sentinel");
+                    };
+
+                    switch (arr.child) {
+                        u8 => {
+                            const data = c.sqlite3_column_blob(self.stmt, 0);
+                            const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, 0));
+
+                            if (size >= @as(usize, arr.len)) return error.ArrayTooSmall;
+
+                            mem.copy(u8, array[0..], @ptrCast([*c]const u8, data)[0..size]);
+                            array[size] = arr.sentinel.?;
+                        },
+                        else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
+                    }
+                },
+                else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
             }
         }
 
@@ -307,18 +339,8 @@ pub fn Iterator(comptime Type: type) type {
                         .Void => {
                             @field(value, field.name) = {};
                         },
-                        .Array => |arr| {
-                            switch (arr.child) {
-                                u8 => {
-                                    const data = c.sqlite3_column_blob(self.stmt, i);
-                                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-
-                                    if (size > @as(usize, arr.len)) return error.ArrayTooSmall;
-
-                                    mem.copy(u8, @field(value, field.name)[0..], @ptrCast([*c]const u8, data)[0..size]);
-                                },
-                                else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
-                            }
+                        .Array => {
+                            try self.readArray(field.fieldtype, &@field(value, field.name), .{});
                         },
                         else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
                     },
@@ -819,9 +841,17 @@ test "sqlite: read a single text value" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try addTestData(&db);
 
+    // TODO(vincent): implement the following
+    // [:0]const u8
+    // [:0]u8
+
     const types = &[_]type{
+        // Slices
         []const u8,
         []u8,
+        // Array
+        [8:0]u8,
+        // Specific text or blob
         Text,
         Blob,
     };
@@ -843,7 +873,16 @@ test "sqlite: read a single text value" {
                 testing.expectEqualStrings("Vincent", name.?.data);
             },
             else => {
-                testing.expectEqualStrings("Vincent", name.?);
+                const span = blk: {
+                    const type_info = @typeInfo(typ);
+                    break :blk switch (type_info) {
+                        .Pointer => name.?,
+                        .Array => mem.spanZ(&(name.?)),
+                        else => @compileError("invalid type " ++ @typeName(typ)),
+                    };
+                };
+
+                testing.expectEqualStrings("Vincent", span);
             },
         }
     }
