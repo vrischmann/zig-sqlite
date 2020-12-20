@@ -196,20 +196,18 @@ pub fn Iterator(comptime Type: type) type {
             switch (Type) {
                 []const u8, []u8 => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    try self.readBytes(options, .Text, 0, &ret);
-                    return ret;
+                    return try self.readBytes(Type, options, .Text, 0);
                 },
                 Blob => {
                     debug.assert(columns == 1);
                     var ret: Type = undefined;
-                    try self.readBytes(options, .Blob, 0, &ret.data);
+                    ret.data = try self.readBytes([]const u8, options, .Blob, 0);
                     return ret;
                 },
                 Text => {
                     debug.assert(columns == 1);
                     var ret: Type = undefined;
-                    try self.readBytes(options, .Text, 0, &ret.data);
+                    ret.data = try self.readBytes([]const u8, options, .Text, 0);
                     return ret;
                 },
                 else => {},
@@ -294,30 +292,26 @@ pub fn Iterator(comptime Type: type) type {
             Text,
         };
 
-        fn readBytes(self: *Self, options: anytype, mode: ReadBytesMode, _i: usize, ptr: *[]const u8) !void {
+        fn readBytes(self: *Self, comptime BytesType: type, options: anytype, mode: ReadBytesMode, _i: usize) !BytesType {
             const i = @intCast(c_int, _i);
             switch (mode) {
                 .Blob => {
                     const data = c.sqlite3_column_blob(self.stmt, i);
-                    if (data == null) ptr.* = "";
+                    if (data == null) return "";
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+                    const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    var tmp = try options.allocator.alloc(u8, size);
-                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
-
-                    ptr.* = tmp;
+                    return options.allocator.dupe(u8, ptr);
                 },
                 .Text => {
                     const data = c.sqlite3_column_text(self.stmt, i);
-                    if (data == null) ptr.* = "";
+                    if (data == null) return "";
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+                    const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    var tmp = try options.allocator.alloc(u8, size);
-                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
-
-                    ptr.* = tmp;
+                    return options.allocator.dupe(u8, ptr);
                 },
             }
         }
@@ -331,13 +325,13 @@ pub fn Iterator(comptime Type: type) type {
 
                 switch (field.field_type) {
                     []const u8, []u8 => {
-                        try self.readBytes(options, .Blob, i, &@field(value, field.name));
+                        @field(value, field.name) = try self.readBytes(field.field_type, options, .Blob, i);
                     },
                     Blob => {
-                        try self.readBytes(options, .Blob, i, &@field(value, field.name).data);
+                        @field(value, field.name).data = try self.readBytes([]const u8, options, .Blob, i);
                     },
                     Text => {
-                        try self.readBytes(options, .Text, i, &@field(value, field.name).data);
+                        @field(value, field.name).data = try self.readBytes([]const u8, options, .Text, i);
                     },
                     else => switch (field_type_info) {
                         .Int => {
