@@ -824,6 +824,7 @@ test "sqlite: read in an anonymous struct" {
     testing.expectEqualStrings(exp.name, row.?.name);
     testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name_2));
     testing.expectEqual(exp.age, row.?.age);
+    testing.expect(row.?.is_id);
 }
 
 test "sqlite: read in a Text struct" {
