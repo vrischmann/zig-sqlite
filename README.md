@@ -19,17 +19,23 @@ This package is a thin wrapper around [sqlite](https://sqlite.org/index.html)'s 
 
 Since there's no package manager for Zig yet, the recommended way is to use a git submodule:
 
-    $ git submodule add https://git.sr.ht/~vrischmann/zig-sqlite src/sqlite
+```bash
+$ git submodule add https://git.sr.ht/~vrischmann/zig-sqlite src/sqlite
+```
 
 Then add the following to your `build.zig` target(s):
 
-    exe.linkLibC();
-    exe.linkSystemLibrary("sqlite3");
-    exe.addPackage(.{ .name = "sqlite", .path = "src/sqlite/sqlite.zig" });
+```zig
+exe.linkLibC();
+exe.linkSystemLibrary("sqlite3");
+exe.addPackage(.{ .name = "sqlite", .path = "src/sqlite/sqlite.zig" });
+```
 
 Now you should be able to import sqlite like this:
 
-    const sqlite = @import("sqlite");
+```zig
+const sqlite = @import("sqlite");
+```
 
 ## Usage
 
@@ -37,8 +43,10 @@ Now you should be able to import sqlite like this:
 
 You must create and initialize an instance of `sqlite.Db`:
 
-    var db: sqlite.Db = undefined;
-    try db.init(allocator, .{ .mode = sqlite.Db.Mode{ .File = "/home/vincent/mydata.db" } });
+```zig
+var db: sqlite.Db = undefined;
+try db.init(allocator, .{ .mode = sqlite.Db.Mode{ .File = "/home/vincent/mydata.db" } });
+```
 
 The `init` method takes an allocator and an optional tuple which will used to configure sqlite.
 
@@ -48,12 +56,14 @@ Right now the only member used in that tuple is `mode` which defines if the sqli
 
 sqlite works exclusively by using prepared statements. The wrapper type is `sqlite.Statement`. Here is how you get one:
 
-    const query =
-        \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
-    ;
+```zig
+const query =
+    \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
+;
 
-    var stmt = try db.prepare(query);
-    defer stmt.deinit();
+var stmt = try db.prepare(query);
+defer stmt.deinit();
+```
 
 The `Db.prepare` method takes a `comptime` query string.
 
@@ -61,17 +71,19 @@ The `Db.prepare` method takes a `comptime` query string.
 
 For queries which do not return data (`INSERT`, `UPDATE`) you can use the `exec` method:
 
-    const query =
-        \\UPDATE foo SET salary = ? WHERE id = ?
-    ;
+```zig
+const query =
+    \\UPDATE foo SET salary = ? WHERE id = ?
+;
 
-    var stmt = try db.prepare(query);
-    defer stmt.deinit();
+var stmt = try db.prepare(query);
+defer stmt.deinit();
 
-    try stmt.exec({
-        .salary = 20000,
-        .id = 40,
-    });
+try stmt.exec({
+    .salary = 20000,
+    .id = 40,
+});
+```
 
 See the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
@@ -79,26 +91,28 @@ See the section "Bind parameters and resultset rows" for more information on the
 
 For queries which do return data you can use the `all` method:
 
-    const query =
-        \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
-    ;
+```zig
+const query =
+    \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
+;
 
-    var stmt = try db.prepare(query);
-    defer stmt.deinit();
+var stmt = try db.prepare(query);
+defer stmt.deinit();
 
-    const rows = try stmt.all(
-        struct {
-            id: usize,
-            name: []const u8,
-            age: u16,
-            salary: u32,
-        },
-        .{ .allocator = allocator },
-        .{ .age1 = 20, .age2 = 40 },
-    );
-    for (rows) |row| {
-        std.log.debug("id: {} ; name: {}; age: {}; salary: {}", .{ row.id, row.name, row.age, row.salary });
-    }
+const rows = try stmt.all(
+    struct {
+        id: usize,
+        name: []const u8,
+        age: u16,
+        salary: u32,
+    },
+    .{ .allocator = allocator },
+    .{ .age1 = 20, .age2 = 40 },
+);
+for (rows) |row| {
+    std.log.debug("id: {} ; name: {}; age: {}; salary: {}", .{ row.id, row.name, row.age, row.salary });
+}
+```
 
 The `all` method takes a type and an optional tuple.
 
@@ -127,8 +141,118 @@ Here are the rules for resultset rows:
 
 Note that arrays must have a sentinel because we need a way to communicate where the data actually stops in the array, so for example use `[200:0]u8` for a `TEXT` field.
 
-### Comptime checked statements
+## Comptime checks
 
-Prepared statements contain _comptime_ metadata which is used to validate that every call to `exec`, `one` and `all` provides the appropriate number of bind parameters.
+Prepared statements contain _comptime_ metadata which is used to validate every call to `exec`, `one` and `all` _at compile time_.
 
-Right now there's no _type_ checking of bind parameters but it could probably be done.
+### Check the number of bind parameters.
+
+The first check makes sure you provide the same number of bind parameters as there are bind markers in the query string.
+
+Take the following code:
+```zig
+var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?");
+defer stmt.deinit();
+
+const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+    .age_1 = 10,
+    .age_2 = 20,
+});
+_ = rows;
+```
+It fails with this compilation error:
+```
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:465:17: error: number of bind markers not equal to number of fields
+                @compileError("number of bind markers not equal to number of fields");
+                ^
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:543:22: note: called from here
+            self.bind(values);
+                     ^
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:619:41: note: called from here
+            var iter = try self.iterator(Type, values);
+                                        ^
+./src/main.zig:16:30: note: called from here
+    const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+                             ^
+./src/main.zig:5:29: note: called from here
+pub fn main() anyerror!void {
+```
+
+### Assign types to bind markers and check them.
+
+The second (and more interesting) check makes sure you provide appropriately typed values as bind parameters.
+
+This check is not automatic since with a standard SQL query we have no way to know the types of the bind parameters, to use it you must provide theses types in the SQL query with a custom syntax.
+
+For example, take the same code as above but now we also bind the last parameter:
+```zig
+var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?");
+defer stmt.deinit();
+
+const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+    .age_1 = 10,
+    .age_2 = 20,
+    .weight = false,
+});
+_ = rows;
+```
+
+This compiles correctly even if the `weight` field in our `user` table is of the type `INTEGER`.
+
+We can make sure the bind parameters have the right type if we rewrite the query like this:
+```zig
+var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?{usize}");
+defer stmt.deinit();
+
+const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+    .age_1 = 10,
+    .age_2 = 20,
+    .weight = false,
+});
+_ = rows;
+
+```
+Now this fails to compile:
+```
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:485:25: error: value type bool is not the bind marker type usize
+                        @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
+                        ^
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:557:22: note: called from here
+            self.bind(values);
+                     ^
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:633:41: note: called from here
+            var iter = try self.iterator(Type, values);
+                                        ^
+./src/main.zig:16:30: note: called from here
+    const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+                             ^
+./src/main.zig:5:29: note: called from here
+pub fn main() anyerror!void {
+```
+The syntax is straightforward: a bind marker `?` followed by `{`, a Zig type name and finally `}`.
+
+There are a limited number of types allowed currently:
+ * all [integer](https://ziglang.org/documentation/master/#Primitive-Types) types.
+ * all [arbitrary bit-width integer](https://ziglang.org/documentation/master/#Primitive-Types) types.
+ * all [float](https://ziglang.org/documentation/master/#Primitive-Types) types.
+ * bool.
+ * strings with `[]const u8` or `[]u8`.
+ * strings with `sqlite.Text`.
+ * blobs with `sqlite.Blob`.
+
+It's probably possible to support arbitrary types if they can be marshaled to a sqlite type. This is something to investigate.
+
+**NOTE**: this is done at compile time and is quite CPU intensive, therefore it's possible you'll have to play with [@setEvalBranchQuota](https://ziglang.org/documentation/master/#setEvalBranchQuota) to make it compile.
+
+To finish our example, passing the proper type allows it compile:
+```zig
+var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?{usize}");
+defer stmt.deinit();
+
+const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+    .age_1 = 10,
+    .age_2 = 20,
+    .weight = @as(usize, 200),
+});
+_ = rows;
+```
