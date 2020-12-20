@@ -224,6 +224,10 @@ pub fn Iterator(comptime Type: type) type {
                     debug.assert(columns == 1);
                     return try self.readFloat(options);
                 },
+                .Bool => {
+                    debug.assert(columns == 1);
+                    return try self.readBool(options);
+                },
                 .Void => {
                     debug.assert(columns == 1);
                 },
@@ -278,6 +282,11 @@ pub fn Iterator(comptime Type: type) type {
         fn readFloat(self: *Self, options: anytype) !Type {
             const d = c.sqlite3_column_double(self.stmt, 0);
             return @floatCast(Type, d);
+        }
+
+        fn readBool(self: *Self, options: anytype) !Type {
+            const d = c.sqlite3_column_int64(self.stmt, 0);
+            return d > 0;
         }
 
         const ReadBytesMode = enum {
@@ -488,6 +497,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     else => switch (field_type_info) {
                         .Int, .ComptimeInt => _ = c.sqlite3_bind_int64(self.stmt, column, @intCast(c_longlong, field_value)),
                         .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field_value),
+                        .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field_value)),
                         .Array => |arr| {
                             switch (arr.child) {
                                 u8 => {
@@ -653,6 +663,7 @@ fn addTestData(db: *Db) !void {
         \\  id integer PRIMARY KEY,
         \\  author_id integer,
         \\  data text,
+        \\  is_published integer,
         \\  FOREIGN KEY(author_id) REFERENCES user(id)
         \\)
     };
@@ -936,6 +947,42 @@ test "sqlite: read a single value into void" {
     defer stmt.deinit();
 
     _ = try stmt.one(void, .{}, .{ .id = @as(usize, 20) });
+}
+
+test "sqlite: read a single value into bool" {
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    const query = "SELECT id FROM user WHERE id = ?{usize}";
+
+    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    defer stmt.deinit();
+
+    const b = try stmt.one(bool, .{}, .{ .id = @as(usize, 20) });
+    testing.expect(b != null);
+    testing.expect(b.?);
+}
+
+test "sqlite: insert bool and bind bool" {
+    var db: Db = undefined;
+    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try addTestData(&db);
+
+    try db.exec("INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})", .{
+        .id = @as(usize, 1),
+        .author_id = @as(usize, 20),
+        .is_published = true,
+    });
+
+    const query = "SELECT id FROM article WHERE is_published = ?{bool}";
+
+    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    defer stmt.deinit();
+
+    const b = try stmt.one(bool, .{}, .{ .is_published = true });
+    testing.expect(b != null);
+    testing.expect(b.?);
 }
 
 test "sqlite: statement reset" {

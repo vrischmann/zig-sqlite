@@ -129,6 +129,9 @@ pub const ParsedQuery = struct {
         if (mem.eql(u8, "f64", type_info)) return f64;
         if (mem.eql(u8, "f128", type_info)) return f128;
 
+        // Bool
+        if (mem.eql(u8, "bool", type_info)) return bool;
+
         // Strings
         if (mem.eql(u8, "[]const u8", type_info) or mem.eql(u8, "[]u8", type_info)) {
             return []const u8;
