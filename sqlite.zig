@@ -230,7 +230,7 @@ pub fn Iterator(comptime Type: type) type {
                 .Array => {
                     debug.assert(columns == 1);
                     var ret: Type = undefined;
-                    try self.readArray(Type, &ret);
+                    try self.readArray(Type, 0, &ret);
                     return ret;
                 },
                 .Struct => {
@@ -241,7 +241,8 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
-        fn readArray(self: *Self, comptime ArrayType: type, array: anytype) !void {
+        fn readArray(self: *Self, comptime ArrayType: type, _i: usize, array: anytype) !void {
+            const i = @intCast(c_int, _i);
             const array_type_info = @typeInfo(ArrayType);
 
             switch (array_type_info) {
@@ -252,12 +253,14 @@ pub fn Iterator(comptime Type: type) type {
 
                     switch (arr.child) {
                         u8 => {
-                            const data = c.sqlite3_column_blob(self.stmt, 0);
-                            const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, 0));
+                            const data = c.sqlite3_column_blob(self.stmt, i);
+                            const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
 
                             if (size >= @as(usize, arr.len)) return error.ArrayTooSmall;
 
-                            mem.copy(u8, array[0..], @ptrCast([*c]const u8, data)[0..size]);
+                            const ptr = @ptrCast([*c]const u8, data)[0..size];
+
+                            mem.copy(u8, array[0..], ptr);
                             array[size] = arr.sentinel.?;
                         },
                         else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
@@ -340,7 +343,7 @@ pub fn Iterator(comptime Type: type) type {
                             @field(value, field.name) = {};
                         },
                         .Array => {
-                            try self.readArray(field.fieldtype, &@field(value, field.name), .{});
+                            try self.readArray(field.field_type, i, &@field(value, field.name));
                         },
                         else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
                     },
@@ -785,13 +788,14 @@ test "sqlite: read in an anonymous struct" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT id, name, name, age FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var row = try stmt.one(
         struct {
             id: usize,
             name: []const u8,
+            name_2: [200:0xAD]u8,
             age: usize,
         },
         .{ .allocator = &arena.allocator },
@@ -802,6 +806,7 @@ test "sqlite: read in an anonymous struct" {
     const exp = test_users[0];
     testing.expectEqual(exp.id, row.?.id);
     testing.expectEqualStrings(exp.name, row.?.name);
+    testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name_2));
     testing.expectEqual(exp.age, row.?.age);
 }
 
