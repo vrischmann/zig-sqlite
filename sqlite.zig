@@ -348,6 +348,10 @@ pub fn Iterator(comptime Type: type) type {
                             const f = c.sqlite3_column_double(self.stmt, i);
                             @field(value, field.name) = f;
                         },
+                        .Bool => {
+                            const n = c.sqlite3_column_int64(self.stmt, i);
+                            @field(value, field.name) = n > 0;
+                        },
                         .Void => {
                             @field(value, field.name) = {};
                         },
@@ -799,7 +803,7 @@ test "sqlite: read in an anonymous struct" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, name, age FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT id, name, name, age, id FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var row = try stmt.one(
@@ -808,6 +812,7 @@ test "sqlite: read in an anonymous struct" {
             name: []const u8,
             name_2: [200:0xAD]u8,
             age: usize,
+            is_id: bool,
         },
         .{ .allocator = &arena.allocator },
         .{ .id = @as(usize, 20) },
