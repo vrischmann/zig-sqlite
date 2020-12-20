@@ -196,18 +196,18 @@ pub fn Iterator(comptime Type: type) type {
             switch (Type) {
                 []const u8, []u8 => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Type, options, .Text, 0);
+                    return try self.readBytes(Type, 0, options, .Text);
                 },
                 Blob => {
                     debug.assert(columns == 1);
                     var ret: Type = undefined;
-                    ret.data = try self.readBytes([]const u8, options, .Blob, 0);
+                    ret.data = try self.readBytes([]const u8, 0, options, .Blob);
                     return ret;
                 },
                 Text => {
                     debug.assert(columns == 1);
                     var ret: Type = undefined;
-                    ret.data = try self.readBytes([]const u8, options, .Text, 0);
+                    ret.data = try self.readBytes([]const u8, 0, options, .Text);
                     return ret;
                 },
                 else => {},
@@ -292,7 +292,7 @@ pub fn Iterator(comptime Type: type) type {
             Text,
         };
 
-        fn readBytes(self: *Self, comptime BytesType: type, options: anytype, mode: ReadBytesMode, _i: usize) !BytesType {
+        fn readBytes(self: *Self, comptime BytesType: type, _i: usize, options: anytype, mode: ReadBytesMode) !BytesType {
             const i = @intCast(c_int, _i);
             switch (mode) {
                 .Blob => {
@@ -325,13 +325,13 @@ pub fn Iterator(comptime Type: type) type {
 
                 switch (field.field_type) {
                     []const u8, []u8 => {
-                        @field(value, field.name) = try self.readBytes(field.field_type, options, .Blob, i);
+                        @field(value, field.name) = try self.readBytes(field.field_type, i, options, .Blob);
                     },
                     Blob => {
-                        @field(value, field.name).data = try self.readBytes([]const u8, options, .Blob, i);
+                        @field(value, field.name).data = try self.readBytes([]const u8, i, options, .Blob);
                     },
                     Text => {
-                        @field(value, field.name).data = try self.readBytes([]const u8, options, .Text, i);
+                        @field(value, field.name).data = try self.readBytes([]const u8, i, options, .Text);
                     },
                     else => switch (field_type_info) {
                         .Int => {
