@@ -125,6 +125,8 @@ Here are the rules for resultset rows:
 * `TEXT` can be read into any array of `u8` provided the data fits.
 * `BLOB` follows the same rules as `TEXT`.
 
+Note that arrays must have a sentinel because we need a way to communicate where the data actually stops in the array, so for example use `[200:0]u8` for a `TEXT` field.
+
 ### Comptime checked statements
 
 Prepared statements contain _comptime_ metadata which is used to validate that every call to `exec`, `one` and `all` provides the appropriate number of bind parameters.
