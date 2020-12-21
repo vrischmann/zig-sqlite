@@ -48,7 +48,7 @@ var db: sqlite.Db = undefined;
 try db.init(allocator, .{ .mode = sqlite.Db.Mode{ .File = "/home/vincent/mydata.db" } });
 ```
 
-The `init` method takes an allocator and an optional tuple which will used to configure sqlite.
+The `init` method takes an allocator and an optional tuple which will be used to configure sqlite.
 
 Right now the only member used in that tuple is `mode` which defines if the sqlite database is in memory or uses a file.
 
