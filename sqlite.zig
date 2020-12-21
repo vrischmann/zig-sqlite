@@ -231,9 +231,7 @@ pub fn Iterator(comptime Type: type) type {
                 },
                 .Array => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    try self.readArray(Type, 0, &ret);
-                    return ret;
+                    return try self.readArray(Type, 0);
                 },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
@@ -243,10 +241,11 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
-        fn readArray(self: *Self, comptime ArrayType: type, _i: usize, array: anytype) !void {
+        fn readArray(self: *Self, comptime ArrayType: type, _i: usize) !ArrayType {
             const i = @intCast(c_int, _i);
             const array_type_info = @typeInfo(ArrayType);
 
+            var ret: ArrayType = undefined;
             switch (array_type_info) {
                 .Array => |arr| {
                     comptime if (arr.sentinel == null) {
@@ -262,14 +261,15 @@ pub fn Iterator(comptime Type: type) type {
 
                             const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                            mem.copy(u8, array[0..], ptr);
-                            array[size] = arr.sentinel.?;
+                            mem.copy(u8, ret[0..], ptr);
+                            ret[size] = arr.sentinel.?;
                         },
                         else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
                     }
                 },
                 else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
             }
+            return ret;
         }
 
         fn readInt(self: *Self, comptime IntType: type, i: usize, options: anytype) !IntType {
@@ -347,7 +347,7 @@ pub fn Iterator(comptime Type: type) type {
                             @field(value, field.name) = {};
                         },
                         .Array => {
-                            try self.readArray(field.field_type, i, &@field(value, field.name));
+                            @field(value, field.name) = try self.readArray(field.field_type, i);
                         },
                         else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
                     },
