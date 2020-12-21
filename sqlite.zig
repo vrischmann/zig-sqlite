@@ -180,6 +180,9 @@ pub fn Iterator(comptime Type: type) type {
 
         stmt: *c.sqlite3_stmt,
 
+        // next scans the next row using the preapred statement.
+        //
+        // If it returns null iterating is done.
         pub fn next(self: *Self, options: anytype) !?Type {
             var result = c.sqlite3_step(self.stmt);
             if (result == c.SQLITE_DONE) {
