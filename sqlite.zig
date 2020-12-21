@@ -196,19 +196,15 @@ pub fn Iterator(comptime Type: type) type {
             switch (Type) {
                 []const u8, []u8 => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Type, 0, options, .Text);
+                    return try self.readBytes(Type, 0, .Text, options);
                 },
                 Blob => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    ret.data = try self.readBytes([]const u8, 0, options, .Blob);
-                    return ret;
+                    return try self.readBytes(Blob, 0, .Blob, options);
                 },
                 Text => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    ret.data = try self.readBytes([]const u8, 0, options, .Text);
-                    return ret;
+                    return try self.readBytes(Text, 0, .Text, options);
                 },
                 else => {},
             }
@@ -292,26 +288,48 @@ pub fn Iterator(comptime Type: type) type {
             Text,
         };
 
-        fn readBytes(self: *Self, comptime BytesType: type, _i: usize, options: anytype, mode: ReadBytesMode) !BytesType {
+        fn readBytes(self: *Self, comptime BytesType: type, _i: usize, comptime mode: ReadBytesMode, options: anytype) !BytesType {
             const i = @intCast(c_int, _i);
+
+            var ret: BytesType = switch (BytesType) {
+                Text, Blob => .{ .data = "" },
+                else => "",
+            };
+
             switch (mode) {
                 .Blob => {
                     const data = c.sqlite3_column_blob(self.stmt, i);
-                    if (data == null) return "";
+                    if (data == null) return ret;
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
                     const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    return options.allocator.dupe(u8, ptr);
+                    return switch (BytesType) {
+                        []const u8, []u8 => try options.allocator.dupe(u8, ptr),
+                        Blob => blk: {
+                            var tmp: Blob = undefined;
+                            tmp.data = try options.allocator.dupe(u8, ptr);
+                            break :blk tmp;
+                        },
+                        else => @compileError("cannot read blob into type " ++ @typeName(BytesType)),
+                    };
                 },
                 .Text => {
                     const data = c.sqlite3_column_text(self.stmt, i);
-                    if (data == null) return "";
+                    if (data == null) return ret;
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
                     const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    return options.allocator.dupe(u8, ptr);
+                    return switch (BytesType) {
+                        []const u8, []u8 => try options.allocator.dupe(u8, ptr),
+                        Text => blk: {
+                            var tmp: Text = undefined;
+                            tmp.data = try options.allocator.dupe(u8, ptr);
+                            break :blk tmp;
+                        },
+                        else => @compileError("cannot read text into type " ++ @typeName(BytesType)),
+                    };
                 },
             }
         }
@@ -323,35 +341,21 @@ pub fn Iterator(comptime Type: type) type {
                 const i = @as(usize, _i);
                 const field_type_info = @typeInfo(field.field_type);
 
-                switch (field.field_type) {
-                    []const u8, []u8 => {
-                        @field(value, field.name) = try self.readBytes(field.field_type, i, options, .Blob);
-                    },
-                    Blob => {
-                        @field(value, field.name).data = try self.readBytes([]const u8, i, options, .Blob);
-                    },
-                    Text => {
-                        @field(value, field.name).data = try self.readBytes([]const u8, i, options, .Text);
-                    },
+                const ret = switch (field.field_type) {
+                    []const u8, []u8 => try self.readBytes(field.field_type, i, .Blob, options),
+                    Blob => try self.readBytes(Blob, i, .Blob, options),
+                    Text => try self.readBytes(Text, i, .Text, options),
                     else => switch (field_type_info) {
-                        .Int => {
-                            @field(value, field.name) = try self.readInt(field.field_type, i, options);
-                        },
-                        .Float => {
-                            @field(value, field.name) = try self.readFloat(field.field_type, i, options);
-                        },
-                        .Bool => {
-                            @field(value, field.name) = try self.readBool(i, options);
-                        },
-                        .Void => {
-                            @field(value, field.name) = {};
-                        },
-                        .Array => {
-                            @field(value, field.name) = try self.readArray(field.field_type, i);
-                        },
+                        .Int => try self.readInt(field.field_type, i, options),
+                        .Float => try self.readFloat(field.field_type, i, options),
+                        .Bool => try self.readBool(i, options),
+                        .Void => {},
+                        .Array => try self.readArray(field.field_type, i),
                         else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
                     },
-                }
+                };
+
+                @field(value, field.name) = ret;
             }
 
             return value;
