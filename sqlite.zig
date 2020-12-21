@@ -237,7 +237,13 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
-        fn readArray(self: *Self, comptime ArrayType: type, _i: usize) !ArrayType {
+        // readArray reads a sqlite BLOB or TEXT column into an array of u8.
+        //
+        // We also require the array to have a sentinel because otherwise we have no way
+        // of communicating the end of the data to the caller.
+        //
+        // If the array is too small for the data an error will be returned.
+        fn readArray(self: *Self, comptime ArrayType: type, _i: usize) error{ArrayTooSmall}!ArrayType {
             const i = @intCast(c_int, _i);
             const array_type_info = @typeInfo(ArrayType);
 
@@ -268,16 +274,19 @@ pub fn Iterator(comptime Type: type) type {
             return ret;
         }
 
+        // readInt reads a sqlite INTEGER column into an integer.
         fn readInt(self: *Self, comptime IntType: type, i: usize, options: anytype) !IntType {
             const n = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return @intCast(IntType, n);
         }
 
+        // readFloat reads a sqlite REAL column into a float.
         fn readFloat(self: *Self, comptime FloatType: type, i: usize, options: anytype) !FloatType {
             const d = c.sqlite3_column_double(self.stmt, @intCast(c_int, i));
             return @floatCast(FloatType, d);
         }
 
+        // readFloat reads a sqlite INTEGER column into a bool (true is anything > 0, false is anything <= 0).
         fn readBool(self: *Self, i: usize, options: anytype) !bool {
             const d = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return d > 0;
@@ -288,12 +297,22 @@ pub fn Iterator(comptime Type: type) type {
             Text,
         };
 
+        // readBytes reads a sqlite BLOB or TEXT column.
+        //
+        // The mode controls which sqlite function is used to retrieve the data:
+        // * .Blob uses sqlite3_column_blob
+        // * .Text uses sqlite3_column_text
+        //
+        // When using .Blob you can only read into either []const u8, []u8 or Blob.
+        // When using .Text you can only read into either []const u8, []u8 or Text.
+        //
+        // The options must contain an `allocator` field which will be used to create a copy of the data.
         fn readBytes(self: *Self, comptime BytesType: type, _i: usize, comptime mode: ReadBytesMode, options: anytype) !BytesType {
             const i = @intCast(c_int, _i);
 
             var ret: BytesType = switch (BytesType) {
                 Text, Blob => .{ .data = "" },
-                else => "",
+                else => "", // TODO(vincent): I think with a []u8 this will crash if the caller attempts to modify it...
             };
 
             switch (mode) {
@@ -334,6 +353,27 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
+        // readStruct reads an entire sqlite row into a struct.
+        //
+        // Each field correspond to a column; its position in the struct determines the column used for it.
+        // For example, given the following query:
+        //
+        //   SELECT id, name, age FROM user
+        //
+        // The struct must have the following fields:
+        //
+        //   struct {
+        //     id: usize,
+        //     name: []const u8,
+        //     age: u16,
+        //   }
+        //
+        // The field `id` will be associated with the column `id` and so on.
+        //
+        // This function relies on the fact that there are the same number of fields than columns and
+        // that the order is correct.
+        //
+        // TODO(vincent): add comptime checks for the fields/columns.
         fn readStruct(self: *Self, options: anytype) !Type {
             var value: Type = undefined;
 
