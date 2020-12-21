@@ -130,7 +130,8 @@ Here are the rules for bind parameters:
 * any Zig `Int` or `ComptimeInt` is tread as a `INTEGER`.
 * any Zig `Float` or `ComptimeFloat` is treated as a `REAL`.
 * `[]const u8`, `[]u8` or any array of `u8` is treated as a `TEXT`.
-* The custom `sqlite.Bytes` type is treated as a `TEXT` or `BLOB`.
+* The custom `sqlite.Blob` type is treated as a `BLOB`.
+* The custom `sqlite.Text` type is treated as a `TEXT`.
 
 Here are the rules for resultset rows:
 * `INTEGER` can be read into any Zig `Int` provided the data fits.
