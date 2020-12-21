@@ -114,13 +114,16 @@ for (rows) |row| {
 }
 ```
 
-The `all` method takes a type and an optional tuple.
+The `all` method takes a type and an options tuple.
 
 The type represents a "row", it can be:
 * a struct where each field maps to the corresponding column in the resultset (so field 0 must map to field 1 and so on).
 * a single type, in that case the resultset must only return one column.
 
 Not all types are allowed, see the section "Bind parameters and resultset rows" for more information on the types mapping rules.
+
+The options tuple is used to pass additional state required for some queries, usually it will be an allocator.
+Not all queries require an allocator, hence why it's not required for every call.
 
 The `one` method on a statement works the same way except it returns the first row of the result set:
 
@@ -150,6 +153,57 @@ if (row) |age| {
     std.log.debug("age: {}", .{age});
 }
 ```
+
+### Iterating
+
+Another way to get the data returned by a query is to use the `sqlite.Iterator` type.
+
+You can only get one by calling the `iterator` method on a statement:
+
+```zig
+var stmt = try db.prepare("SELECT name FROM user WHERE age < ?");
+defer stmt.deinit();
+
+var iter = try stmt.iterator([]const u8, .{
+    .age = 20,
+});
+
+var names = std.ArrayList([]const u8).init(allocator);
+while (true) {
+    const row = (try iter.next(.{ .allocator = allocator })) orelse break;
+    try rows.append(row);
+}
+```
+
+The `iterator` method takes a type which is the same as with `all` or `one`: every row retrieved by calling `next` will have this type.
+
+Using the iterator is straightforward: call `next` on it in a loop; it can either fail with an error or return an optional value: if that optional is null, iterating is done.
+
+The `next` method takes an options tuple which serves the same function as the one in `all` or `one`.
+
+The code example above uses the iterator but it's no different than just calling `all` used like this; the real benefit of the iterator is to be able to process each row
+sequentially without needing to store all the resultset in memory at the same time.
+
+Here's an example:
+```zig
+var stmt = try db.prepare("SELECT name FROM user WHERE age < ?");
+defer stmt.deinit();
+
+var iter = try stmt.iterator([]const u8, .{
+    .age = 20,
+});
+
+while (true) {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    const name = (try iter.next(.{ .allocator = &arena.allocator })) orelse break;
+
+    // do stuff with name here
+}
+```
+
+Used like this the memory required for the row is only used for one iteration. You can imagine this is especially useful if your resultset contains millions of rows.
 
 ### Bind parameters and resultset rows
 
