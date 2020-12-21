@@ -180,6 +180,9 @@ pub fn Iterator(comptime Type: type) type {
 
         stmt: *c.sqlite3_stmt,
 
+        // next scans the next row using the preapred statement.
+        //
+        // If it returns null iterating is done.
         pub fn next(self: *Self, options: anytype) !?Type {
             var result = c.sqlite3_step(self.stmt);
             if (result == c.SQLITE_DONE) {
@@ -196,21 +199,15 @@ pub fn Iterator(comptime Type: type) type {
             switch (Type) {
                 []const u8, []u8 => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    try self.readBytes(options, .Text, 0, &ret);
-                    return ret;
+                    return try self.readBytes(Type, 0, .Text, options);
                 },
                 Blob => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    try self.readBytes(options, .Blob, 0, &ret.data);
-                    return ret;
+                    return try self.readBytes(Blob, 0, .Blob, options);
                 },
                 Text => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    try self.readBytes(options, .Text, 0, &ret.data);
-                    return ret;
+                    return try self.readBytes(Text, 0, .Text, options);
                 },
                 else => {},
             }
@@ -218,24 +215,22 @@ pub fn Iterator(comptime Type: type) type {
             switch (TypeInfo) {
                 .Int => {
                     debug.assert(columns == 1);
-                    return try self.readInt(options);
+                    return try self.readInt(Type, 0, options);
                 },
                 .Float => {
                     debug.assert(columns == 1);
-                    return try self.readFloat(options);
+                    return try self.readFloat(Type, 0, options);
                 },
                 .Bool => {
                     debug.assert(columns == 1);
-                    return try self.readBool(options);
+                    return try self.readBool(0, options);
                 },
                 .Void => {
                     debug.assert(columns == 1);
                 },
                 .Array => {
                     debug.assert(columns == 1);
-                    var ret: Type = undefined;
-                    try self.readArray(Type, 0, &ret);
-                    return ret;
+                    return try self.readArray(Type, 0);
                 },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
@@ -245,10 +240,17 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
-        fn readArray(self: *Self, comptime ArrayType: type, _i: usize, array: anytype) !void {
+        // readArray reads a sqlite BLOB or TEXT column into an array of u8.
+        //
+        // We also require the array to have a sentinel because otherwise we have no way
+        // of communicating the end of the data to the caller.
+        //
+        // If the array is too small for the data an error will be returned.
+        fn readArray(self: *Self, comptime ArrayType: type, _i: usize) error{ArrayTooSmall}!ArrayType {
             const i = @intCast(c_int, _i);
             const array_type_info = @typeInfo(ArrayType);
 
+            var ret: ArrayType = undefined;
             switch (array_type_info) {
                 .Array => |arr| {
                     comptime if (arr.sentinel == null) {
@@ -264,28 +266,32 @@ pub fn Iterator(comptime Type: type) type {
 
                             const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                            mem.copy(u8, array[0..], ptr);
-                            array[size] = arr.sentinel.?;
+                            mem.copy(u8, ret[0..], ptr);
+                            ret[size] = arr.sentinel.?;
                         },
                         else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
                     }
                 },
                 else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
             }
+            return ret;
         }
 
-        fn readInt(self: *Self, options: anytype) !Type {
-            const n = c.sqlite3_column_int64(self.stmt, 0);
-            return @intCast(Type, n);
+        // readInt reads a sqlite INTEGER column into an integer.
+        fn readInt(self: *Self, comptime IntType: type, i: usize, options: anytype) !IntType {
+            const n = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
+            return @intCast(IntType, n);
         }
 
-        fn readFloat(self: *Self, options: anytype) !Type {
-            const d = c.sqlite3_column_double(self.stmt, 0);
-            return @floatCast(Type, d);
+        // readFloat reads a sqlite REAL column into a float.
+        fn readFloat(self: *Self, comptime FloatType: type, i: usize, options: anytype) !FloatType {
+            const d = c.sqlite3_column_double(self.stmt, @intCast(c_int, i));
+            return @floatCast(FloatType, d);
         }
 
-        fn readBool(self: *Self, options: anytype) !Type {
-            const d = c.sqlite3_column_int64(self.stmt, 0);
+        // readFloat reads a sqlite INTEGER column into a bool (true is anything > 0, false is anything <= 0).
+        fn readBool(self: *Self, i: usize, options: anytype) !bool {
+            const d = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return d > 0;
         }
 
@@ -294,34 +300,83 @@ pub fn Iterator(comptime Type: type) type {
             Text,
         };
 
-        fn readBytes(self: *Self, options: anytype, mode: ReadBytesMode, _i: usize, ptr: *[]const u8) !void {
+        // readBytes reads a sqlite BLOB or TEXT column.
+        //
+        // The mode controls which sqlite function is used to retrieve the data:
+        // * .Blob uses sqlite3_column_blob
+        // * .Text uses sqlite3_column_text
+        //
+        // When using .Blob you can only read into either []const u8, []u8 or Blob.
+        // When using .Text you can only read into either []const u8, []u8 or Text.
+        //
+        // The options must contain an `allocator` field which will be used to create a copy of the data.
+        fn readBytes(self: *Self, comptime BytesType: type, _i: usize, comptime mode: ReadBytesMode, options: anytype) !BytesType {
             const i = @intCast(c_int, _i);
+
+            var ret: BytesType = switch (BytesType) {
+                Text, Blob => .{ .data = "" },
+                else => "", // TODO(vincent): I think with a []u8 this will crash if the caller attempts to modify it...
+            };
+
             switch (mode) {
                 .Blob => {
                     const data = c.sqlite3_column_blob(self.stmt, i);
-                    if (data == null) ptr.* = "";
+                    if (data == null) return ret;
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+                    const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    var tmp = try options.allocator.alloc(u8, size);
-                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
-
-                    ptr.* = tmp;
+                    return switch (BytesType) {
+                        []const u8, []u8 => try options.allocator.dupe(u8, ptr),
+                        Blob => blk: {
+                            var tmp: Blob = undefined;
+                            tmp.data = try options.allocator.dupe(u8, ptr);
+                            break :blk tmp;
+                        },
+                        else => @compileError("cannot read blob into type " ++ @typeName(BytesType)),
+                    };
                 },
                 .Text => {
                     const data = c.sqlite3_column_text(self.stmt, i);
-                    if (data == null) ptr.* = "";
+                    if (data == null) return ret;
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+                    const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    var tmp = try options.allocator.alloc(u8, size);
-                    mem.copy(u8, tmp, @ptrCast([*c]const u8, data)[0..size]);
-
-                    ptr.* = tmp;
+                    return switch (BytesType) {
+                        []const u8, []u8 => try options.allocator.dupe(u8, ptr),
+                        Text => blk: {
+                            var tmp: Text = undefined;
+                            tmp.data = try options.allocator.dupe(u8, ptr);
+                            break :blk tmp;
+                        },
+                        else => @compileError("cannot read text into type " ++ @typeName(BytesType)),
+                    };
                 },
             }
         }
 
+        // readStruct reads an entire sqlite row into a struct.
+        //
+        // Each field correspond to a column; its position in the struct determines the column used for it.
+        // For example, given the following query:
+        //
+        //   SELECT id, name, age FROM user
+        //
+        // The struct must have the following fields:
+        //
+        //   struct {
+        //     id: usize,
+        //     name: []const u8,
+        //     age: u16,
+        //   }
+        //
+        // The field `id` will be associated with the column `id` and so on.
+        //
+        // This function relies on the fact that there are the same number of fields than columns and
+        // that the order is correct.
+        //
+        // TODO(vincent): add comptime checks for the fields/columns.
         fn readStruct(self: *Self, options: anytype) !Type {
             var value: Type = undefined;
 
@@ -329,38 +384,21 @@ pub fn Iterator(comptime Type: type) type {
                 const i = @as(usize, _i);
                 const field_type_info = @typeInfo(field.field_type);
 
-                switch (field.field_type) {
-                    []const u8, []u8 => {
-                        try self.readBytes(options, .Blob, i, &@field(value, field.name));
-                    },
-                    Blob => {
-                        try self.readBytes(options, .Blob, i, &@field(value, field.name).data);
-                    },
-                    Text => {
-                        try self.readBytes(options, .Text, i, &@field(value, field.name).data);
-                    },
+                const ret = switch (field.field_type) {
+                    []const u8, []u8 => try self.readBytes(field.field_type, i, .Blob, options),
+                    Blob => try self.readBytes(Blob, i, .Blob, options),
+                    Text => try self.readBytes(Text, i, .Text, options),
                     else => switch (field_type_info) {
-                        .Int => {
-                            const n = c.sqlite3_column_int64(self.stmt, i);
-                            @field(value, field.name) = @intCast(field.field_type, n);
-                        },
-                        .Float => {
-                            const f = c.sqlite3_column_double(self.stmt, i);
-                            @field(value, field.name) = f;
-                        },
-                        .Bool => {
-                            const n = c.sqlite3_column_int64(self.stmt, i);
-                            @field(value, field.name) = n > 0;
-                        },
-                        .Void => {
-                            @field(value, field.name) = {};
-                        },
-                        .Array => {
-                            try self.readArray(field.field_type, i, &@field(value, field.name));
-                        },
+                        .Int => try self.readInt(field.field_type, i, options),
+                        .Float => try self.readFloat(field.field_type, i, options),
+                        .Bool => try self.readBool(i, options),
+                        .Void => {},
+                        .Array => try self.readArray(field.field_type, i),
                         else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
                     },
-                }
+                };
+
+                @field(value, field.name) = ret;
             }
 
             return value;
@@ -647,12 +685,13 @@ const TestUser = struct {
     id: usize,
     name: []const u8,
     age: usize,
+    weight: f32,
 };
 
 const test_users = &[_]TestUser{
-    .{ .id = 20, .name = "Vincent", .age = 33 },
-    .{ .id = 40, .name = "Julien", .age = 35 },
-    .{ .id = 60, .name = "José", .age = 40 },
+    .{ .id = 20, .name = "Vincent", .age = 33, .weight = 85.4 },
+    .{ .id = 40, .name = "Julien", .age = 35, .weight = 100.3 },
+    .{ .id = 60, .name = "José", .age = 40, .weight = 240.2 },
 };
 
 fn addTestData(db: *Db) !void {
@@ -660,7 +699,8 @@ fn addTestData(db: *Db) !void {
         \\CREATE TABLE user(
         \\ id integer PRIMARY KEY,
         \\ name text,
-        \\ age integer
+        \\ age integer,
+        \\ weight real
         \\)
         ,
         \\CREATE TABLE article(
@@ -678,7 +718,7 @@ fn addTestData(db: *Db) !void {
     }
 
     for (test_users) |user| {
-        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})", user);
+        try db.exec("INSERT INTO user(id, name, age, weight) VALUES(?{usize}, ?{[]const u8}, ?{usize}, ?{f32})", user);
 
         const rows_inserted = db.rowsAffected();
         testing.expectEqual(@as(usize, 1), rows_inserted);
@@ -755,7 +795,7 @@ test "sqlite: read a single user into a struct" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT id, name, age, weight FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var rows = try stmt.all(
@@ -778,7 +818,7 @@ test "sqlite: read all users into a struct" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, age FROM user");
+    var stmt = try db.prepare("SELECT id, name, age, weight FROM user");
     defer stmt.deinit();
 
     var rows = try stmt.all(
@@ -803,7 +843,7 @@ test "sqlite: read in an anonymous struct" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, name, age, id FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT id, name, name, age, id, weight FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var row = try stmt.one(
@@ -813,6 +853,7 @@ test "sqlite: read in an anonymous struct" {
             name_2: [200:0xAD]u8,
             age: usize,
             is_id: bool,
+            weight: f64,
         },
         .{ .allocator = &arena.allocator },
         .{ .id = @as(usize, 20) },
@@ -825,6 +866,7 @@ test "sqlite: read in an anonymous struct" {
     testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name_2));
     testing.expectEqual(exp.age, row.?.age);
     testing.expect(row.?.is_id);
+    testing.expectEqual(exp.weight, @floatCast(f32, row.?.weight));
 }
 
 test "sqlite: read in a Text struct" {
@@ -998,13 +1040,13 @@ test "sqlite: statement reset" {
 
     // Add data
 
-    var stmt = try db.prepare("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})");
+    var stmt = try db.prepare("INSERT INTO user(id, name, age, weight) VALUES(?{usize}, ?{[]const u8}, ?{usize}, ?{f32})");
     defer stmt.deinit();
 
     const users = &[_]TestUser{
-        .{ .id = 200, .name = "Vincent", .age = 33 },
-        .{ .id = 400, .name = "Julien", .age = 35 },
-        .{ .id = 600, .name = "José", .age = 40 },
+        .{ .id = 200, .name = "Vincent", .age = 33, .weight = 10.0 },
+        .{ .id = 400, .name = "Julien", .age = 35, .weight = 12.0 },
+        .{ .id = 600, .name = "José", .age = 40, .weight = 14.0 },
     };
 
     for (users) |user| {
@@ -1029,14 +1071,14 @@ test "sqlite: statement iterator" {
     try db.exec("DELETE FROM user", .{});
 
     // Add data
-    var stmt = try db.prepare("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{[]const u8}, ?{usize})");
+    var stmt = try db.prepare("INSERT INTO user(id, name, age, weight) VALUES(?{usize}, ?{[]const u8}, ?{usize}, ?{f32})");
     defer stmt.deinit();
 
     var expected_rows = std.ArrayList(TestUser).init(allocator);
     var i: usize = 0;
     while (i < 20) : (i += 1) {
         const name = try std.fmt.allocPrint(allocator, "Vincent {}", .{i});
-        const user = TestUser{ .id = i, .name = name, .age = i + 200 };
+        const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @intToFloat(f32, i + 200) };
 
         try expected_rows.append(user);
 
