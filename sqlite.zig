@@ -216,15 +216,15 @@ pub fn Iterator(comptime Type: type) type {
             switch (TypeInfo) {
                 .Int => {
                     debug.assert(columns == 1);
-                    return try self.readInt(options);
+                    return try self.readInt(Type, 0, options);
                 },
                 .Float => {
                     debug.assert(columns == 1);
-                    return try self.readFloat(options);
+                    return try self.readFloat(Type, 0, options);
                 },
                 .Bool => {
                     debug.assert(columns == 1);
-                    return try self.readBool(options);
+                    return try self.readBool(0, options);
                 },
                 .Void => {
                     debug.assert(columns == 1);
@@ -272,18 +272,18 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
-        fn readInt(self: *Self, options: anytype) !Type {
-            const n = c.sqlite3_column_int64(self.stmt, 0);
-            return @intCast(Type, n);
+        fn readInt(self: *Self, comptime IntType: type, i: usize, options: anytype) !IntType {
+            const n = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
+            return @intCast(IntType, n);
         }
 
-        fn readFloat(self: *Self, options: anytype) !Type {
-            const d = c.sqlite3_column_double(self.stmt, 0);
-            return @floatCast(Type, d);
+        fn readFloat(self: *Self, comptime FloatType: type, i: usize, options: anytype) !FloatType {
+            const d = c.sqlite3_column_double(self.stmt, @intCast(c_int, i));
+            return @floatCast(FloatType, d);
         }
 
-        fn readBool(self: *Self, options: anytype) !Type {
-            const d = c.sqlite3_column_int64(self.stmt, 0);
+        fn readBool(self: *Self, i: usize, options: anytype) !bool {
+            const d = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return d > 0;
         }
 
@@ -335,16 +335,13 @@ pub fn Iterator(comptime Type: type) type {
                     },
                     else => switch (field_type_info) {
                         .Int => {
-                            const n = c.sqlite3_column_int64(self.stmt, i);
-                            @field(value, field.name) = @intCast(field.field_type, n);
+                            @field(value, field.name) = try self.readInt(field.field_type, i, options);
                         },
                         .Float => {
-                            const f = c.sqlite3_column_double(self.stmt, i);
-                            @field(value, field.name) = f;
+                            @field(value, field.name) = try self.readFloat(field.field_type, i, options);
                         },
                         .Bool => {
-                            const n = c.sqlite3_column_int64(self.stmt, i);
-                            @field(value, field.name) = n > 0;
+                            @field(value, field.name) = try self.readBool(i, options);
                         },
                         .Void => {
                             @field(value, field.name) = {};
