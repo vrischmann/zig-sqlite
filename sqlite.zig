@@ -248,10 +248,10 @@ pub fn Iterator(comptime Type: type) type {
         // If the array is too small for the data an error will be returned.
         fn readArray(self: *Self, comptime ArrayType: type, _i: usize) error{ArrayTooSmall}!ArrayType {
             const i = @intCast(c_int, _i);
-            const array_type_info = @typeInfo(ArrayType);
+            const type_info = @typeInfo(ArrayType);
 
             var ret: ArrayType = undefined;
-            switch (array_type_info) {
+            switch (type_info) {
                 .Array => |arr| {
                     comptime if (arr.sentinel == null) {
                         @compileError("cannot populate array of " ++ @typeName(arr.child) ++ ", arrays must have a sentinel");
@@ -356,6 +356,27 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
+        fn readPointer(self: *Self, comptime PointerType: type, i: usize, options: anytype) !PointerType {
+            const type_info = @typeInfo(PointerType);
+
+            var ret: PointerType = undefined;
+            switch (type_info) {
+                .Pointer => |ptr| {
+                    switch (ptr.size) {
+                        .One => unreachable,
+                        .Slice => switch (ptr.child) {
+                            u8 => ret = try self.readBytes(PointerType, i, .Text, options),
+                            else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
+                        },
+                        else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
+                    }
+                },
+                else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
+            }
+
+            return ret;
+        }
+
         // readStruct reads an entire sqlite row into a struct.
         //
         // Each field correspond to a column; its position in the struct determines the column used for it.
@@ -385,7 +406,6 @@ pub fn Iterator(comptime Type: type) type {
                 const field_type_info = @typeInfo(field.field_type);
 
                 const ret = switch (field.field_type) {
-                    []const u8, []u8 => try self.readBytes(field.field_type, i, .Blob, options),
                     Blob => try self.readBytes(Blob, i, .Blob, options),
                     Text => try self.readBytes(Text, i, .Text, options),
                     else => switch (field_type_info) {
@@ -394,6 +414,7 @@ pub fn Iterator(comptime Type: type) type {
                         .Bool => try self.readBool(i, options),
                         .Void => {},
                         .Array => try self.readArray(field.field_type, i),
+                        .Pointer => try self.readPointer(field.field_type, i, options),
                         else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
                     },
                 };
