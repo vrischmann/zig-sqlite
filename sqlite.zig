@@ -232,6 +232,10 @@ pub fn Iterator(comptime Type: type) type {
                     debug.assert(columns == 1);
                     return try self.readArray(Type, 0);
                 },
+                .Pointer => {
+                    debug.assert(columns == 1);
+                    return try self.readPointer(Type, 0, options);
+                },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
                     return try self.readStruct(options);
@@ -300,6 +304,25 @@ pub fn Iterator(comptime Type: type) type {
             Text,
         };
 
+        // dupeWithSentinel is like dupe/dupeZ but allows for any sentinel value.
+        fn dupeWithSentinel(comptime SliceType: type, allocator: *mem.Allocator, data: []const u8) !SliceType {
+            const type_info = @typeInfo(SliceType);
+            switch (type_info) {
+                .Pointer => |ptr_info| {
+                    if (ptr_info.sentinel) |sentinel| {
+                        const slice = try allocator.alloc(u8, data.len + 1);
+                        mem.copy(u8, slice, data);
+                        slice[data.len] = sentinel;
+
+                        return slice[0..data.len :sentinel];
+                    } else {
+                        return try allocator.dupe(u8, data);
+                    }
+                },
+                else => @compileError("cannot dupe type " ++ @typeName(SliceType)),
+            }
+        }
+
         // readBytes reads a sqlite BLOB or TEXT column.
         //
         // The mode controls which sqlite function is used to retrieve the data:
@@ -312,46 +335,47 @@ pub fn Iterator(comptime Type: type) type {
         // The options must contain an `allocator` field which will be used to create a copy of the data.
         fn readBytes(self: *Self, comptime BytesType: type, _i: usize, comptime mode: ReadBytesMode, options: anytype) !BytesType {
             const i = @intCast(c_int, _i);
+            const type_info = @typeInfo(BytesType);
 
             var ret: BytesType = switch (BytesType) {
                 Text, Blob => .{ .data = "" },
-                else => "", // TODO(vincent): I think with a []u8 this will crash if the caller attempts to modify it...
+                else => try dupeWithSentinel(BytesType, options.allocator, ""),
             };
 
             switch (mode) {
                 .Blob => {
                     const data = c.sqlite3_column_blob(self.stmt, i);
-                    if (data == null) return ret;
+                    if (data == null) {
+                        return switch (BytesType) {
+                            Text, Blob => .{ .data = try options.allocator.dupe(u8, "") },
+                            else => try dupeWithSentinel(BytesType, options.allocator, ""),
+                        };
+                    }
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
                     const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    return switch (BytesType) {
-                        []const u8, []u8 => try options.allocator.dupe(u8, ptr),
-                        Blob => blk: {
-                            var tmp: Blob = undefined;
-                            tmp.data = try options.allocator.dupe(u8, ptr);
-                            break :blk tmp;
-                        },
-                        else => @compileError("cannot read blob into type " ++ @typeName(BytesType)),
-                    };
+                    if (BytesType == Blob) {
+                        return Blob{ .data = try options.allocator.dupe(u8, ptr) };
+                    }
+                    return try dupeWithSentinel(BytesType, options.allocator, ptr);
                 },
                 .Text => {
                     const data = c.sqlite3_column_text(self.stmt, i);
-                    if (data == null) return ret;
+                    if (data == null) {
+                        return switch (BytesType) {
+                            Text, Blob => .{ .data = try options.allocator.dupe(u8, "") },
+                            else => try dupeWithSentinel(BytesType, options.allocator, ""),
+                        };
+                    }
 
                     const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
                     const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                    return switch (BytesType) {
-                        []const u8, []u8 => try options.allocator.dupe(u8, ptr),
-                        Text => blk: {
-                            var tmp: Text = undefined;
-                            tmp.data = try options.allocator.dupe(u8, ptr);
-                            break :blk tmp;
-                        },
-                        else => @compileError("cannot read text into type " ++ @typeName(BytesType)),
-                    };
+                    if (BytesType == Text) {
+                        return Text{ .data = try options.allocator.dupe(u8, ptr) };
+                    }
+                    return try dupeWithSentinel(BytesType, options.allocator, ptr);
                 },
             }
         }
@@ -926,16 +950,17 @@ test "sqlite: read a single text value" {
     try db.init(testing.allocator, .{ .mode = dbMode() });
     try addTestData(&db);
 
-    // TODO(vincent): implement the following
-    // [:0]const u8
-    // [:0]u8
-
     const types = &[_]type{
         // Slices
         []const u8,
         []u8,
+        [:0]const u8,
+        [:0]u8,
+        [:0xAD]const u8,
+        [:0xAD]u8,
         // Array
         [8:0]u8,
+        [8:0xAD]u8,
         // Specific text or blob
         Text,
         Blob,
