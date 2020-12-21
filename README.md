@@ -122,6 +122,35 @@ The type represents a "row", it can be:
 
 Not all types are allowed, see the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
+The `one` method on a statement works the same way except it returns the first row of the result set:
+
+```zig
+const query =
+    \\SELECT age FROM employees WHERE id = ?
+;
+
+var stmt = try db.prepare(query);
+defer stmt.deinit();
+
+const row = try stmt.one(usize, .{}, .{ .id = 20 });
+if (row) |age| {
+    std.log.debug("age: {}", .{age});
+}
+```
+
+The convienence function `sqlite.Db.one` works exactly the same way:
+
+```zig
+const query =
+    \\SELECT age FROM employees WHERE id = ?
+;
+
+const row = try db.one(usize, query, .{}, .{ .id = 20 });
+if (row) |age| {
+    std.log.debug("age: {}", .{age});
+}
+```
+
 ### Bind parameters and resultset rows
 
 Since sqlite doesn't have many [types](https://www.sqlite.org/datatype3.html) only a small number of Zig types are allowed in binding parameters and in resultset mapping types.
