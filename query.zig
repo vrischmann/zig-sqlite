@@ -3,8 +3,7 @@ const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
 
-/// Blob is used to represent a SQLite BLOB value when binding a parameter or reading a column.
-pub const Blob = struct { data: []const u8 };
+const Blob = @import("sqlite.zig").Blob;
 
 /// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
 pub const Text = struct { data: []const u8 };
