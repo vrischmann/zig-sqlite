@@ -31,7 +31,7 @@ pub const Db = struct {
 
     /// Mode determines how the database will be opened.
     pub const Mode = union(enum) {
-        File: []const u8,
+        File: [:0]const u8,
         Memory,
     };
 
@@ -45,13 +45,9 @@ pub const Db = struct {
             .File => |path| {
                 logger.info("opening {}", .{path});
 
-                // Need a null-terminated string here.
-                const pathZ = try allocator.dupeZ(u8, path);
-                defer allocator.free(pathZ);
-
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(
-                    pathZ,
+                    path,
                     &db,
                     c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_CREATE,
                     null,
