@@ -33,16 +33,15 @@ fn isThreadSafe() bool {
 ///
 ///     // File database
 ///     var db: sqlite.Db = undefined;
-///     try db.init(allocator, .{ .mode = { .File = "/tmp/data.db" } });
+///     try db.init(.{ .mode = { .File = "/tmp/data.db" } });
 ///
 ///     // In memory database
 ///     var db: sqlite.Db = undefined;
-///     try db.init(allocator, .{ .mode = { .Memory = {} } });
+///     try db.init(.{ .mode = { .Memory = {} } });
 ///
 pub const Db = struct {
     const Self = @This();
 
-    allocator: *mem.Allocator,
     db: *c.sqlite3,
 
     /// Mode determines how the database will be opened.
@@ -57,9 +56,7 @@ pub const Db = struct {
     };
 
     /// init creates a database with the provided `mode`.
-    pub fn init(self: *Self, allocator: *mem.Allocator, options: InitOptions) !void {
-        self.allocator = allocator;
-
+    pub fn init(self: *Self, options: InitOptions) !void {
         // Validate the threading mode
         if (options.threading_mode != .SingleThread and !isThreadSafe()) {
             return error.CannotUseSingleThreadedSQLite;
@@ -803,8 +800,8 @@ fn addTestData(db: *Db) !void {
 
 test "sqlite: db init" {
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
-    try db.init(testing.allocator, .{});
+    try db.init(initOptions());
+    try db.init(.{});
 }
 
 test "sqlite: db pragma" {
@@ -812,7 +809,7 @@ test "sqlite: db pragma" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
 
     const foreign_keys = try db.pragma(usize, "foreign_keys", .{}, .{});
     testing.expect(foreign_keys != null);
@@ -841,7 +838,7 @@ test "sqlite: db pragma" {
 
 test "sqlite: statement exec" {
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     // Test with a Blob struct
@@ -868,7 +865,7 @@ test "sqlite: read a single user into a struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, age, weight FROM user WHERE id = ?{usize}");
@@ -911,7 +908,7 @@ test "sqlite: read all users into a struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, age, weight FROM user");
@@ -936,7 +933,7 @@ test "sqlite: read in an anonymous struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, name, age, id, weight FROM user WHERE id = ?{usize}");
@@ -970,7 +967,7 @@ test "sqlite: read in a Text struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
@@ -998,7 +995,7 @@ test "sqlite: read a single text value" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     const types = &[_]type{
@@ -1051,7 +1048,7 @@ test "sqlite: read a single text value" {
 
 test "sqlite: read a single integer value" {
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     const types = &[_]type{
@@ -1083,7 +1080,7 @@ test "sqlite: read a single integer value" {
 
 test "sqlite: read a single value into void" {
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     const query = "SELECT age FROM user WHERE id = ?{usize}";
@@ -1096,7 +1093,7 @@ test "sqlite: read a single value into void" {
 
 test "sqlite: read a single value into bool" {
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     const query = "SELECT id FROM user WHERE id = ?{usize}";
@@ -1111,7 +1108,7 @@ test "sqlite: read a single value into bool" {
 
 test "sqlite: insert bool and bind bool" {
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     try db.exec("INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})", .{
@@ -1132,7 +1129,7 @@ test "sqlite: insert bool and bind bool" {
 
 test "sqlite: statement reset" {
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     // Add data
@@ -1161,7 +1158,7 @@ test "sqlite: statement iterator" {
     var allocator = &arena.allocator;
 
     var db: Db = undefined;
-    try db.init(testing.allocator, initOptions());
+    try db.init(initOptions());
     try addTestData(&db);
 
     // Cleanup first
