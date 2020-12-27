@@ -202,15 +202,15 @@ pub fn Iterator(comptime Type: type) type {
             switch (Type) {
                 []const u8, []u8 => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Type, 0, .Text, options);
+                    return try self.readBytes(Type, options.allocator, 0, .Text);
                 },
                 Blob => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Blob, 0, .Blob, options);
+                    return try self.readBytes(Blob, options.allocator, 0, .Blob);
                 },
                 Text => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Text, 0, .Text, options);
+                    return try self.readBytes(Text, options.allocator, 0, .Text);
                 },
                 else => {},
             }
@@ -336,13 +336,13 @@ pub fn Iterator(comptime Type: type) type {
         // When using .Text you can only read into either []const u8, []u8 or Text.
         //
         // The options must contain an `allocator` field which will be used to create a copy of the data.
-        fn readBytes(self: *Self, comptime BytesType: type, _i: usize, comptime mode: ReadBytesMode, options: anytype) !BytesType {
+        fn readBytes(self: *Self, comptime BytesType: type, allocator: *mem.Allocator, _i: usize, comptime mode: ReadBytesMode) !BytesType {
             const i = @intCast(c_int, _i);
             const type_info = @typeInfo(BytesType);
 
             var ret: BytesType = switch (BytesType) {
                 Text, Blob => .{ .data = "" },
-                else => try dupeWithSentinel(BytesType, options.allocator, ""),
+                else => try dupeWithSentinel(BytesType, allocator, ""),
             };
 
             switch (mode) {
@@ -350,8 +350,8 @@ pub fn Iterator(comptime Type: type) type {
                     const data = c.sqlite3_column_blob(self.stmt, i);
                     if (data == null) {
                         return switch (BytesType) {
-                            Text, Blob => .{ .data = try options.allocator.dupe(u8, "") },
-                            else => try dupeWithSentinel(BytesType, options.allocator, ""),
+                            Text, Blob => .{ .data = try allocator.dupe(u8, "") },
+                            else => try dupeWithSentinel(BytesType, allocator, ""),
                         };
                     }
 
@@ -359,16 +359,16 @@ pub fn Iterator(comptime Type: type) type {
                     const ptr = @ptrCast([*c]const u8, data)[0..size];
 
                     if (BytesType == Blob) {
-                        return Blob{ .data = try options.allocator.dupe(u8, ptr) };
+                        return Blob{ .data = try allocator.dupe(u8, ptr) };
                     }
-                    return try dupeWithSentinel(BytesType, options.allocator, ptr);
+                    return try dupeWithSentinel(BytesType, allocator, ptr);
                 },
                 .Text => {
                     const data = c.sqlite3_column_text(self.stmt, i);
                     if (data == null) {
                         return switch (BytesType) {
-                            Text, Blob => .{ .data = try options.allocator.dupe(u8, "") },
-                            else => try dupeWithSentinel(BytesType, options.allocator, ""),
+                            Text, Blob => .{ .data = try allocator.dupe(u8, "") },
+                            else => try dupeWithSentinel(BytesType, allocator, ""),
                         };
                     }
 
@@ -376,9 +376,9 @@ pub fn Iterator(comptime Type: type) type {
                     const ptr = @ptrCast([*c]const u8, data)[0..size];
 
                     if (BytesType == Text) {
-                        return Text{ .data = try options.allocator.dupe(u8, ptr) };
+                        return Text{ .data = try allocator.dupe(u8, ptr) };
                     }
-                    return try dupeWithSentinel(BytesType, options.allocator, ptr);
+                    return try dupeWithSentinel(BytesType, allocator, ptr);
                 },
             }
         }
@@ -392,7 +392,7 @@ pub fn Iterator(comptime Type: type) type {
                     switch (ptr.size) {
                         .One => unreachable,
                         .Slice => switch (ptr.child) {
-                            u8 => ret = try self.readBytes(PointerType, i, .Text, options),
+                            u8 => ret = try self.readBytes(PointerType, options.allocator, i, .Text),
                             else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
                         },
                         else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
@@ -433,8 +433,8 @@ pub fn Iterator(comptime Type: type) type {
                 const field_type_info = @typeInfo(field.field_type);
 
                 const ret = switch (field.field_type) {
-                    Blob => try self.readBytes(Blob, i, .Blob, options),
-                    Text => try self.readBytes(Text, i, .Text, options),
+                    Blob => try self.readBytes(Blob, options.allocator, i, .Blob),
+                    Text => try self.readBytes(Text, options.allocator, i, .Text),
                     else => switch (field_type_info) {
                         .Int => try self.readInt(field.field_type, i),
                         .Float => try self.readFloat(field.field_type, i),
