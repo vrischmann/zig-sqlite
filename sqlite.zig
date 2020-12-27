@@ -12,6 +12,16 @@ usingnamespace @import("query.zig");
 
 const logger = std.log.scoped(.sqlite);
 
+pub const ThreadingMode = enum {
+    SingleThread,
+    MultiThread,
+    Serialized,
+};
+
+fn isThreadSafe() bool {
+    return c.sqlite3_threadsafe() > 0;
+}
+
 /// Db is a wrapper around a SQLite database, providing high-level functions for executing queries.
 /// A Db can be opened with a file database or a in-memory database:
 ///
@@ -40,6 +50,10 @@ pub const Db = struct {
         self.allocator = allocator;
 
         const mode: Mode = if (@hasField(@TypeOf(options), "mode")) options.mode else .Memory;
+        // Validate the threading mode
+        if (options.threading_mode != .SingleThread and !isThreadSafe()) {
+            return error.CannotUseSingleThreadedSQLite;
+        }
 
         switch (mode) {
             .File => |path| {
