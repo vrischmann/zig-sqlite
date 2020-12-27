@@ -159,6 +159,30 @@ pub const Db = struct {
         return getLastDetailedErrorFromDb(self.db);
     }
 
+    fn getPragmaQuery(comptime buf: []u8, comptime name: []const u8, comptime arg: anytype) []const u8 {
+        return if (arg.len == 1) blk: {
+            break :blk try std.fmt.bufPrint(buf, "PRAGMA {} = {}", .{ name, arg[0] });
+        } else blk: {
+            break :blk try std.fmt.bufPrint(buf, "PRAGMA {}", .{name});
+        };
+    }
+
+    /// pragmaAlloc is like `pragma` but can allocate memory.
+    ///
+    /// Useful when the pragma command returns text, for example:
+    ///
+    ///     const journal_mode = try db.pragma([]const u8, allocator, .{}, "journal_mode", .{});
+    ///
+    pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, comptime name: []const u8, comptime arg: anytype) !?Type {
+        comptime var buf: [1024]u8 = undefined;
+        comptime var query = getPragmaQuery(&buf, name, arg);
+
+        var stmt = try self.prepare(query);
+        defer stmt.deinit();
+
+        return try stmt.oneAlloc(Type, allocator, options, .{});
+    }
+
     /// pragma is a convenience function to use the PRAGMA statement.
     ///
     /// Here is how to set a pragma value:
@@ -167,21 +191,14 @@ pub const Db = struct {
     ///
     /// Here is how to query a pragama value:
     ///
-    ///     const journal_mode = try db.pragma(
-    ///         []const u8,
-    ///         "journal_mode",
-    ///         .{ .allocator = allocator },
-    ///         .{},
-    ///     );
+    ///     const journal_mode = try db.pragma([128:0]const u8, .{}, "journal_mode", .{});
     ///
     /// The pragma name must be known at comptime.
-    pub fn pragma(self: *Self, comptime Type: type, comptime name: []const u8, options: anytype, arg: anytype) !?Type {
+    ///
+    /// This cannot allocate memory. If your pragma command returns text you must use an array or call `pragmaAlloc`.
+    pub fn pragma(self: *Self, comptime Type: type, options: anytype, comptime name: []const u8, arg: anytype) !?Type {
         comptime var buf: [1024]u8 = undefined;
-        comptime var query = if (arg.len == 1) blk: {
-            break :blk try std.fmt.bufPrint(&buf, "PRAGMA {} = {}", .{ name, arg[0] });
-        } else blk: {
-            break :blk try std.fmt.bufPrint(&buf, "PRAGMA {}", .{name});
-        };
+        comptime var query = getPragmaQuery(&buf, name, arg);
 
         var stmt = try self.prepare(query);
         defer stmt.deinit();
@@ -920,19 +937,24 @@ test "sqlite: db pragma" {
     var db: Db = undefined;
     try db.init(initOptions());
 
-    const foreign_keys = try db.pragma(usize, "foreign_keys", .{}, .{});
+    const foreign_keys = try db.pragma(usize, .{}, "foreign_keys", .{});
     testing.expect(foreign_keys != null);
     testing.expectEqual(@as(usize, 0), foreign_keys.?);
 
+    const arg = .{"wal"};
+
     if (build_options.in_memory) {
-        const journal_mode = try db.pragma(
-            [128:0]u8,
-            "journal_mode",
-            .{},
-            .{"wal"},
-        );
-        testing.expect(journal_mode != null);
-        testing.expectEqualStrings("memory", journal_mode.?);
+        {
+            const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", arg);
+            testing.expect(journal_mode != null);
+            testing.expectEqualStrings("memory", mem.spanZ(&journal_mode.?));
+        }
+
+        {
+            const journal_mode = try db.pragmaAlloc([]const u8, &arena.allocator, .{}, "journal_mode", arg);
+            testing.expect(journal_mode != null);
+            testing.expectEqualStrings("memory", journal_mode.?);
+        }
     } else {
         {
             const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", arg);
