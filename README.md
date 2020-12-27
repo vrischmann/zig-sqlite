@@ -51,12 +51,19 @@ You must create and initialize an instance of `sqlite.Db`:
 
 ```zig
 var db: sqlite.Db = undefined;
-try db.init(allocator, .{ .mode = sqlite.Db.Mode{ .File = "/home/vincent/mydata.db" } });
+try db.init(allocator, .{
+    .mode = sqlite.Db.Mode{ .File = "/home/vincent/mydata.db" },
+    .open_flags = .{
+        .write = true,
+        .create = true,
+    },
+    .threading_mode = .MultiThread,
+});
 ```
 
-The `init` method takes an allocator and an optional tuple which will be used to configure sqlite.
+The `init` method takes an allocator and a `InitOptions` struct which will be used to configure sqlite.
 
-Right now the only member used in that tuple is `mode` which defines if the sqlite database is in memory or uses a file.
+Only the `mode` field is mandatory, the other fields have sane default values.
 
 ### Preparing a statement
 
