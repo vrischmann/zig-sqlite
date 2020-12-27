@@ -183,7 +183,7 @@ pub fn Iterator(comptime Type: type) type {
 
         stmt: *c.sqlite3_stmt,
 
-        // next scans the next row using the preapred statement.
+        // next scans the next row using the prepared statement.
         //
         // If it returns null iterating is done.
         pub fn next(self: *Self, options: anytype) !?Type {
@@ -487,7 +487,7 @@ pub const StatementOptions = struct {};
 ///     };
 ///     const rows = try stmt.all(Row, .{ .allocator = allocator }, .{});
 ///
-/// Look at aach function for more complete documentation.
+/// Look at each function for more complete documentation.
 ///
 pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) type {
     return struct {
