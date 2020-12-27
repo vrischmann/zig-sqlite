@@ -218,15 +218,15 @@ pub fn Iterator(comptime Type: type) type {
             switch (TypeInfo) {
                 .Int => {
                     debug.assert(columns == 1);
-                    return try self.readInt(Type, 0, options);
+                    return try self.readInt(Type, 0);
                 },
                 .Float => {
                     debug.assert(columns == 1);
-                    return try self.readFloat(Type, 0, options);
+                    return try self.readFloat(Type, 0);
                 },
                 .Bool => {
                     debug.assert(columns == 1);
-                    return try self.readBool(0, options);
+                    return try self.readBool(0);
                 },
                 .Void => {
                     debug.assert(columns == 1);
@@ -285,19 +285,19 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         // readInt reads a sqlite INTEGER column into an integer.
-        fn readInt(self: *Self, comptime IntType: type, i: usize, options: anytype) !IntType {
+        fn readInt(self: *Self, comptime IntType: type, i: usize) !IntType {
             const n = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return @intCast(IntType, n);
         }
 
         // readFloat reads a sqlite REAL column into a float.
-        fn readFloat(self: *Self, comptime FloatType: type, i: usize, options: anytype) !FloatType {
+        fn readFloat(self: *Self, comptime FloatType: type, i: usize) !FloatType {
             const d = c.sqlite3_column_double(self.stmt, @intCast(c_int, i));
             return @floatCast(FloatType, d);
         }
 
         // readFloat reads a sqlite INTEGER column into a bool (true is anything > 0, false is anything <= 0).
-        fn readBool(self: *Self, i: usize, options: anytype) !bool {
+        fn readBool(self: *Self, i: usize) !bool {
             const d = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return d > 0;
         }
@@ -436,9 +436,9 @@ pub fn Iterator(comptime Type: type) type {
                     Blob => try self.readBytes(Blob, i, .Blob, options),
                     Text => try self.readBytes(Text, i, .Text, options),
                     else => switch (field_type_info) {
-                        .Int => try self.readInt(field.field_type, i, options),
-                        .Float => try self.readFloat(field.field_type, i, options),
-                        .Bool => try self.readBool(i, options),
+                        .Int => try self.readInt(field.field_type, i),
+                        .Float => try self.readFloat(field.field_type, i),
+                        .Bool => try self.readBool(i),
                         .Void => {},
                         .Array => try self.readArray(field.field_type, i),
                         .Pointer => try self.readPointer(field.field_type, i, options),
