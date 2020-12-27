@@ -994,6 +994,26 @@ test "sqlite: read a single user into a struct" {
 
     // Read a row with db.one()
     {
+        var row = try db.one(
+            struct {
+                id: usize,
+                name: [128:0]u8,
+                age: usize,
+            },
+            "SELECT id, name, age FROM user WHERE id = ?{usize}",
+            .{},
+            .{@as(usize, 20)},
+        );
+        testing.expect(row != null);
+
+        const exp = test_users[0];
+        testing.expectEqual(exp.id, row.?.id);
+        testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name));
+        testing.expectEqual(exp.age, row.?.age);
+    }
+
+    // Read a row with db.oneAlloc()
+    {
         var row = try db.oneAlloc(
             struct {
                 id: usize,
@@ -1129,12 +1149,9 @@ test "sqlite: read a single text value" {
         var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
         defer stmt.deinit();
 
-        const name = try stmt.oneAlloc(
-            typ,
-            &arena.allocator,
-            .{},
-            .{ .id = @as(usize, 20) },
-        );
+        const name = try stmt.oneAlloc(typ, &arena.allocator, .{}, .{
+            .id = @as(usize, 20),
+        });
         testing.expect(name != null);
         switch (typ) {
             Text, Blob => {
@@ -1181,7 +1198,9 @@ test "sqlite: read a single integer value" {
         var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
         defer stmt.deinit();
 
-        var age = try stmt.one(typ, .{}, .{ .id = @as(usize, 20) });
+        var age = try stmt.one(typ, .{}, .{
+            .id = @as(usize, 20),
+        });
         testing.expect(age != null);
 
         testing.expectEqual(@as(typ, 33), age.?);
@@ -1198,7 +1217,9 @@ test "sqlite: read a single value into void" {
     var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
     defer stmt.deinit();
 
-    _ = try stmt.one(void, .{}, .{ .id = @as(usize, 20) });
+    _ = try stmt.one(void, .{}, .{
+        .id = @as(usize, 20),
+    });
 }
 
 test "sqlite: read a single value into bool" {
@@ -1211,7 +1232,9 @@ test "sqlite: read a single value into bool" {
     var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
     defer stmt.deinit();
 
-    const b = try stmt.one(bool, .{}, .{ .id = @as(usize, 20) });
+    const b = try stmt.one(bool, .{}, .{
+        .id = @as(usize, 20),
+    });
     testing.expect(b != null);
     testing.expect(b.?);
 }
@@ -1232,7 +1255,9 @@ test "sqlite: insert bool and bind bool" {
     var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
     defer stmt.deinit();
 
-    const b = try stmt.one(bool, .{}, .{ .is_published = true });
+    const b = try stmt.one(bool, .{}, .{
+        .is_published = true,
+    });
     testing.expect(b != null);
     testing.expect(b.?);
 }
@@ -1293,30 +1318,60 @@ test "sqlite: statement iterator" {
         testing.expectEqual(@as(usize, 1), rows_inserted);
     }
 
-    // Get the data with an iterator
-    var stmt2 = try db.prepare("SELECT name, age FROM user");
-    defer stmt2.deinit();
+    // Get data with a non-allocating iterator.
+    {
+        var stmt2 = try db.prepare("SELECT name, age FROM user");
+        defer stmt2.deinit();
 
-    const Type = struct {
-        name: Text,
-        age: usize,
-    };
+        const RowType = struct {
+            name: [128:0]u8,
+            age: usize,
+        };
 
-    var iter = try stmt2.iterator(Type, .{});
+        var iter = try stmt2.iterator(RowType, .{});
 
-    var rows = std.ArrayList(Type).init(allocator);
-    while (true) {
-        const row = (try iter.nextAlloc(allocator, .{})) orelse break;
-        try rows.append(row);
+        var rows = std.ArrayList(RowType).init(allocator);
+        while (true) {
+            const row = (try iter.next(.{})) orelse break;
+            try rows.append(row);
+        }
+
+        // Check the data
+        testing.expectEqual(expected_rows.items.len, rows.items.len);
+
+        for (rows.items) |row, j| {
+            const exp_row = expected_rows.items[j];
+            testing.expectEqualStrings(exp_row.name, mem.spanZ(&row.name));
+            testing.expectEqual(exp_row.age, row.age);
+        }
     }
 
-    // Check the data
-    testing.expectEqual(expected_rows.items.len, rows.items.len);
+    // Get data with an iterator
+    {
+        var stmt2 = try db.prepare("SELECT name, age FROM user");
+        defer stmt2.deinit();
 
-    for (rows.items) |row, j| {
-        const exp_row = expected_rows.items[j];
-        testing.expectEqualStrings(exp_row.name, row.name.data);
-        testing.expectEqual(exp_row.age, row.age);
+        const RowType = struct {
+            name: Text,
+            age: usize,
+        };
+
+        var iter = try stmt2.iterator(RowType, .{});
+
+        var rows = std.ArrayList(RowType).init(allocator);
+        while (true) {
+            const row = (try iter.nextAlloc(allocator, .{})) orelse break;
+            try rows.append(row);
+        }
+
+        // Check the data
+        testing.expectEqual(expected_rows.items.len, rows.items.len);
+
+        for (rows.items) |row, j| {
+            const exp_row = expected_rows.items[j];
+            testing.expectEqualStrings(exp_row.name, row.name.data);
+            testing.expectEqual(exp_row.age, row.age);
+        }
     }
 }
 
