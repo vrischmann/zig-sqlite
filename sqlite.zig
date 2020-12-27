@@ -96,6 +96,7 @@ pub const Db = struct {
         Memory,
     };
 
+    /// OpenFlags contains various flags used when opening a SQLite databse.
     pub const OpenFlags = struct {
         write: bool = false,
         create: bool = false,
