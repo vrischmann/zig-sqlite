@@ -26,5 +26,8 @@ jobs:
       - name: Build
         run: zig build
 
-      - name: Run Tests
+      - name: Run Tests with filesystem
+        run: zig build test
+
+      - name: Run Tests in memory
         run: zig build test
