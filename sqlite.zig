@@ -790,7 +790,7 @@ test "sqlite: db pragma" {
     testing.expect(foreign_keys != null);
     testing.expectEqual(@as(usize, 0), foreign_keys.?);
 
-    if (build_options.is_ci) {
+    if (build_options.in_memory) {
         const journal_mode = try db.pragma(
             []const u8,
             "journal_mode",
@@ -1186,7 +1186,7 @@ test "sqlite: statement iterator" {
 }
 
 fn dbMode() Db.Mode {
-    return if (build_options.is_ci) blk: {
+    return if (build_options.in_memory) blk: {
         break :blk .{ .Memory = {} };
     } else blk: {
         const path = "/tmp/zig-sqlite.db";

@@ -17,9 +17,14 @@ tasks:
       tar xJf ~/zig.tar.xz
       mv ~/zig-linux-* ~/zig-master
       echo "export PATH=$PATH:~/zig-master" >> ~/.buildenv
+
   - test: |
       cd zig-sqlite
-      TERM=dumb zig build test -Dis_ci
+      TERM=dumb zig build test
+
+  - test_in_memory: |
+      cd zig-sqlite
+      TERM=dumb zig build test -Din_memory
 
 triggers:
   - action: email

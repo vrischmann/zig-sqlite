@@ -14,11 +14,11 @@ pub fn build(b: *Builder) void {
     linkAll(lib);
     lib.install();
 
-    const is_ci = b.option(bool, "is_ci", "Identifies if it runs in a CI environment") orelse false;
+    const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory") orelse false;
 
     var main_tests = b.addTest("sqlite.zig");
     main_tests.setBuildMode(mode);
-    main_tests.addBuildOption(bool, "is_ci", is_ci);
+    main_tests.addBuildOption(bool, "in_memory", in_memory);
     linkAll(main_tests);
 
     const test_step = b.step("test", "Run library tests");
