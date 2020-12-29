@@ -803,7 +803,7 @@ fn addTestData(db: *Db) !void {
 
 test "sqlite: db init" {
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try db.init(testing.allocator, .{});
 }
 
@@ -812,7 +812,7 @@ test "sqlite: db pragma" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
 
     const foreign_keys = try db.pragma(usize, "foreign_keys", .{}, .{});
     testing.expect(foreign_keys != null);
@@ -841,7 +841,7 @@ test "sqlite: db pragma" {
 
 test "sqlite: statement exec" {
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     // Test with a Blob struct
@@ -868,7 +868,7 @@ test "sqlite: read a single user into a struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, age, weight FROM user WHERE id = ?{usize}");
@@ -911,7 +911,7 @@ test "sqlite: read all users into a struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, age, weight FROM user");
@@ -936,7 +936,7 @@ test "sqlite: read in an anonymous struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, name, age, id, weight FROM user WHERE id = ?{usize}");
@@ -970,7 +970,7 @@ test "sqlite: read in a Text struct" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
@@ -998,7 +998,7 @@ test "sqlite: read a single text value" {
     defer arena.deinit();
 
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     const types = &[_]type{
@@ -1051,7 +1051,7 @@ test "sqlite: read a single text value" {
 
 test "sqlite: read a single integer value" {
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     const types = &[_]type{
@@ -1083,7 +1083,7 @@ test "sqlite: read a single integer value" {
 
 test "sqlite: read a single value into void" {
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     const query = "SELECT age FROM user WHERE id = ?{usize}";
@@ -1096,7 +1096,7 @@ test "sqlite: read a single value into void" {
 
 test "sqlite: read a single value into bool" {
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     const query = "SELECT id FROM user WHERE id = ?{usize}";
@@ -1111,7 +1111,7 @@ test "sqlite: read a single value into bool" {
 
 test "sqlite: insert bool and bind bool" {
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     try db.exec("INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})", .{
@@ -1132,7 +1132,7 @@ test "sqlite: insert bool and bind bool" {
 
 test "sqlite: statement reset" {
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     // Add data
@@ -1161,7 +1161,7 @@ test "sqlite: statement iterator" {
     var allocator = &arena.allocator;
 
     var db: Db = undefined;
-    try db.init(testing.allocator, .{ .mode = dbMode() });
+    try db.init(testing.allocator, initOptions());
     try addTestData(&db);
 
     // Cleanup first
@@ -1211,6 +1211,16 @@ test "sqlite: statement iterator" {
         testing.expectEqualStrings(exp_row.name, row.name.data);
         testing.expectEqual(exp_row.age, row.age);
     }
+}
+
+fn initOptions() InitOptions {
+    return .{
+        .open_flags = .{
+            .write = true,
+            .create = true,
+        },
+        .mode = dbMode(),
+    };
 }
 
 fn dbMode() Db.Mode {
