@@ -18,6 +18,12 @@ pub const ThreadingMode = enum {
     Serialized,
 };
 
+pub const InitOptions = struct {
+    mode: Db.Mode = .Memory,
+    open_flags: Db.OpenFlags = .{},
+    threading_mode: ThreadingMode = .SingleThread,
+};
+
 fn isThreadSafe() bool {
     return c.sqlite3_threadsafe() > 0;
 }
@@ -45,27 +51,38 @@ pub const Db = struct {
         Memory,
     };
 
+    pub const OpenFlags = struct {
+        write: bool = false,
+        create: bool = false,
+    };
+
     /// init creates a database with the provided `mode`.
-    pub fn init(self: *Self, allocator: *mem.Allocator, options: anytype) !void {
+    pub fn init(self: *Self, allocator: *mem.Allocator, options: InitOptions) !void {
         self.allocator = allocator;
 
-        const mode: Mode = if (@hasField(@TypeOf(options), "mode")) options.mode else .Memory;
         // Validate the threading mode
         if (options.threading_mode != .SingleThread and !isThreadSafe()) {
             return error.CannotUseSingleThreadedSQLite;
         }
 
-        switch (mode) {
+        // Compute the flags
+        var flags: c_int = 0;
+        flags |= @as(c_int, if (options.open_flags.write) c.SQLITE_OPEN_READWRITE else c.SQLITE_OPEN_READONLY);
+        if (options.open_flags.create) {
+            flags |= c.SQLITE_OPEN_CREATE;
+        }
+        switch (options.threading_mode) {
+            .MultiThread => flags |= c.SQLITE_OPEN_NOMUTEX,
+            .Serialized => flags |= c.SQLITE_OPEN_FULLMUTEX,
+            else => {},
+        }
+
+        switch (options.mode) {
             .File => |path| {
                 logger.info("opening {}", .{path});
 
                 var db: ?*c.sqlite3 = undefined;
-                const result = c.sqlite3_open_v2(
-                    path,
-                    &db,
-                    c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_CREATE,
-                    null,
-                );
+                const result = c.sqlite3_open_v2(path, &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
                     logger.warn("unable to open database, result: {}", .{result});
                     return error.CannotOpenDatabase;
@@ -76,13 +93,10 @@ pub const Db = struct {
             .Memory => {
                 logger.info("opening in memory", .{});
 
+                flags |= c.SQLITE_OPEN_MEMORY;
+
                 var db: ?*c.sqlite3 = undefined;
-                const result = c.sqlite3_open_v2(
-                    ":memory:",
-                    &db,
-                    c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_MEMORY,
-                    null,
-                );
+                const result = c.sqlite3_open_v2(":memory:", &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
                     logger.warn("unable to open database, result: {}", .{result});
                     return error.CannotOpenDatabase;
