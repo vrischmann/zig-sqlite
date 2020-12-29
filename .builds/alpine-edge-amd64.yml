@@ -25,8 +25,3 @@ tasks:
   - test_in_memory: |
       cd zig-sqlite
       TERM=dumb zig build test -Din_memory
-
-triggers:
-  - action: email
-    condition: failure
-    to: "Vincent Rischmann <vincent@rischmann.fr>"
