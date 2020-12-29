@@ -26,7 +26,7 @@ If you use this library, expect to have to make changes when you update the code
 Since there's no package manager for Zig yet, the recommended way is to use a git submodule:
 
 ```bash
-$ git submodule add https://git.sr.ht/~vrischmann/zig-sqlite src/sqlite
+$ git submodule add https://github.com/vrischmann/zig-sqlite.git src/sqlite
 ```
 
 Then add the following to your `build.zig` target(s):
