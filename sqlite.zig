@@ -1258,6 +1258,27 @@ test "sqlite: statement iterator" {
     }
 }
 
+test "sqlite: failing open" {
+    var db: Db = undefined;
+    const res = db.init(.{
+        .open_flags = .{},
+        .mode = .{ .File = "/tmp/not_existing.db" },
+    });
+    testing.expectError(error.CannotOpenDatabase, res);
+}
+
+test "sqlite: failing prepare statement" {
+    var db: Db = undefined;
+    try db.init(initOptions());
+
+    const result = db.prepare("SELECT id FROM foobar");
+    testing.expectError(error.CannotPrepareStatement, result);
+
+    const detailed_err = db.getDetailedError();
+    testing.expectEqual(@as(usize, 1), detailed_err.code);
+    testing.expectEqualStrings("no such table: foobar", detailed_err.message);
+}
+
 fn initOptions() InitOptions {
     return .{
         .open_flags = .{
