@@ -192,6 +192,31 @@ pub const ThreadingMode = enum {
     Serialized,
 };
 
+/// Diagnostics can be used by the library to give more information in case of failures.
+pub const Diagnostics = struct {
+    message: []const u8 = "",
+    err: ?DetailedError = null,
+
+    pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        if (self.err) |err| {
+            if (self.message.len > 0) {
+                _ = try writer.print("{{message: {s}, error: {s}}}", .{ self.message, err.message });
+                return;
+            }
+
+            _ = try writer.write(err.message);
+            return;
+        }
+
+        if (self.message.len > 0) {
+            _ = try writer.write(self.message);
+            return;
+        }
+
+        _ = try writer.write("none");
+    }
+};
+
 pub const InitOptions = struct {
     /// mode controls how the database is opened.
     ///
@@ -207,6 +232,9 @@ pub const InitOptions = struct {
     ///
     /// Defaults to Serialized.
     threading_mode: ThreadingMode = .Serialized,
+
+    /// if provided, diags will be populated in case of failures.
+    diags: ?*Diagnostics = null,
 };
 
 /// DetailedError contains a SQLite error code and error message.
@@ -267,8 +295,11 @@ pub const Db = struct {
         create: bool = false,
     };
 
-    /// init creates a database with the provided `mode`.
+    /// init creates a database with the provided options.
     pub fn init(self: *Self, options: InitOptions) !void {
+        var dummy_diags = Diagnostics{};
+        var diags = options.diags orelse &dummy_diags;
+
         // Validate the threading mode
         if (options.threading_mode != .SingleThread and !isThreadSafe()) {
             return error.CannotUseSingleThreadedSQLite;
@@ -293,6 +324,11 @@ pub const Db = struct {
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(path, &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
+                    if (db) |v| {
+                        diags.err = getLastDetailedErrorFromDb(v);
+                    } else {
+                        diags.err = getDetailedErrorFromResultCode(result);
+                    }
                     return errorFromResultCode(result);
                 }
 
@@ -306,6 +342,11 @@ pub const Db = struct {
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(":memory:", &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
+                    if (db) |v| {
+                        diags.err = getLastDetailedErrorFromDb(v);
+                    } else {
+                        diags.err = getDetailedErrorFromResultCode(result);
+                    }
                     return errorFromResultCode(result);
                 }
 
@@ -371,7 +412,7 @@ pub const Db = struct {
         comptime var buf: [1024]u8 = undefined;
         comptime var query = getPragmaQuery(&buf, name, arg);
 
-        var stmt = try self.prepare(query);
+        var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();
 
         return try stmt.one(Type, options, .{});
@@ -385,17 +426,24 @@ pub const Db = struct {
     }
 
     /// one is a convenience function which prepares a statement and reads a single row from the result set.
-    pub fn one(self: *Self, comptime Type: type, comptime query: []const u8, options: anytype, values: anytype) !?Type {
-        var stmt = try self.prepare(query);
+    pub fn one(self: *Self, comptime Type: type, comptime query: []const u8, options: QueryOptions, values: anytype) !?Type {
+        var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();
         return try stmt.one(Type, options, values);
     }
 
     /// oneAlloc is like `one` but can allocate memory.
-    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, comptime query: []const u8, options: anytype, values: anytype) !?Type {
-        var stmt = try self.prepare(query);
+    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, comptime query: []const u8, options: QueryOptions, values: anytype) !?Type {
+        var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();
         return try stmt.oneAlloc(Type, allocator, options, values);
+    }
+
+    /// prepareWithDiags is like `prepare` but takes an additional options argument.
+    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !Statement(.{}, ParsedQuery.from(query)) {
+        @setEvalBranchQuota(10000);
+        const parsed_query = ParsedQuery.from(query);
+        return Statement(.{}, comptime parsed_query).prepare(self, options, 0);
     }
 
     /// prepare prepares a statement for the `query` provided.
@@ -411,10 +459,11 @@ pub const Db = struct {
     /// The statement returned is only compatible with the number of bind markers in the input query.
     /// This is done because we type check the bind parameters when executing the statement later.
     ///
+    /// If you want additional error information in case of failures, use `prepareWithDiags`.
     pub fn prepare(self: *Self, comptime query: []const u8) !Statement(.{}, ParsedQuery.from(query)) {
         @setEvalBranchQuota(10000);
         const parsed_query = ParsedQuery.from(query);
-        return Statement(.{}, comptime parsed_query).prepare(self, 0);
+        return Statement(.{}, comptime parsed_query).prepare(self, .{}, 0);
     }
 
     /// rowsAffected returns the number of rows affected by the last statement executed.
@@ -426,6 +475,11 @@ pub const Db = struct {
     pub fn openBlob(self: *Self, db_name: Blob.DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: Blob.OpenFlags) !Blob {
         return Blob.open(self.db, db_name, table, column, row, flags);
     }
+};
+
+pub const QueryOptions = struct {
+    /// if provided, diags will be populated in case of failures.
+    diags: ?*Diagnostics = null,
 };
 
 /// Iterator allows iterating over a result set.
@@ -463,12 +517,16 @@ pub fn Iterator(comptime Type: type) type {
         // If it returns null iterating is done.
         //
         // This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call nextAlloc.
-        pub fn next(self: *Self, options: anytype) !?Type {
+        pub fn next(self: *Self, options: QueryOptions) !?Type {
+            var dummy_diags = Diagnostics{};
+            var diags = options.diags orelse &dummy_diags;
+
             var result = c.sqlite3_step(self.stmt);
             if (result == c.SQLITE_DONE) {
                 return null;
             }
             if (result != c.SQLITE_ROW) {
+                diags.err = getLastDetailedErrorFromDb(self.db);
                 return errorFromResultCode(result);
             }
 
@@ -503,12 +561,16 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         // nextAlloc is like `next` but can allocate memory.
-        pub fn nextAlloc(self: *Self, allocator: *mem.Allocator, options: anytype) !?Type {
+        pub fn nextAlloc(self: *Self, allocator: *mem.Allocator, options: QueryOptions) !?Type {
+            var dummy_diags = Diagnostics{};
+            var diags = options.diags orelse &dummy_diags;
+
             var result = c.sqlite3_step(self.stmt);
             if (result == c.SQLITE_DONE) {
                 return null;
             }
             if (result != c.SQLITE_ROW) {
+                diags.err = getLastDetailedErrorFromDb(self.db);
                 return errorFromResultCode(result);
             }
 
@@ -847,7 +909,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         db: *c.sqlite3,
         stmt: *c.sqlite3_stmt,
 
-        fn prepare(db: *Db, flags: c_uint) !Self {
+        fn prepare(db: *Db, options: QueryOptions, flags: c_uint) !Self {
+            var dummy_diags = Diagnostics{};
+            var diags = options.diags orelse &dummy_diags;
+
             var stmt = blk: {
                 const real_query = query.getQuery();
 
@@ -861,6 +926,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     null,
                 );
                 if (result != c.SQLITE_OK) {
+                    diags.err = getLastDetailedErrorFromDb(db.db);
                     return errorFromResultCode(result);
                 }
                 break :blk tmp.?;
@@ -1795,23 +1861,76 @@ test "sqlite: blob open, reopen" {
 }
 
 test "sqlite: failing open" {
+    var diags: Diagnostics = undefined;
+
     var db: Db = undefined;
     const res = db.init(.{
+        .diags = &diags,
         .open_flags = .{},
         .mode = .{ .File = "/tmp/not_existing.db" },
     });
     testing.expectError(error.SQLiteCantOpen, res);
+    testing.expectEqual(@as(usize, 14), diags.err.?.code);
+    testing.expectEqualStrings("unable to open database file", diags.err.?.message);
 }
 
 test "sqlite: failing prepare statement" {
     var db = try getTestDb();
 
-    const result = db.prepare("SELECT id FROM foobar");
+    var diags: Diagnostics = undefined;
+
+    const result = db.prepareWithDiags("SELECT id FROM foobar", .{ .diags = &diags });
     testing.expectError(error.SQLiteError, result);
 
     const detailed_err = db.getDetailedError();
     testing.expectEqual(@as(usize, 1), detailed_err.code);
     testing.expectEqualStrings("no such table: foobar", detailed_err.message);
+}
+
+test "sqlite: diagnostics format" {
+    const TestCase = struct {
+        input: Diagnostics,
+        exp: []const u8,
+    };
+
+    const testCases = &[_]TestCase{
+        .{
+            .input = .{},
+            .exp = "my diagnostics: none",
+        },
+        .{
+            .input = .{
+                .message = "foobar",
+            },
+            .exp = "my diagnostics: foobar",
+        },
+        .{
+            .input = .{
+                .err = .{
+                    .code = 20,
+                    .message = "barbaz",
+                },
+            },
+            .exp = "my diagnostics: barbaz",
+        },
+        .{
+            .input = .{
+                .message = "foobar",
+                .err = .{
+                    .code = 20,
+                    .message = "barbaz",
+                },
+            },
+            .exp = "my diagnostics: {message: foobar, error: barbaz}",
+        },
+    };
+
+    inline for (testCases) |tc| {
+        var buf: [1024]u8 = undefined;
+        const str = try std.fmt.bufPrint(&buf, "my diagnostics: {s}", .{tc.input});
+
+        testing.expectEqualStrings(tc.exp, str);
+    }
 }
 
 fn getTestDb() !Db {
