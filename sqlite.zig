@@ -127,7 +127,6 @@ pub const Db = struct {
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(path, &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
-                    logger.warn("unable to open database, result: {}", .{result});
                     return error.CannotOpenDatabase;
                 }
 
@@ -141,7 +140,6 @@ pub const Db = struct {
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(":memory:", &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
-                    logger.warn("unable to open database, result: {}", .{result});
                     return error.CannotOpenDatabase;
                 }
 
@@ -585,7 +583,6 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     null,
                 );
                 if (result != c.SQLITE_OK) {
-                    logger.warn("unable to prepare statement, result: {}", .{result});
                     return error.CannotPrepareStatement;
                 }
                 break :blk tmp.?;
