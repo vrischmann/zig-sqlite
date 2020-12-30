@@ -42,8 +42,36 @@ pub const InitOptions = struct {
     threading_mode: ThreadingMode = .Serialized,
 };
 
+pub const Error = error{};
+
+/// DetailedError contains a SQLite error code and error message.
+pub const DetailedError = struct {
+    code: usize,
+    message: []const u8,
+};
+
 fn isThreadSafe() bool {
     return c.sqlite3_threadsafe() > 0;
+}
+
+fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
+    return .{
+        .code = @intCast(usize, code),
+        .message = blk: {
+            const msg = c.sqlite3_errstr(code);
+            break :blk mem.spanZ(msg);
+        },
+    };
+}
+
+fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
+    return .{
+        .code = @intCast(usize, c.sqlite3_extended_errcode(db)),
+        .message = blk: {
+            const msg = c.sqlite3_errmsg(db);
+            break :blk mem.spanZ(msg);
+        },
+    };
 }
 
 /// Db is a wrapper around a SQLite database, providing high-level functions for executing queries.
@@ -125,6 +153,11 @@ pub const Db = struct {
     /// deinit closes the database.
     pub fn deinit(self: *Self) void {
         _ = c.sqlite3_close(self.db);
+    }
+
+    // getDetailedError returns the detailed error for the last API call if it failed.
+    pub fn getDetailedError(self: *Self) DetailedError {
+        return getLastDetailedErrorFromDb(self.db);
     }
 
     /// pragma is a convenience function to use the PRAGMA statement.
