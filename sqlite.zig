@@ -12,16 +12,34 @@ usingnamespace @import("query.zig");
 
 const logger = std.log.scoped(.sqlite);
 
+/// ThreadingMode controls the threading mode used by SQLite.
+///
+/// See https://sqlite.org/threadsafe.html
 pub const ThreadingMode = enum {
+    /// SingleThread makes SQLite unsafe to use with more than a single thread at once.
     SingleThread,
+    /// MultiThread makes SQLite safe to use with multiple threads at once provided that
+    /// a single database connection is not by more than a single thread at once.
     MultiThread,
+    /// Serialized makes SQLite safe to use with multiple threads at once with no restriction.
     Serialized,
 };
 
 pub const InitOptions = struct {
+    /// mode controls how the database is opened.
+    ///
+    /// Defaults to a in-memory database.
     mode: Db.Mode = .Memory,
+
+    /// open_flags controls the flags used when opening a database.
+    ///
+    /// Defaults to a read only database.
     open_flags: Db.OpenFlags = .{},
-    threading_mode: ThreadingMode = .SingleThread,
+
+    /// threading_mode controls the threading mode used by SQLite.
+    ///
+    /// Defaults to Serialized.
+    threading_mode: ThreadingMode = .Serialized,
 };
 
 fn isThreadSafe() bool {
