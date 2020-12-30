@@ -5,7 +5,7 @@ packages:
   - jq
   - libsqlite3-dev
 sources:
-  - https://git.sr.ht/~vrischmann/zig-sqlite
+  - https://github.com/vrischmann/zig-sqlite
 secrets:
   - ce266aec-9be4-4136-b53e-dc12a62a399b
 
