@@ -251,7 +251,7 @@ Since sqlite doesn't have many [types](https://www.sqlite.org/datatype3.html) on
 Here are the rules for bind parameters:
 * any Zig `Int` or `ComptimeInt` is tread as a `INTEGER`.
 * any Zig `Float` or `ComptimeFloat` is treated as a `REAL`.
-* `[]const u8`, `[]u8` or any array of `u8` is treated as a `TEXT`.
+* `[]const u8`, `[]u8` is treated as a `TEXT`.
 * The custom `sqlite.Blob` type is treated as a `BLOB`.
 * The custom `sqlite.Text` type is treated as a `TEXT`.
 
@@ -259,7 +259,7 @@ Here are the rules for resultset rows:
 * `INTEGER` can be read into any Zig `Int` provided the data fits.
 * `REAL` can be read into any Zig `Float` provided the data fits.
 * `TEXT` can be read into a `[]const u8` or `[]u8`.
-* `TEXT` can be read into any array of `u8` provided the data fits.
+* `TEXT` can be read into any array of `u8` with a sentinel provided the data fits.
 * `BLOB` follows the same rules as `TEXT`.
 
 Note that arrays must have a sentinel because we need a way to communicate where the data actually stops in the array, so for example use `[200:0]u8` for a `TEXT` field.
