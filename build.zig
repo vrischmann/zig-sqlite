@@ -7,9 +7,11 @@ fn linkAll(obj: *std.build.LibExeObjStep) void {
 }
 
 pub fn build(b: *Builder) void {
+    const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
     const lib = b.addStaticLibrary("zig-sqlite", "sqlite.zig");
+    lib.setTarget(target);
     lib.setBuildMode(mode);
     linkAll(lib);
     lib.install();
@@ -17,6 +19,7 @@ pub fn build(b: *Builder) void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory") orelse false;
 
     var main_tests = b.addTest("sqlite.zig");
+    main_tests.setTarget(target);
     main_tests.setBuildMode(mode);
     main_tests.addBuildOption(bool, "in_memory", in_memory);
     linkAll(main_tests);
