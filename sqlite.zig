@@ -9,6 +9,7 @@ const c = @cImport({
 });
 
 usingnamespace @import("query.zig");
+usingnamespace @import("error.zig");
 
 const logger = std.log.scoped(.sqlite);
 
@@ -41,8 +42,6 @@ pub const InitOptions = struct {
     /// Defaults to Serialized.
     threading_mode: ThreadingMode = .Serialized,
 };
-
-pub const Error = error{};
 
 /// DetailedError contains a SQLite error code and error message.
 pub const DetailedError = struct {
@@ -128,7 +127,7 @@ pub const Db = struct {
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(path, &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
-                    return error.CannotOpenDatabase;
+                    return errorFromResultCode(result);
                 }
 
                 self.db = db.?;
@@ -141,7 +140,7 @@ pub const Db = struct {
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(":memory:", &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
-                    return error.CannotOpenDatabase;
+                    return errorFromResultCode(result);
                 }
 
                 self.db = db.?;
@@ -292,7 +291,7 @@ pub fn Iterator(comptime Type: type) type {
                 return null;
             }
             if (result != c.SQLITE_ROW) {
-                return error.SQLiteStepError;
+                return errorFromResultCode(result);
             }
 
             const columns = c.sqlite3_column_count(self.stmt);
@@ -332,7 +331,7 @@ pub fn Iterator(comptime Type: type) type {
                 return null;
             }
             if (result != c.SQLITE_ROW) {
-                return error.SQLiteStepError;
+                return errorFromResultCode(result);
             }
 
             const columns = c.sqlite3_column_count(self.stmt);
@@ -649,7 +648,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     null,
                 );
                 if (result != c.SQLITE_OK) {
-                    return error.CannotPrepareStatement;
+                    return errorFromResultCode(result);
                 }
                 break :blk tmp.?;
             };
@@ -754,7 +753,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             const result = c.sqlite3_step(self.stmt);
             switch (result) {
                 c.SQLITE_DONE => {},
-                c.SQLITE_BUSY => return error.SQLiteBusy,
+                c.SQLITE_BUSY => return errorFromResultCode(result),
                 else => std.debug.panic("invalid result {}", .{result}),
             }
         }
@@ -1403,7 +1402,7 @@ test "sqlite: failing open" {
         .open_flags = .{},
         .mode = .{ .File = "/tmp/not_existing.db" },
     });
-    testing.expectError(error.CannotOpenDatabase, res);
+    testing.expectError(error.SQLiteCantOpen, res);
 }
 
 test "sqlite: failing prepare statement" {
@@ -1411,7 +1410,7 @@ test "sqlite: failing prepare statement" {
     try db.init(initOptions());
 
     const result = db.prepare("SELECT id FROM foobar");
-    testing.expectError(error.CannotPrepareStatement, result);
+    testing.expectError(error.SQLiteError, result);
 
     const detailed_err = db.getDetailedError();
     testing.expectEqual(@as(usize, 1), detailed_err.code);
