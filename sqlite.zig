@@ -159,6 +159,30 @@ pub const Db = struct {
         return getLastDetailedErrorFromDb(self.db);
     }
 
+    fn getPragmaQuery(comptime buf: []u8, comptime name: []const u8, comptime arg: anytype) []const u8 {
+        return if (arg.len == 1) blk: {
+            break :blk try std.fmt.bufPrint(buf, "PRAGMA {} = {}", .{ name, arg[0] });
+        } else blk: {
+            break :blk try std.fmt.bufPrint(buf, "PRAGMA {}", .{name});
+        };
+    }
+
+    /// pragmaAlloc is like `pragma` but can allocate memory.
+    ///
+    /// Useful when the pragma command returns text, for example:
+    ///
+    ///     const journal_mode = try db.pragma([]const u8, allocator, .{}, "journal_mode", .{});
+    ///
+    pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, comptime name: []const u8, comptime arg: anytype) !?Type {
+        comptime var buf: [1024]u8 = undefined;
+        comptime var query = getPragmaQuery(&buf, name, arg);
+
+        var stmt = try self.prepare(query);
+        defer stmt.deinit();
+
+        return try stmt.oneAlloc(Type, allocator, options, .{});
+    }
+
     /// pragma is a convenience function to use the PRAGMA statement.
     ///
     /// Here is how to set a pragma value:
@@ -167,21 +191,14 @@ pub const Db = struct {
     ///
     /// Here is how to query a pragama value:
     ///
-    ///     const journal_mode = try db.pragma(
-    ///         []const u8,
-    ///         "journal_mode",
-    ///         .{ .allocator = allocator },
-    ///         .{},
-    ///     );
+    ///     const journal_mode = try db.pragma([128:0]const u8, .{}, "journal_mode", .{});
     ///
     /// The pragma name must be known at comptime.
-    pub fn pragma(self: *Self, comptime Type: type, comptime name: []const u8, options: anytype, arg: anytype) !?Type {
+    ///
+    /// This cannot allocate memory. If your pragma command returns text you must use an array or call `pragmaAlloc`.
+    pub fn pragma(self: *Self, comptime Type: type, options: anytype, comptime name: []const u8, arg: anytype) !?Type {
         comptime var buf: [1024]u8 = undefined;
-        comptime var query = if (arg.len == 1) blk: {
-            break :blk try std.fmt.bufPrint(&buf, "PRAGMA {} = {}", .{ name, arg[0] });
-        } else blk: {
-            break :blk try std.fmt.bufPrint(&buf, "PRAGMA {}", .{name});
-        };
+        comptime var query = getPragmaQuery(&buf, name, arg);
 
         var stmt = try self.prepare(query);
         defer stmt.deinit();
@@ -201,6 +218,13 @@ pub const Db = struct {
         var stmt = try self.prepare(query);
         defer stmt.deinit();
         return try stmt.one(Type, options, values);
+    }
+
+    /// oneAlloc is like `one` but can allocate memory.
+    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, comptime query: []const u8, options: anytype, values: anytype) !?Type {
+        var stmt = try self.prepare(query);
+        defer stmt.deinit();
+        return try stmt.oneAlloc(Type, allocator, options, values);
     }
 
     /// prepare prepares a statement for the `query` provided.
@@ -259,16 +283,55 @@ pub fn Iterator(comptime Type: type) type {
         stmt: *c.sqlite3_stmt,
 
         // next scans the next row using the prepared statement.
-        //
         // If it returns null iterating is done.
+        //
+        // This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call nextAlloc.
         pub fn next(self: *Self, options: anytype) !?Type {
             var result = c.sqlite3_step(self.stmt);
             if (result == c.SQLITE_DONE) {
                 return null;
             }
-
             if (result != c.SQLITE_ROW) {
-                logger.err("unable to iterate, result: {}", .{result});
+                return error.SQLiteStepError;
+            }
+
+            const columns = c.sqlite3_column_count(self.stmt);
+
+            switch (TypeInfo) {
+                .Int => {
+                    debug.assert(columns == 1);
+                    return try self.readInt(Type, 0);
+                },
+                .Float => {
+                    debug.assert(columns == 1);
+                    return try self.readFloat(Type, 0);
+                },
+                .Bool => {
+                    debug.assert(columns == 1);
+                    return try self.readBool(0);
+                },
+                .Void => {
+                    debug.assert(columns == 1);
+                },
+                .Array => {
+                    debug.assert(columns == 1);
+                    return try self.readArray(Type, 0);
+                },
+                .Struct => {
+                    std.debug.assert(columns == TypeInfo.Struct.fields.len);
+                    return try self.readStruct(.{});
+                },
+                else => @compileError("cannot read into type " ++ @typeName(Type) ++ " ; if dynamic memory allocation is required use nextAlloc"),
+            }
+        }
+
+        // nextAlloc is like `next` but can allocate memory.
+        pub fn nextAlloc(self: *Self, allocator: *mem.Allocator, options: anytype) !?Type {
+            var result = c.sqlite3_step(self.stmt);
+            if (result == c.SQLITE_DONE) {
+                return null;
+            }
+            if (result != c.SQLITE_ROW) {
                 return error.SQLiteStepError;
             }
 
@@ -277,15 +340,15 @@ pub fn Iterator(comptime Type: type) type {
             switch (Type) {
                 []const u8, []u8 => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Type, options.allocator, 0, .Text);
+                    return try self.readBytes(Type, allocator, 0, .Text);
                 },
                 Blob => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Blob, options.allocator, 0, .Blob);
+                    return try self.readBytes(Blob, allocator, 0, .Blob);
                 },
                 Text => {
                     debug.assert(columns == 1);
-                    return try self.readBytes(Text, options.allocator, 0, .Text);
+                    return try self.readBytes(Text, allocator, 0, .Text);
                 },
                 else => {},
             }
@@ -312,11 +375,13 @@ pub fn Iterator(comptime Type: type) type {
                 },
                 .Pointer => {
                     debug.assert(columns == 1);
-                    return try self.readPointer(Type, 0, options);
+                    return try self.readPointer(Type, allocator, 0);
                 },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
-                    return try self.readStruct(options);
+                    return try self.readStruct(.{
+                        .allocator = allocator,
+                    });
                 },
                 else => @compileError("cannot read into type " ++ @typeName(Type)),
             }
@@ -458,7 +523,7 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
-        fn readPointer(self: *Self, comptime PointerType: type, i: usize, options: anytype) !PointerType {
+        fn readPointer(self: *Self, comptime PointerType: type, allocator: *mem.Allocator, i: usize) !PointerType {
             const type_info = @typeInfo(PointerType);
 
             var ret: PointerType = undefined;
@@ -467,7 +532,7 @@ pub fn Iterator(comptime Type: type) type {
                     switch (ptr.size) {
                         .One => unreachable,
                         .Slice => switch (ptr.child) {
-                            u8 => ret = try self.readBytes(PointerType, options.allocator, i, .Text),
+                            u8 => ret = try self.readBytes(PointerType, allocator, i, .Text),
                             else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
                         },
                         else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
@@ -516,7 +581,7 @@ pub fn Iterator(comptime Type: type) type {
                         .Bool => try self.readBool(i),
                         .Void => {},
                         .Array => try self.readArray(field.field_type, i),
-                        .Pointer => try self.readPointer(field.field_type, i, options),
+                        .Pointer => try self.readPointer(field.field_type, options.allocator, i),
                         else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
                     },
                 };
@@ -734,10 +799,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///     const row = try stmt.one(
         ///         struct {
         ///             id: usize,
-        ///             name: []const u8,
+        ///             name: [400]u8,
         ///             age: usize,
         ///         },
-        ///         .{ .allocator = allocator },
+        ///         .{},
         ///         .{ .foo = "bar", .age = 500 },
         ///     );
         ///
@@ -747,6 +812,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
         /// in the input query string.
         ///
+        /// This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call `oneAlloc`.
         pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
                 @compileError("options passed to iterator must be a struct");
@@ -755,6 +821,18 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             var iter = try self.iterator(Type, values);
 
             const row = (try iter.next(options)) orelse return null;
+            return row;
+        }
+
+        /// oneAlloc is like `one` but can allocate memory.
+        pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) !?Type {
+            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+                @compileError("options passed to iterator must be a struct");
+            }
+
+            var iter = try self.iterator(Type, values);
+
+            const row = (try iter.nextAlloc(allocator, options)) orelse return null;
             return row;
         }
 
@@ -773,7 +851,8 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///             name: []const u8,
         ///             age: usize,
         ///         },
-        ///         .{ .allocator = allocator },
+        ///         allocator,
+        ///         .{},
         ///         .{ .foo = "bar", .age = 500 },
         ///     );
         ///
@@ -783,18 +862,16 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
         /// in the input query string.
         ///
-        /// Note that this allocates all rows into a single slice: if you read a lot of data this can
-        /// use a lot of memory.
-        ///
-        pub fn all(self: *Self, comptime Type: type, options: anytype, values: anytype) ![]Type {
+        /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
+        pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) ![]Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
                 @compileError("options passed to iterator must be a struct");
             }
             var iter = try self.iterator(Type, values);
 
-            var rows = std.ArrayList(Type).init(options.allocator);
+            var rows = std.ArrayList(Type).init(allocator);
             while (true) {
-                const row = (try iter.next(options)) orelse break;
+                const row = (try iter.nextAlloc(allocator, options)) orelse break;
                 try rows.append(row);
             }
 
@@ -860,28 +937,36 @@ test "sqlite: db pragma" {
     var db: Db = undefined;
     try db.init(initOptions());
 
-    const foreign_keys = try db.pragma(usize, "foreign_keys", .{}, .{});
+    const foreign_keys = try db.pragma(usize, .{}, "foreign_keys", .{});
     testing.expect(foreign_keys != null);
     testing.expectEqual(@as(usize, 0), foreign_keys.?);
 
+    const arg = .{"wal"};
+
     if (build_options.in_memory) {
-        const journal_mode = try db.pragma(
-            []const u8,
-            "journal_mode",
-            .{ .allocator = &arena.allocator },
-            .{"wal"},
-        );
-        testing.expect(journal_mode != null);
-        testing.expectEqualStrings("memory", journal_mode.?);
+        {
+            const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", arg);
+            testing.expect(journal_mode != null);
+            testing.expectEqualStrings("memory", mem.spanZ(&journal_mode.?));
+        }
+
+        {
+            const journal_mode = try db.pragmaAlloc([]const u8, &arena.allocator, .{}, "journal_mode", arg);
+            testing.expect(journal_mode != null);
+            testing.expectEqualStrings("memory", journal_mode.?);
+        }
     } else {
-        const journal_mode = try db.pragma(
-            []const u8,
-            "journal_mode",
-            .{ .allocator = &arena.allocator },
-            .{"wal"},
-        );
-        testing.expect(journal_mode != null);
-        testing.expectEqualStrings("wal", journal_mode.?);
+        {
+            const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", arg);
+            testing.expect(journal_mode != null);
+            testing.expectEqualStrings("wal", mem.spanZ(&journal_mode.?));
+        }
+
+        {
+            const journal_mode = try db.pragmaAlloc([]const u8, &arena.allocator, .{}, "journal_mode", arg);
+            testing.expect(journal_mode != null);
+            testing.expectEqualStrings("wal", journal_mode.?);
+        }
     }
 }
 
@@ -920,11 +1005,9 @@ test "sqlite: read a single user into a struct" {
     var stmt = try db.prepare("SELECT id, name, age, weight FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
-    var rows = try stmt.all(
-        TestUser,
-        .{ .allocator = &arena.allocator },
-        .{ .id = @as(usize, 20) },
-    );
+    var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{
+        .id = @as(usize, 20),
+    });
     for (rows) |row| {
         testing.expectEqual(test_users[0].id, row.id);
         testing.expectEqualStrings(test_users[0].name, row.name);
@@ -936,11 +1019,32 @@ test "sqlite: read a single user into a struct" {
         var row = try db.one(
             struct {
                 id: usize,
-                name: Text,
+                name: [128:0]u8,
                 age: usize,
             },
             "SELECT id, name, age FROM user WHERE id = ?{usize}",
-            .{ .allocator = &arena.allocator },
+            .{},
+            .{@as(usize, 20)},
+        );
+        testing.expect(row != null);
+
+        const exp = test_users[0];
+        testing.expectEqual(exp.id, row.?.id);
+        testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name));
+        testing.expectEqual(exp.age, row.?.age);
+    }
+
+    // Read a row with db.oneAlloc()
+    {
+        var row = try db.oneAlloc(
+            struct {
+                id: usize,
+                name: Text,
+                age: usize,
+            },
+            &arena.allocator,
+            "SELECT id, name, age FROM user WHERE id = ?{usize}",
+            .{},
             .{@as(usize, 20)},
         );
         testing.expect(row != null);
@@ -963,11 +1067,7 @@ test "sqlite: read all users into a struct" {
     var stmt = try db.prepare("SELECT id, name, age, weight FROM user");
     defer stmt.deinit();
 
-    var rows = try stmt.all(
-        TestUser,
-        .{ .allocator = &arena.allocator },
-        .{},
-    );
+    var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{});
     testing.expectEqual(@as(usize, 3), rows.len);
     for (rows) |row, i| {
         const exp = test_users[i];
@@ -988,7 +1088,7 @@ test "sqlite: read in an anonymous struct" {
     var stmt = try db.prepare("SELECT id, name, name, age, id, weight FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
-    var row = try stmt.one(
+    var row = try stmt.oneAlloc(
         struct {
             id: usize,
             name: []const u8,
@@ -997,7 +1097,8 @@ test "sqlite: read in an anonymous struct" {
             is_id: bool,
             weight: f64,
         },
-        .{ .allocator = &arena.allocator },
+        &arena.allocator,
+        .{},
         .{ .id = @as(usize, 20) },
     );
     testing.expect(row != null);
@@ -1022,13 +1123,14 @@ test "sqlite: read in a Text struct" {
     var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
-    var row = try stmt.one(
+    var row = try stmt.oneAlloc(
         struct {
             id: usize,
             name: Text,
             age: usize,
         },
-        .{ .allocator = &arena.allocator },
+        &arena.allocator,
+        .{},
         .{@as(usize, 20)},
     );
     testing.expect(row != null);
@@ -1069,11 +1171,9 @@ test "sqlite: read a single text value" {
         var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
         defer stmt.deinit();
 
-        const name = try stmt.one(
-            typ,
-            .{ .allocator = &arena.allocator },
-            .{ .id = @as(usize, 20) },
-        );
+        const name = try stmt.oneAlloc(typ, &arena.allocator, .{}, .{
+            .id = @as(usize, 20),
+        });
         testing.expect(name != null);
         switch (typ) {
             Text, Blob => {
@@ -1120,7 +1220,9 @@ test "sqlite: read a single integer value" {
         var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
         defer stmt.deinit();
 
-        var age = try stmt.one(typ, .{}, .{ .id = @as(usize, 20) });
+        var age = try stmt.one(typ, .{}, .{
+            .id = @as(usize, 20),
+        });
         testing.expect(age != null);
 
         testing.expectEqual(@as(typ, 33), age.?);
@@ -1137,7 +1239,9 @@ test "sqlite: read a single value into void" {
     var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
     defer stmt.deinit();
 
-    _ = try stmt.one(void, .{}, .{ .id = @as(usize, 20) });
+    _ = try stmt.one(void, .{}, .{
+        .id = @as(usize, 20),
+    });
 }
 
 test "sqlite: read a single value into bool" {
@@ -1150,7 +1254,9 @@ test "sqlite: read a single value into bool" {
     var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
     defer stmt.deinit();
 
-    const b = try stmt.one(bool, .{}, .{ .id = @as(usize, 20) });
+    const b = try stmt.one(bool, .{}, .{
+        .id = @as(usize, 20),
+    });
     testing.expect(b != null);
     testing.expect(b.?);
 }
@@ -1171,7 +1277,9 @@ test "sqlite: insert bool and bind bool" {
     var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
     defer stmt.deinit();
 
-    const b = try stmt.one(bool, .{}, .{ .is_published = true });
+    const b = try stmt.one(bool, .{}, .{
+        .is_published = true,
+    });
     testing.expect(b != null);
     testing.expect(b.?);
 }
@@ -1232,30 +1340,60 @@ test "sqlite: statement iterator" {
         testing.expectEqual(@as(usize, 1), rows_inserted);
     }
 
-    // Get the data with an iterator
-    var stmt2 = try db.prepare("SELECT name, age FROM user");
-    defer stmt2.deinit();
+    // Get data with a non-allocating iterator.
+    {
+        var stmt2 = try db.prepare("SELECT name, age FROM user");
+        defer stmt2.deinit();
 
-    const Type = struct {
-        name: Text,
-        age: usize,
-    };
+        const RowType = struct {
+            name: [128:0]u8,
+            age: usize,
+        };
 
-    var iter = try stmt2.iterator(Type, .{});
+        var iter = try stmt2.iterator(RowType, .{});
 
-    var rows = std.ArrayList(Type).init(allocator);
-    while (true) {
-        const row = (try iter.next(.{ .allocator = allocator })) orelse break;
-        try rows.append(row);
+        var rows = std.ArrayList(RowType).init(allocator);
+        while (true) {
+            const row = (try iter.next(.{})) orelse break;
+            try rows.append(row);
+        }
+
+        // Check the data
+        testing.expectEqual(expected_rows.items.len, rows.items.len);
+
+        for (rows.items) |row, j| {
+            const exp_row = expected_rows.items[j];
+            testing.expectEqualStrings(exp_row.name, mem.spanZ(&row.name));
+            testing.expectEqual(exp_row.age, row.age);
+        }
     }
 
-    // Check the data
-    testing.expectEqual(expected_rows.items.len, rows.items.len);
+    // Get data with an iterator
+    {
+        var stmt2 = try db.prepare("SELECT name, age FROM user");
+        defer stmt2.deinit();
 
-    for (rows.items) |row, j| {
-        const exp_row = expected_rows.items[j];
-        testing.expectEqualStrings(exp_row.name, row.name.data);
-        testing.expectEqual(exp_row.age, row.age);
+        const RowType = struct {
+            name: Text,
+            age: usize,
+        };
+
+        var iter = try stmt2.iterator(RowType, .{});
+
+        var rows = std.ArrayList(RowType).init(allocator);
+        while (true) {
+            const row = (try iter.nextAlloc(allocator, .{})) orelse break;
+            try rows.append(row);
+        }
+
+        // Check the data
+        testing.expectEqual(expected_rows.items.len, rows.items.len);
+
+        for (rows.items) |row, j| {
+            const exp_row = expected_rows.items[j];
+            testing.expectEqualStrings(exp_row.name, row.name.data);
+            testing.expectEqual(exp_row.age, row.age);
+        }
     }
 }
 

@@ -2,13 +2,13 @@
 
 This package is a thin wrapper around [sqlite](https://sqlite.org/index.html)'s C API.
 
-## Status
+# Status
 
 While the core functionality works right now, the API is still subject to changes.
 
 If you use this library, expect to have to make changes when you update the code.
 
-## Requirements
+# Requirements
 
 * [Zig master](https://ziglang.org/download/)
 * Linux
@@ -16,12 +16,12 @@ If you use this library, expect to have to make changes when you update the code
   * `libsqlite3-dev` for Debian and derivatives
   * `sqlite3-devel` for Fedora
 
-## Features
+# Features
 
 * Preparing, executing statements
 * comptime checked bind parameters
 
-## Installation
+# Installation
 
 Since there's no package manager for Zig yet, the recommended way is to use a git submodule:
 
@@ -43,9 +43,9 @@ Now you should be able to import sqlite like this:
 const sqlite = @import("sqlite");
 ```
 
-## Usage
+# Usage
 
-### Initialization
+## Initialization
 
 You must create and initialize an instance of `sqlite.Db`:
 
@@ -65,7 +65,9 @@ The `init` method takes an allocator and a `InitOptions` struct which will be us
 
 Only the `mode` field is mandatory, the other fields have sane default values.
 
-### Preparing a statement
+## Preparing a statement
+
+### Common use
 
 sqlite works exclusively by using prepared statements. The wrapper type is `sqlite.Statement`. Here is how you get one:
 
@@ -80,7 +82,7 @@ defer stmt.deinit();
 
 The `Db.prepare` method takes a `comptime` query string.
 
-### Executing a statement
+## Executing a statement
 
 For queries which do not return data (`INSERT`, `UPDATE`) you can use the `exec` method:
 
@@ -100,34 +102,16 @@ try stmt.exec({
 
 See the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
-### Reading data
+## Reading data
 
-For queries which do return data you can use the `all` method:
+For queries which return data you have multiple options:
+* `Statement.all` which takes an allocator and can allocate memory.
+* `Statement.one` which does not take an allocator and cannot allocate memory (aside from what SQLite allocates itself).
+* `Statement.oneAlloc` which takes an allocator and can allocate memory.
 
-```zig
-const query =
-    \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
-;
+### Type parameter
 
-var stmt = try db.prepare(query);
-defer stmt.deinit();
-
-const rows = try stmt.all(
-    struct {
-        id: usize,
-        name: []const u8,
-        age: u16,
-        salary: u32,
-    },
-    .{ .allocator = allocator },
-    .{ .age1 = 20, .age2 = 40 },
-);
-for (rows) |row| {
-    std.log.debug("id: {} ; name: {}; age: {}; salary: {}", .{ row.id, row.name, row.age, row.salary });
-}
-```
-
-The `all` method takes a type and an options tuple.
+All these methods take a type as first parameter.
 
 The type represents a "row", it can be:
 * a struct where each field maps to the corresponding column in the resultset (so field 0 must map to field 1 and so on).
@@ -135,26 +119,35 @@ The type represents a "row", it can be:
 
 Not all types are allowed, see the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
-The options tuple is used to pass additional state required for some queries, usually it will be an allocator.
-Not all queries require an allocator, hence why it's not required for every call.
+### Non allocating
 
-The `one` method on a statement works the same way except it returns the first row of the result set:
+Using `one`:
 
 ```zig
 const query =
-    \\SELECT age FROM employees WHERE id = ?
+    \\SELECT name, age FROM employees WHERE id = ?
 ;
 
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-const row = try stmt.one(usize, .{}, .{ .id = 20 });
+const row = try stmt.one(
+    struct {
+        name: [128:0]u8,
+        age: usize,
+    },
+    .{},
+    .{ .id = 20 },
+);
 if (row) |age| {
     std.log.debug("age: {}", .{age});
 }
 ```
+Notice that to read text we need to use a 0-terminated array; if the `name` column is bigger than 127 bytes the call to `one` will fail.
 
-The convienence function `sqlite.Db.one` works exactly the same way:
+The sentinel is mandatory: without one there would be no way to know where the data ends in the array.
+
+The convenience function `sqlite.Db.one` works exactly the same way:
 
 ```zig
 const query =
@@ -167,37 +160,73 @@ if (row) |age| {
 }
 ```
 
-### Iterating
+### Allocating
 
-Another way to get the data returned by a query is to use the `sqlite.Iterator` type.
-
-You can only get one by calling the `iterator` method on a statement:
+Using `all`:
 
 ```zig
-var stmt = try db.prepare("SELECT name FROM user WHERE age < ?");
+const query =
+    \\SELECT name FROM employees WHERE age > ? AND age < ?
+;
+
+var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-var iter = try stmt.iterator([]const u8, .{
-    .age = 20,
+const rows = try stmt.all([]const u8, allocator, .{}, .{
+    .age1 = 20,
+    .age2 = 40,
 });
-
-var names = std.ArrayList([]const u8).init(allocator);
-while (true) {
-    const row = (try iter.next(.{ .allocator = allocator })) orelse break;
-    try rows.append(row);
+for (rows) |row| {
+    std.log.debug("id: {} ; name: {}; age: {}; salary: {}", .{ row.id, row.name, row.age, row.salary });
 }
 ```
 
-The `iterator` method takes a type which is the same as with `all` or `one`: every row retrieved by calling `next` will have this type.
+Using `oneAlloc`:
 
-Using the iterator is straightforward: call `next` on it in a loop; it can either fail with an error or return an optional value: if that optional is null, iterating is done.
+```zig
+const query =
+    \\SELECT name FROM employees WHERE id = ?
+;
 
-The `next` method takes an options tuple which serves the same function as the one in `all` or `one`.
+var stmt = try db.prepare(query);
+defer stmt.deinit();
 
-The code example above uses the iterator but it's no different than just calling `all` used like this; the real benefit of the iterator is to be able to process each row
-sequentially without needing to store all the resultset in memory at the same time.
+const name = try stmt.oneAlloc([]const u8, allocator, .{}, .{
+    .id = 200,
+});
+std.log.debug("name: {}", .{name});
+```
 
-Here's an example:
+## Iterating
+
+Another way to get the data returned by a query is to use the `sqlite.Iterator` type.
+
+You can only get one by calling the `iterator` method on a statement.
+
+The `iterator` method takes a type which is the same as with `all`, `one` or `oneAlloc`: every row retrieved by calling `next` or `nextAlloc` will have this type.
+
+Iterating is done by calling the `next` or `nextAlloc` method on an iterator. Just like before, `next` cannot allocate memory while `nextAlloc` can allocate memory.
+
+`next` or `nextAlloc` will either return an optional value or an error; you should keep iterating until `null` is returned.
+
+### Non allocating
+
+```zig
+var stmt = try db.prepare("SELECT age FROM user WHERE age < ?");
+defer stmt.deinit();
+
+var iter = try stmt.iterator(usize, .{
+    .age = 20,
+});
+
+while (true) {
+    const age = (try iter.next(.{})) orelse break;
+    std.debug.print("age: {}\n", .{age});
+}
+```
+
+### Allocating
+
 ```zig
 var stmt = try db.prepare("SELECT name FROM user WHERE age < ?");
 defer stmt.deinit();
@@ -210,22 +239,19 @@ while (true) {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
 
-    const name = (try iter.next(.{ .allocator = &arena.allocator })) orelse break;
-
-    // do stuff with name here
+    const name = (try iter.nextAlloc(&arena.allocator, .{})) orelse break;
+    std.debug.print("name: {}\n", .{name});
 }
 ```
 
-Used like this the memory required for the row is only used for one iteration. You can imagine this is especially useful if your resultset contains millions of rows.
-
-### Bind parameters and resultset rows
+## Bind parameters and resultset rows
 
 Since sqlite doesn't have many [types](https://www.sqlite.org/datatype3.html) only a small number of Zig types are allowed in binding parameters and in resultset mapping types.
 
 Here are the rules for bind parameters:
 * any Zig `Int` or `ComptimeInt` is tread as a `INTEGER`.
 * any Zig `Float` or `ComptimeFloat` is treated as a `REAL`.
-* `[]const u8`, `[]u8` or any array of `u8` is treated as a `TEXT`.
+* `[]const u8`, `[]u8` is treated as a `TEXT`.
 * The custom `sqlite.Blob` type is treated as a `BLOB`.
 * The custom `sqlite.Text` type is treated as a `TEXT`.
 
@@ -233,16 +259,16 @@ Here are the rules for resultset rows:
 * `INTEGER` can be read into any Zig `Int` provided the data fits.
 * `REAL` can be read into any Zig `Float` provided the data fits.
 * `TEXT` can be read into a `[]const u8` or `[]u8`.
-* `TEXT` can be read into any array of `u8` provided the data fits.
+* `TEXT` can be read into any array of `u8` with a sentinel provided the data fits.
 * `BLOB` follows the same rules as `TEXT`.
 
 Note that arrays must have a sentinel because we need a way to communicate where the data actually stops in the array, so for example use `[200:0]u8` for a `TEXT` field.
 
-## Comptime checks
+# Comptime checks
 
 Prepared statements contain _comptime_ metadata which is used to validate every call to `exec`, `one` and `all` _at compile time_.
 
-### Check the number of bind parameters.
+## Check the number of bind parameters.
 
 The first check makes sure you provide the same number of bind parameters as there are bind markers in the query string.
 
@@ -251,7 +277,7 @@ Take the following code:
 var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?");
 defer stmt.deinit();
 
-const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+const rows = try stmt.all(usize, .{}, .{
     .age_1 = 10,
     .age_2 = 20,
 });
@@ -259,23 +285,23 @@ _ = rows;
 ```
 It fails with this compilation error:
 ```
-/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:465:17: error: number of bind markers not equal to number of fields
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:738:17: error: number of bind markers not equal to number of fields
                 @compileError("number of bind markers not equal to number of fields");
                 ^
-/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:543:22: note: called from here
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:817:22: note: called from here
             self.bind(values);
                      ^
-/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:619:41: note: called from here
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:905:41: note: called from here
             var iter = try self.iterator(Type, values);
                                         ^
-./src/main.zig:16:30: note: called from here
-    const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+./src/main.zig:19:30: note: called from here
+    const rows = try stmt.all(usize, allocator, .{}, .{
                              ^
 ./src/main.zig:5:29: note: called from here
 pub fn main() anyerror!void {
 ```
 
-### Assign types to bind markers and check them.
+## Assign types to bind markers and check them.
 
 The second (and more interesting) check makes sure you provide appropriately typed values as bind parameters.
 
@@ -307,21 +333,20 @@ const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
     .weight = false,
 });
 _ = rows;
-
 ```
 Now this fails to compile:
 ```
-/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:485:25: error: value type bool is not the bind marker type usize
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:745:25: error: value type bool is not the bind marker type usize
                         @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
                         ^
-/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:557:22: note: called from here
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:817:22: note: called from here
             self.bind(values);
                      ^
-/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:633:41: note: called from here
+/home/vincent/dev/perso/libs/zig-sqlite/sqlite.zig:905:41: note: called from here
             var iter = try self.iterator(Type, values);
                                         ^
-./src/main.zig:16:30: note: called from here
-    const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+./src/main.zig:19:30: note: called from here
+    const rows = try stmt.all(usize, allocator, .{}, .{
                              ^
 ./src/main.zig:5:29: note: called from here
 pub fn main() anyerror!void {
@@ -346,7 +371,7 @@ To finish our example, passing the proper type allows it compile:
 var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?{usize}");
 defer stmt.deinit();
 
-const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+const rows = try stmt.all(usize, .{}, .{
     .age_1 = 10,
     .age_2 = 20,
     .weight = @as(usize, 200),
