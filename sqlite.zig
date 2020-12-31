@@ -1402,7 +1402,7 @@ test "sqlite: failing open" {
         .open_flags = .{},
         .mode = .{ .File = "/tmp/not_existing.db" },
     });
-    testing.expectError(error.CannotOpenDatabase, res);
+    testing.expectError(error.SQLiteCantOpen, res);
 }
 
 test "sqlite: failing prepare statement" {
@@ -1410,7 +1410,7 @@ test "sqlite: failing prepare statement" {
     try db.init(initOptions());
 
     const result = db.prepare("SELECT id FROM foobar");
-    testing.expectError(error.CannotPrepareStatement, result);
+    testing.expectError(error.SQLiteError, result);
 
     const detailed_err = db.getDetailedError();
     testing.expectEqual(@as(usize, 1), detailed_err.code);
