@@ -104,6 +104,19 @@ defer stmt.deinit();
 
 The `Db.prepare` method takes a `comptime` query string.
 
+### Diagnostics
+
+If you want failure diagnostics you can use `prepareWithDiags` like this:
+
+```zig
+var diags = sqlite.Diagnostics{};
+var stmt = db.prepareWithDiags(query, .{ .diags = &diags }) catch |err| {
+    std.log.err("unable to prepare statement, got error {s}. diagnostics: {s}", .{ err, diags });
+    return err;
+};
+defer stmt.deinit();
+```
+
 ## Executing a statement
 
 For queries which do not return data (`INSERT`, `UPDATE`) you can use the `exec` method:
