@@ -129,6 +129,44 @@ pub const Error = SQLiteError ||
     SQLiteExtendedConstraintError;
 
 pub fn errorFromResultCode(code: c_int) Error {
+    // TODO(vincent): can we do something with comptime here ?
+    // The version number is always static and defined by sqlite.
+
+    // These errors are only available since 3.25.0.
+    if (c.SQLITE_VERSION_NUMBER >= 3025000) {
+        switch (code) {
+            c.SQLITE_ERROR_SNAPSHOT => return error.SQLiteErrorSnapshot,
+            c.SQLITE_LOCKED_VTAB => return error.SQLiteLockedVTab,
+            c.SQLITE_CANTOPEN_DIRTYWAL => return error.SQLiteCantOpenDirtyWAL,
+            c.SQLITE_CORRUPT_SEQUENCE => return error.SQLiteCorruptSequence,
+            else => {},
+        }
+    }
+    // These errors are only available since 3.31.0.
+    if (c.SQLITE_VERSION_NUMBER >= 3031000) {
+        switch (code) {
+            c.SQLITE_CANTOPEN_SYMLINK => return error.SQLiteCantOpenSymlink,
+            c.SQLITE_CONSTRAINT_PINNED => return error.SQLiteConstraintPinned,
+            else => {},
+        }
+    }
+    // These errors are only available since 3.32.0.
+    if (c.SQLITE_VERSION_NUMBER >= 3032000) {
+        switch (code) {
+            c.SQLITE_IOERR_DATA => return error.SQLiteIOErrData, // See https://sqlite.org/cksumvfs.html
+            c.SQLITE_BUSY_TIMEOUT => return error.SQLiteBusyTimeout,
+            c.SQLITE_CORRUPT_INDEX => return error.SQLiteCorruptIndex,
+            else => {},
+        }
+    }
+    // These errors are only available since 3.34.0.
+    if (c.SQLITE_VERSION_NUMBER >= 3034000) {
+        switch (code) {
+            c.SQLITE_IOERR_CORRUPTFS => return error.SQLiteIOErrCorruptFS,
+            else => {},
+        }
+    }
+
     return switch (code) {
         c.SQLITE_ERROR => error.SQLiteError,
         c.SQLITE_INTERNAL => error.SQLiteInternal,
@@ -160,7 +198,6 @@ pub fn errorFromResultCode(code: c_int) Error {
 
         c.SQLITE_ERROR_MISSING_COLLSEQ => error.SQLiteErrorMissingCollSeq,
         c.SQLITE_ERROR_RETRY => error.SQLiteErrorRetry,
-        c.SQLITE_ERROR_SNAPSHOT => error.SQLiteErrorSnapshot,
 
         c.SQLITE_IOERR_READ => error.SQLiteIOErrRead,
         c.SQLITE_IOERR_SHORT_READ => error.SQLiteIOErrShortRead,
@@ -193,26 +230,18 @@ pub fn errorFromResultCode(code: c_int) Error {
         c.SQLITE_IOERR_BEGIN_ATOMIC => error.SQLiteIOErrBeginAtomic,
         c.SQLITE_IOERR_COMMIT_ATOMIC => error.SQLiteIOErrCommitAtomic,
         c.SQLITE_IOERR_ROLLBACK_ATOMIC => error.SQLiteIOErrRollbackAtomic,
-        c.SQLITE_IOERR_DATA => error.SQLiteIOErrData,
-        c.SQLITE_IOERR_CORRUPTFS => error.SQLiteIOErrCorruptFS,
 
         c.SQLITE_LOCKED_SHAREDCACHE => error.SQLiteLockedSharedCache,
-        c.SQLITE_LOCKED_VTAB => error.SQLiteLockedVTab,
 
         c.SQLITE_BUSY_RECOVERY => error.SQLiteBusyRecovery,
         c.SQLITE_BUSY_SNAPSHOT => error.SQLiteBusySnapshot,
-        c.SQLITE_BUSY_TIMEOUT => error.SQLiteBusyTimeout,
 
         c.SQLITE_CANTOPEN_NOTEMPDIR => error.SQLiteCantOpenNoTempDir,
         c.SQLITE_CANTOPEN_ISDIR => error.SQLiteCantOpenIsDir,
         c.SQLITE_CANTOPEN_FULLPATH => error.SQLiteCantOpenFullPath,
         c.SQLITE_CANTOPEN_CONVPATH => error.SQLiteCantOpenConvPath,
-        c.SQLITE_CANTOPEN_DIRTYWAL => error.SQLiteCantOpenDirtyWAL,
-        c.SQLITE_CANTOPEN_SYMLINK => error.SQLiteCantOpenSymlink,
 
         c.SQLITE_CORRUPT_VTAB => error.SQLiteCorruptVTab,
-        c.SQLITE_CORRUPT_SEQUENCE => error.SQLiteCorruptSequence,
-        c.SQLITE_CORRUPT_INDEX => error.SQLiteCorruptIndex,
 
         c.SQLITE_READONLY_RECOVERY => error.SQLiteReadOnlyRecovery,
         c.SQLITE_READONLY_CANTLOCK => error.SQLiteReadOnlyCantLock,
@@ -233,7 +262,6 @@ pub fn errorFromResultCode(code: c_int) Error {
         c.SQLITE_CONSTRAINT_UNIQUE => error.SQLiteConstraintUnique,
         c.SQLITE_CONSTRAINT_VTAB => error.SQLiteConstraintVTab,
         c.SQLITE_CONSTRAINT_ROWID => error.SQLiteConstraintRowID,
-        c.SQLITE_CONSTRAINT_PINNED => error.SQLiteConstraintPinned,
 
         else => std.debug.panic("invalid result code {}", .{code}),
     };
