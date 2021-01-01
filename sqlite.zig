@@ -529,7 +529,12 @@ pub fn Iterator(comptime Type: type) type {
             switch (type_info) {
                 .Pointer => |ptr| {
                     switch (ptr.size) {
-                        .One => unreachable,
+                        .One => {
+                            ret = try allocator.create(ptr.child);
+                            errdefer allocator.destroy(ret);
+
+                            ret.* = try self.readField(ptr.child, i, .{ .allocator = allocator });
+                        },
                         .Slice => switch (ptr.child) {
                             u8 => ret = try self.readBytes(PointerType, allocator, i, .Text),
                             else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
