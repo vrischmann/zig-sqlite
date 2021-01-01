@@ -102,6 +102,27 @@ try stmt.exec({
 
 See the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
+## Reuse a statement
+
+You can reuse a statement by resetting it like this:
+```zig
+const query =
+    \\UPDATE foo SET salary = ? WHERE id = ?
+;
+
+var stmt = try db.prepare(query);
+defer stmt.deinit();
+
+var id: usize = 0;
+while (id < 20) : (id += 1) {
+    stmt.reset();
+    try stmt.exec(.{
+        .salary = 2000,
+        .id = id,
+    });
+}
+```
+
 ## Reading data
 
 For queries which return data you have multiple options:
