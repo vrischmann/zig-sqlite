@@ -1073,6 +1073,7 @@ test "sqlite: read all users into a struct" {
         testing.expectEqual(exp.id, row.id);
         testing.expectEqualStrings(exp.name, row.name);
         testing.expectEqual(exp.age, row.age);
+        testing.expectEqual(exp.weight, row.weight);
     }
 }
 
