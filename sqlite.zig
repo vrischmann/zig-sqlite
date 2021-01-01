@@ -732,6 +732,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field),
                     .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field)),
                     .Pointer => |ptr| switch (ptr.size) {
+                        .One => self.bindField(ptr.child, field_name, i, field.*),
                         else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                     },
                     .Array => |arr| {
