@@ -1345,6 +1345,41 @@ test "sqlite: bind pointer" {
     }
 }
 
+test "sqlite: read pointers" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(initOptions());
+    try addTestData(&db);
+
+    const query = "SELECT id, name, age, weight FROM user";
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    const rows = try stmt.all(
+        struct {
+            id: *usize,
+            name: *[]const u8,
+            age: *u32,
+            weight: *f32,
+        },
+        &arena.allocator,
+        .{},
+        .{},
+    );
+
+    testing.expectEqual(@as(usize, 3), rows.len);
+    for (rows) |row, i| {
+        const exp = test_users[i];
+        testing.expectEqual(exp.id, row.id.*);
+        testing.expectEqualStrings(exp.name, row.name.*);
+        testing.expectEqual(exp.age, row.age.*);
+        testing.expectEqual(exp.weight, row.weight.*);
+    }
+}
+
 test "sqlite: statement reset" {
     var db: Db = undefined;
     try db.init(initOptions());
