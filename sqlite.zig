@@ -722,9 +722,6 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             const column = i + 1;
 
             switch (FieldType) {
-                []const u8, []u8 => {
-                    _ = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), null);
-                },
                 Text => _ = c.sqlite3_bind_text(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
                 Blob => _ = c.sqlite3_bind_blob(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
                 else => switch (field_type_info) {
@@ -733,6 +730,12 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field)),
                     .Pointer => |ptr| switch (ptr.size) {
                         .One => self.bindField(ptr.child, field_name, i, field.*),
+                        .Slice => switch (ptr.child) {
+                            u8 => {
+                                _ = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), null);
+                            },
+                            else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
+                        },
                         else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                     },
                     .Array => |arr| {
