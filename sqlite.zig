@@ -711,34 +711,41 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     .Untyped => {},
                 }
 
-                const i = @as(usize, _i);
-                const field_type_info = @typeInfo(struct_field.field_type);
                 const field_value = @field(values, struct_field.name);
-                const column = i + 1;
 
-                switch (struct_field.field_type) {
-                    []const u8, []u8 => {
-                        _ = c.sqlite3_bind_text(self.stmt, column, field_value.ptr, @intCast(c_int, field_value.len), null);
-                    },
-                    Text => _ = c.sqlite3_bind_text(self.stmt, column, field_value.data.ptr, @intCast(c_int, field_value.data.len), null),
-                    Blob => _ = c.sqlite3_bind_blob(self.stmt, column, field_value.data.ptr, @intCast(c_int, field_value.data.len), null),
-                    else => switch (field_type_info) {
-                        .Int, .ComptimeInt => _ = c.sqlite3_bind_int64(self.stmt, column, @intCast(c_longlong, field_value)),
-                        .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field_value),
-                        .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field_value)),
-                        .Array => |arr| {
-                            switch (arr.child) {
-                                u8 => {
-                                    const data: []const u8 = field_value[0..field_value.len];
+                self.bindField(struct_field.field_type, struct_field.name, _i, field_value);
+            }
+        }
 
-                                    _ = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
-                                },
-                                else => @compileError("cannot bind field " ++ struct_field.name ++ " of type array of " ++ @typeName(arr.child)),
-                            }
-                        },
-                        else => @compileError("cannot bind field " ++ struct_field.name ++ " of type " ++ @typeName(struct_field.field_type)),
+        fn bindField(self: *Self, comptime FieldType: type, comptime field_name: []const u8, i: c_int, field: FieldType) void {
+            const field_type_info = @typeInfo(FieldType);
+            const column = i + 1;
+
+            switch (FieldType) {
+                []const u8, []u8 => {
+                    _ = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), null);
+                },
+                Text => _ = c.sqlite3_bind_text(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
+                Blob => _ = c.sqlite3_bind_blob(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
+                else => switch (field_type_info) {
+                    .Int, .ComptimeInt => _ = c.sqlite3_bind_int64(self.stmt, column, @intCast(c_longlong, field)),
+                    .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field),
+                    .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field)),
+                    .Pointer => |ptr| switch (ptr.size) {
+                        else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                     },
-                }
+                    .Array => |arr| {
+                        switch (arr.child) {
+                            u8 => {
+                                const data: []const u8 = field[0..field.len];
+
+                                _ = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
+                            },
+                            else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
+                        }
+                    },
+                    else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
+                },
             }
         }
 
