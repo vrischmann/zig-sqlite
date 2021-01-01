@@ -805,8 +805,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///         .{ .foo = "bar", .age = 500 },
         ///     );
         ///
-        /// The `options` tuple is used to provide additional state in some cases, for example
-        /// an allocator used to read text and blobs.
+        /// The `options` tuple is used to provide additional state in some cases.
         ///
         /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
         /// in the input query string.
@@ -856,7 +855,6 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///     );
         ///
         /// The `options` tuple is used to provide additional state in some cases.
-        /// Note that for this function the allocator is mandatory.
         ///
         /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
         /// in the input query string.
