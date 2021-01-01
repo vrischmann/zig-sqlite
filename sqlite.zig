@@ -1289,6 +1289,26 @@ test "sqlite: insert bool and bind bool" {
     testing.expect(b.?);
 }
 
+test "sqlite: bind string literal" {
+    var db: Db = undefined;
+    try db.init(initOptions());
+    try addTestData(&db);
+
+    try db.exec("INSERT INTO article(id, data) VALUES(?, ?)", .{
+        @as(usize, 10),
+        "foobar",
+    });
+
+    const query = "SELECT id FROM article WHERE data = ?";
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    const b = try stmt.one(usize, .{}, .{"foobar"});
+    testing.expect(b != null);
+    testing.expectEqual(@as(usize, 10), b.?);
+}
+
 test "sqlite: statement reset" {
     var db: Db = undefined;
     try db.init(initOptions());
