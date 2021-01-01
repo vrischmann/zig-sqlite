@@ -569,26 +569,31 @@ pub fn Iterator(comptime Type: type) type {
 
             inline for (@typeInfo(Type).Struct.fields) |field, _i| {
                 const i = @as(usize, _i);
-                const field_type_info = @typeInfo(field.field_type);
 
-                const ret = switch (field.field_type) {
-                    Blob => try self.readBytes(Blob, options.allocator, i, .Blob),
-                    Text => try self.readBytes(Text, options.allocator, i, .Text),
-                    else => switch (field_type_info) {
-                        .Int => try self.readInt(field.field_type, i),
-                        .Float => try self.readFloat(field.field_type, i),
-                        .Bool => try self.readBool(i),
-                        .Void => {},
-                        .Array => try self.readArray(field.field_type, i),
-                        .Pointer => try self.readPointer(field.field_type, options.allocator, i),
-                        else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
-                    },
-                };
+                const ret = try self.readField(field.field_type, i, options);
 
                 @field(value, field.name) = ret;
             }
 
             return value;
+        }
+
+        fn readField(self: *Self, comptime FieldType: type, i: usize, options: anytype) !FieldType {
+            const field_type_info = @typeInfo(FieldType);
+
+            return switch (FieldType) {
+                Blob => try self.readBytes(Blob, options.allocator, i, .Blob),
+                Text => try self.readBytes(Text, options.allocator, i, .Text),
+                else => switch (field_type_info) {
+                    .Int => try self.readInt(FieldType, i),
+                    .Float => try self.readFloat(FieldType, i),
+                    .Bool => try self.readBool(i),
+                    .Void => {},
+                    .Array => try self.readArray(FieldType, i),
+                    .Pointer => try self.readPointer(FieldType, options.allocator, i),
+                    else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(FieldType)),
+                },
+            };
         }
     };
 }
