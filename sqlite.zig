@@ -1313,6 +1313,28 @@ test "sqlite: bind string literal" {
     testing.expectEqual(@as(usize, 10), b.?);
 }
 
+test "sqlite: bind pointer" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(initOptions());
+    try addTestData(&db);
+
+    const query = "SELECT name FROM user WHERE id = ?";
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    for (test_users) |test_user, i| {
+        stmt.reset();
+
+        const name = try stmt.oneAlloc([]const u8, &arena.allocator, .{}, .{&test_user.id});
+        testing.expect(name != null);
+        testing.expectEqualStrings(test_users[i].name, name.?);
+    }
+}
+
 test "sqlite: statement reset" {
     var db: Db = undefined;
     try db.init(initOptions());
