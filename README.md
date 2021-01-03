@@ -51,7 +51,7 @@ You must create and initialize an instance of `sqlite.Db`:
 
 ```zig
 var db: sqlite.Db = undefined;
-try db.init(allocator, .{
+try db.init(.{
     .mode = sqlite.Db.Mode{ .File = "/home/vincent/mydata.db" },
     .open_flags = .{
         .write = true,
@@ -160,8 +160,8 @@ const row = try stmt.one(
     .{},
     .{ .id = 20 },
 );
-if (row) |age| {
-    std.log.debug("age: {}", .{age});
+if (row) |row| {
+    std.log.debug("name: {}, age: {}", .{std.mem.spanZ(&row.name), row.age});
 }
 ```
 Notice that to read text we need to use a 0-terminated array; if the `name` column is bigger than 127 bytes the call to `one` will fail.
@@ -193,12 +193,12 @@ const query =
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-const rows = try stmt.all([]const u8, allocator, .{}, .{
+const names = try stmt.all([]const u8, allocator, .{}, .{
     .age1 = 20,
     .age2 = 40,
 });
-for (rows) |row| {
-    std.log.debug("id: {} ; name: {}; age: {}; salary: {}", .{ row.id, row.name, row.age, row.salary });
+for (names) |name| {
+    std.log.debug("name: {}", .{ row.name });
 }
 ```
 
@@ -212,10 +212,12 @@ const query =
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-const name = try stmt.oneAlloc([]const u8, allocator, .{}, .{
+const row = try stmt.oneAlloc([]const u8, allocator, .{}, .{
     .id = 200,
 });
-std.log.debug("name: {}", .{name});
+if (row) |name| {
+    std.log.debug("name: {}", .{name});
+}
 ```
 
 ## Iterating
