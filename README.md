@@ -61,7 +61,7 @@ try db.init(.{
 });
 ```
 
-The `init` method takes an allocator and a `InitOptions` struct which will be used to configure sqlite.
+The `init` method takes a `InitOptions` struct which will be used to configure sqlite.
 
 Only the `mode` field is mandatory, the other fields have sane default values.
 
