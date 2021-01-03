@@ -160,9 +160,9 @@ pub const Db = struct {
 
     fn getPragmaQuery(comptime buf: []u8, comptime name: []const u8, comptime arg: anytype) []const u8 {
         return if (arg.len == 1) blk: {
-            break :blk try std.fmt.bufPrint(buf, "PRAGMA {} = {}", .{ name, arg[0] });
+            break :blk try std.fmt.bufPrint(buf, "PRAGMA {s} = {s}", .{ name, arg[0] });
         } else blk: {
-            break :blk try std.fmt.bufPrint(buf, "PRAGMA {}", .{name});
+            break :blk try std.fmt.bufPrint(buf, "PRAGMA {s}", .{name});
         };
     }
 
@@ -1379,7 +1379,7 @@ test "sqlite: statement iterator" {
     var expected_rows = std.ArrayList(TestUser).init(allocator);
     var i: usize = 0;
     while (i < 20) : (i += 1) {
-        const name = try std.fmt.allocPrint(allocator, "Vincent {}", .{i});
+        const name = try std.fmt.allocPrint(allocator, "Vincent {d}", .{i});
         const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @intToFloat(f32, i + 200) };
 
         try expected_rows.append(user);
