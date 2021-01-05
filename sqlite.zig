@@ -122,7 +122,7 @@ pub const Db = struct {
 
         switch (options.mode) {
             .File => |path| {
-                logger.info("opening {}", .{path});
+                logger.info("opening {s}", .{path});
 
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(path, &db, flags, null);
