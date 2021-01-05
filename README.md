@@ -272,7 +272,7 @@ while (true) {
 Since sqlite doesn't have many [types](https://www.sqlite.org/datatype3.html) only a small number of Zig types are allowed in binding parameters and in resultset mapping types.
 
 Here are the rules for bind parameters:
-* any Zig `Int` or `ComptimeInt` is tread as a `INTEGER`.
+* any Zig `Int` or `ComptimeInt` is treated as a `INTEGER`.
 * any Zig `Float` or `ComptimeFloat` is treated as a `REAL`.
 * `[]const u8`, `[]u8` is treated as a `TEXT`.
 * The custom `sqlite.Blob` type is treated as a `BLOB`.
