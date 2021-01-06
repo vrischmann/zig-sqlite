@@ -20,7 +20,3 @@ tasks:
   - test: |
       cd zig-sqlite
       TERM=dumb zig build test
-
-  - test_in_memory: |
-      cd zig-sqlite
-      TERM=dumb zig build test -Din_memory
