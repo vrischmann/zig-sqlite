@@ -1380,6 +1380,33 @@ test "sqlite: read pointers" {
     }
 }
 
+test "sqlite: optional" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(initOptions());
+    try addTestData(&db);
+
+    try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{ 1, null, true });
+
+    var stmt = try db.prepare("SELECT data, is_published FROM article");
+    defer stmt.deinit();
+
+    const row = try stmt.one(
+        struct {
+            data: ?[128:0]u8,
+            is_published: ?bool,
+        },
+        .{},
+        .{},
+    );
+
+    testing.expect(row != null);
+    testing.expect(row.data == null);
+    testing.expectEqual(true, row.is_published.?);
+}
+
 test "sqlite: statement reset" {
     var db: Db = undefined;
     try db.init(initOptions());
