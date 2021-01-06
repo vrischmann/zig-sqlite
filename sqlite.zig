@@ -529,7 +529,12 @@ pub fn Iterator(comptime Type: type) type {
             switch (type_info) {
                 .Pointer => |ptr| {
                     switch (ptr.size) {
-                        .One => unreachable,
+                        .One => {
+                            ret = try allocator.create(ptr.child);
+                            errdefer allocator.destroy(ret);
+
+                            ret.* = try self.readField(ptr.child, i, .{ .allocator = allocator });
+                        },
                         .Slice => switch (ptr.child) {
                             u8 => ret = try self.readBytes(PointerType, allocator, i, .Text),
                             else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
@@ -569,26 +574,31 @@ pub fn Iterator(comptime Type: type) type {
 
             inline for (@typeInfo(Type).Struct.fields) |field, _i| {
                 const i = @as(usize, _i);
-                const field_type_info = @typeInfo(field.field_type);
 
-                const ret = switch (field.field_type) {
-                    Blob => try self.readBytes(Blob, options.allocator, i, .Blob),
-                    Text => try self.readBytes(Text, options.allocator, i, .Text),
-                    else => switch (field_type_info) {
-                        .Int => try self.readInt(field.field_type, i),
-                        .Float => try self.readFloat(field.field_type, i),
-                        .Bool => try self.readBool(i),
-                        .Void => {},
-                        .Array => try self.readArray(field.field_type, i),
-                        .Pointer => try self.readPointer(field.field_type, options.allocator, i),
-                        else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(field.field_type)),
-                    },
-                };
+                const ret = try self.readField(field.field_type, i, options);
 
                 @field(value, field.name) = ret;
             }
 
             return value;
+        }
+
+        fn readField(self: *Self, comptime FieldType: type, i: usize, options: anytype) !FieldType {
+            const field_type_info = @typeInfo(FieldType);
+
+            return switch (FieldType) {
+                Blob => try self.readBytes(Blob, options.allocator, i, .Blob),
+                Text => try self.readBytes(Text, options.allocator, i, .Text),
+                else => switch (field_type_info) {
+                    .Int => try self.readInt(FieldType, i),
+                    .Float => try self.readFloat(FieldType, i),
+                    .Bool => try self.readBool(i),
+                    .Void => {},
+                    .Array => try self.readArray(FieldType, i),
+                    .Pointer => try self.readPointer(FieldType, options.allocator, i),
+                    else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(FieldType)),
+                },
+            };
         }
     };
 }
@@ -889,16 +899,16 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 }
 
 const TestUser = struct {
-    id: usize,
     name: []const u8,
+    id: usize,
     age: usize,
     weight: f32,
 };
 
 const test_users = &[_]TestUser{
-    .{ .id = 20, .name = "Vincent", .age = 33, .weight = 85.4 },
-    .{ .id = 40, .name = "Julien", .age = 35, .weight = 100.3 },
-    .{ .id = 60, .name = "José", .age = 40, .weight = 240.2 },
+    .{ .name = "Vincent", .id = 20, .age = 33, .weight = 85.4 },
+    .{ .name = "Julien", .id = 40, .age = 35, .weight = 100.3 },
+    .{ .name = "José", .id = 60, .age = 40, .weight = 240.2 },
 };
 
 fn addTestData(db: *Db) !void {
@@ -925,7 +935,7 @@ fn addTestData(db: *Db) !void {
     }
 
     for (test_users) |user| {
-        try db.exec("INSERT INTO user(id, name, age, weight) VALUES(?{usize}, ?{[]const u8}, ?{usize}, ?{f32})", user);
+        try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", user);
 
         const rows_inserted = db.rowsAffected();
         testing.expectEqual(@as(usize, 1), rows_inserted);
@@ -1010,7 +1020,7 @@ test "sqlite: read a single user into a struct" {
     try db.init(initOptions());
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, age, weight FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT name, id, age, weight FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{
@@ -1026,11 +1036,11 @@ test "sqlite: read a single user into a struct" {
     {
         var row = try db.one(
             struct {
-                id: usize,
                 name: [128:0]u8,
+                id: usize,
                 age: usize,
             },
-            "SELECT id, name, age FROM user WHERE id = ?{usize}",
+            "SELECT name, id, age FROM user WHERE id = ?{usize}",
             .{},
             .{@as(usize, 20)},
         );
@@ -1046,12 +1056,12 @@ test "sqlite: read a single user into a struct" {
     {
         var row = try db.oneAlloc(
             struct {
-                id: usize,
                 name: Text,
+                id: usize,
                 age: usize,
             },
             &arena.allocator,
-            "SELECT id, name, age FROM user WHERE id = ?{usize}",
+            "SELECT name, id, age FROM user WHERE id = ?{usize}",
             .{},
             .{@as(usize, 20)},
         );
@@ -1072,7 +1082,7 @@ test "sqlite: read all users into a struct" {
     try db.init(initOptions());
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, age, weight FROM user");
+    var stmt = try db.prepare("SELECT name, id, age, weight FROM user");
     defer stmt.deinit();
 
     var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{});
@@ -1094,13 +1104,13 @@ test "sqlite: read in an anonymous struct" {
     try db.init(initOptions());
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, name, age, id, weight FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT name, id, name, age, id, weight FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var row = try stmt.oneAlloc(
         struct {
-            id: usize,
             name: []const u8,
+            id: usize,
             name_2: [200:0xAD]u8,
             age: usize,
             is_id: bool,
@@ -1129,13 +1139,13 @@ test "sqlite: read in a Text struct" {
     try db.init(initOptions());
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT id, name, age FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT name, id, age FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var row = try stmt.oneAlloc(
         struct {
-            id: usize,
             name: Text,
+            id: usize,
             age: usize,
         },
         &arena.allocator,
@@ -1335,6 +1345,41 @@ test "sqlite: bind pointer" {
     }
 }
 
+test "sqlite: read pointers" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(initOptions());
+    try addTestData(&db);
+
+    const query = "SELECT id, name, age, weight FROM user";
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    const rows = try stmt.all(
+        struct {
+            id: *usize,
+            name: *[]const u8,
+            age: *u32,
+            weight: *f32,
+        },
+        &arena.allocator,
+        .{},
+        .{},
+    );
+
+    testing.expectEqual(@as(usize, 3), rows.len);
+    for (rows) |row, i| {
+        const exp = test_users[i];
+        testing.expectEqual(exp.id, row.id.*);
+        testing.expectEqualStrings(exp.name, row.name.*);
+        testing.expectEqual(exp.age, row.age.*);
+        testing.expectEqual(exp.weight, row.weight.*);
+    }
+}
+
 test "sqlite: statement reset" {
     var db: Db = undefined;
     try db.init(initOptions());
@@ -1342,7 +1387,7 @@ test "sqlite: statement reset" {
 
     // Add data
 
-    var stmt = try db.prepare("INSERT INTO user(id, name, age, weight) VALUES(?{usize}, ?{[]const u8}, ?{usize}, ?{f32})");
+    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})");
     defer stmt.deinit();
 
     const users = &[_]TestUser{
@@ -1373,7 +1418,7 @@ test "sqlite: statement iterator" {
     try db.exec("DELETE FROM user", .{});
 
     // Add data
-    var stmt = try db.prepare("INSERT INTO user(id, name, age, weight) VALUES(?{usize}, ?{[]const u8}, ?{usize}, ?{f32})");
+    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})");
     defer stmt.deinit();
 
     var expected_rows = std.ArrayList(TestUser).init(allocator);

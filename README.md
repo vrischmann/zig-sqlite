@@ -138,6 +138,8 @@ The type represents a "row", it can be:
 * a struct where each field maps to the corresponding column in the resultset (so field 0 must map to column 1 and so on).
 * a single type, in that case the resultset must only return one column.
 
+The type can be a pointer but only when using the methods taking an allocator.
+
 Not all types are allowed, see the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
 ### Non allocating
