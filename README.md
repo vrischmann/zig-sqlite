@@ -277,8 +277,10 @@ Here are the rules for bind parameters:
 * any Zig `Int` or `ComptimeInt` is treated as a `INTEGER`.
 * any Zig `Float` or `ComptimeFloat` is treated as a `REAL`.
 * `[]const u8`, `[]u8` is treated as a `TEXT`.
-* The custom `sqlite.Blob` type is treated as a `BLOB`.
-* The custom `sqlite.Text` type is treated as a `TEXT`.
+* the custom `sqlite.Blob` type is treated as a `BLOB`.
+* the custom `sqlite.Text` type is treated as a `TEXT`.
+* the `null` value is treated as a `NULL`.
+* non-null optionals are treated like a regular value, null optionals are treated as a `NULL`.
 
 Here are the rules for resultset rows:
 * `INTEGER` can be read into any Zig `Int` provided the data fits.
@@ -286,6 +288,7 @@ Here are the rules for resultset rows:
 * `TEXT` can be read into a `[]const u8` or `[]u8`.
 * `TEXT` can be read into any array of `u8` with a sentinel provided the data fits.
 * `BLOB` follows the same rules as `TEXT`.
+* `NULL` can be read into any optional.
 
 Note that arrays must have a sentinel because we need a way to communicate where the data actually stops in the array, so for example use `[200:0]u8` for a `TEXT` field.
 
