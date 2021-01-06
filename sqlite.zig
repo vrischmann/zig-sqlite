@@ -548,6 +548,29 @@ pub fn Iterator(comptime Type: type) type {
             return ret;
         }
 
+        fn readOptional(self: *Self, comptime OptionalType: type, options: anytype, _i: usize) !OptionalType {
+            const i = @intCast(c_int, _i);
+            const type_info = @typeInfo(OptionalType);
+
+            var ret: OptionalType = undefined;
+            switch (type_info) {
+                .Optional => |opt| {
+                    // Easy way to know if the column represents a null value.
+                    const value = c.sqlite3_column_value(self.stmt, i);
+                    const datatype = c.sqlite3_value_type(value);
+
+                    if (datatype == c.SQLITE_NULL) {
+                        return null;
+                    } else {
+                        const val = try self.readField(opt.child, _i, options);
+                        ret = val;
+                        return ret;
+                    }
+                },
+                else => @compileError("cannot read optional of type " ++ @typeName(OptionalType)),
+            }
+        }
+
         // readStruct reads an entire sqlite row into a struct.
         //
         // Each field correspond to a column; its position in the struct determines the column used for it.
@@ -596,7 +619,8 @@ pub fn Iterator(comptime Type: type) type {
                     .Void => {},
                     .Array => try self.readArray(FieldType, i),
                     .Pointer => try self.readPointer(FieldType, options.allocator, i),
-                    else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(FieldType)),
+                    .Optional => try self.readOptional(FieldType, options, i),
+                    else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
             };
         }
@@ -758,6 +782,12 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                             else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
                         }
                     },
+                    .Optional => |opt| if (field) |non_null_field| {
+                        self.bindField(opt.child, field_name, i, non_null_field);
+                    } else {
+                        _ = c.sqlite3_bind_null(self.stmt, column);
+                    },
+                    .Null => _ = c.sqlite3_bind_null(self.stmt, column),
                     else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                 },
             }
@@ -1378,6 +1408,33 @@ test "sqlite: read pointers" {
         testing.expectEqual(exp.age, row.age.*);
         testing.expectEqual(exp.weight, row.weight.*);
     }
+}
+
+test "sqlite: optional" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db: Db = undefined;
+    try db.init(initOptions());
+    try addTestData(&db);
+
+    try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{ 1, null, true });
+
+    var stmt = try db.prepare("SELECT data, is_published FROM article");
+    defer stmt.deinit();
+
+    const row = try stmt.one(
+        struct {
+            data: ?[128:0]u8,
+            is_published: ?bool,
+        },
+        .{},
+        .{},
+    );
+
+    testing.expect(row != null);
+    testing.expect(row.?.data == null);
+    testing.expectEqual(true, row.?.is_published.?);
 }
 
 test "sqlite: statement reset" {
