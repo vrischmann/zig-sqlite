@@ -596,7 +596,7 @@ pub fn Iterator(comptime Type: type) type {
                     .Void => {},
                     .Array => try self.readArray(FieldType, i),
                     .Pointer => try self.readPointer(FieldType, options.allocator, i),
-                    else => @compileError("cannot populate field " ++ field.name ++ " of type " ++ @typeName(FieldType)),
+                    else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
             };
         }
