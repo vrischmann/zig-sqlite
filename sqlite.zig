@@ -973,17 +973,14 @@ fn addTestData(db: *Db) !void {
 }
 
 test "sqlite: db init" {
-    var db: Db = undefined;
-    try db.init(initOptions());
-    try db.init(.{});
+    var db = try getTestDb();
 }
 
 test "sqlite: db pragma" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
 
     const foreign_keys = try db.pragma(usize, .{}, "foreign_keys", .{});
     testing.expect(foreign_keys != null);
@@ -1019,8 +1016,7 @@ test "sqlite: db pragma" {
 }
 
 test "sqlite: statement exec" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     // Test with a Blob struct
@@ -1046,8 +1042,7 @@ test "sqlite: read a single user into a struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT name, id, age, weight FROM user WHERE id = ?{usize}");
@@ -1108,8 +1103,7 @@ test "sqlite: read all users into a struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT name, id, age, weight FROM user");
@@ -1130,8 +1124,7 @@ test "sqlite: read in an anonymous struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT name, id, name, age, id, weight FROM user WHERE id = ?{usize}");
@@ -1165,8 +1158,7 @@ test "sqlite: read in a Text struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT name, id, age FROM user WHERE id = ?{usize}");
@@ -1194,8 +1186,7 @@ test "sqlite: read a single text value" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     const types = &[_]type{
@@ -1245,8 +1236,7 @@ test "sqlite: read a single text value" {
 }
 
 test "sqlite: read a single integer value" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     const types = &[_]type{
@@ -1279,8 +1269,7 @@ test "sqlite: read a single integer value" {
 }
 
 test "sqlite: read a single value into void" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     const query = "SELECT age FROM user WHERE id = ?{usize}";
@@ -1294,8 +1283,7 @@ test "sqlite: read a single value into void" {
 }
 
 test "sqlite: read a single value into bool" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     const query = "SELECT id FROM user WHERE id = ?{usize}";
@@ -1311,8 +1299,7 @@ test "sqlite: read a single value into bool" {
 }
 
 test "sqlite: insert bool and bind bool" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     try db.exec("INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})", .{
@@ -1334,8 +1321,7 @@ test "sqlite: insert bool and bind bool" {
 }
 
 test "sqlite: bind string literal" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     try db.exec("INSERT INTO article(id, data) VALUES(?, ?)", .{
@@ -1357,8 +1343,7 @@ test "sqlite: bind pointer" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     const query = "SELECT name FROM user WHERE id = ?";
@@ -1379,8 +1364,7 @@ test "sqlite: read pointers" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     const query = "SELECT id, name, age, weight FROM user";
@@ -1414,8 +1398,7 @@ test "sqlite: optional" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{ 1, null, true });
@@ -1438,8 +1421,7 @@ test "sqlite: optional" {
 }
 
 test "sqlite: statement reset" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     // Add data
@@ -1467,8 +1449,7 @@ test "sqlite: statement iterator" {
     defer arena.deinit();
     var allocator = &arena.allocator;
 
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
     try addTestData(&db);
 
     // Cleanup first
@@ -1560,8 +1541,7 @@ test "sqlite: failing open" {
 }
 
 test "sqlite: failing prepare statement" {
-    var db: Db = undefined;
-    try db.init(initOptions());
+    var db = try getTestDb();
 
     const result = db.prepare("SELECT id FROM foobar");
     testing.expectError(error.SQLiteError, result);
@@ -1571,21 +1551,44 @@ test "sqlite: failing prepare statement" {
     testing.expectEqualStrings("no such table: foobar", detailed_err.message);
 }
 
-fn initOptions() InitOptions {
-    return .{
+fn getTestDb() !Db {
+    var buf: [1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+
+    var mode = dbMode(&fba.allocator);
+
+    var db: Db = undefined;
+    try db.init(.{
         .open_flags = .{
             .write = true,
             .create = true,
         },
-        .mode = dbMode(),
-    };
+        .mode = mode,
+    });
+
+    return db;
 }
 
-fn dbMode() Db.Mode {
+fn tmpDbPath(allocator: *mem.Allocator) ![:0]const u8 {
+    const tmp_dir = testing.tmpDir(.{});
+
+    const path = try std.fs.path.join(allocator, &[_][]const u8{
+        "zig-cache",
+        "tmp",
+        &tmp_dir.sub_path,
+        "zig-sqlite.db",
+    });
+    defer allocator.free(path);
+
+    return allocator.dupeZ(u8, path);
+}
+
+fn dbMode(allocator: *mem.Allocator) Db.Mode {
     return if (build_options.in_memory) blk: {
         break :blk .{ .Memory = {} };
     } else blk: {
-        const path = "/tmp/zig-sqlite.db";
+        const path = tmpDbPath(allocator) catch unreachable;
+
         std.fs.cwd().deleteFile(path) catch {};
         break :blk .{ .File = path };
     };
