@@ -17,10 +17,18 @@ tasks:
       mv ~/zig-freebsd-* ~/zig-master
       echo "export PATH=$PATH:~/zig-master" >> ~/.buildenv
 
-  - test: |
-      cd zig-sqlite
-      TERM=dumb zig build test
-
   - test_in_memory: |
       cd zig-sqlite
-      TERM=dumb zig build test -Din_memory
+      TERM=dumb zig build test -Din_memory=true
+
+  - test_filesystem: |
+      cd zig-sqlite
+      TERM=dumb zig build test -Din_memory=false
+
+  - test_in_memory_with_bundled_library: |
+      cd zig-sqlite
+      TERM=dumb zig build test -Din_memory=true -Duse_bundled
+
+  - test_filesystem_with_bundled_library: |
+      cd zig-sqlite
+      TERM=dumb zig build test -Din_memory=false -Duse_bundled

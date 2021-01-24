@@ -17,6 +17,10 @@ tasks:
       mv ~/zig-linux-* ~/zig-master
       echo "export PATH=$PATH:~/zig-master" >> ~/.buildenv
 
-  - test: |
+  - test_filesystem: |
       cd zig-sqlite
-      TERM=dumb zig build test
+      TERM=dumb zig build test -Din_memory=false
+
+  - test_filesystem_with_bundled_library: |
+      cd zig-sqlite
+      TERM=dumb zig build test -Din_memory=false -Duse_bundled -Dtarget=native-native-musl
