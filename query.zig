@@ -170,7 +170,6 @@ test "parsed query: query" {
 
     inline for (testCases) |tc| {
         comptime var parsed_query = ParsedQuery.from(tc.query);
-        std.debug.print("parsed query: {s}\n", .{parsed_query.getQuery()});
         testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
     }
 }
@@ -202,7 +201,6 @@ test "parsed query: bind markers types" {
 
     inline for (testCases) |tc| {
         comptime var parsed_query = ParsedQuery.from(tc.query);
-        std.debug.print("parsed query: {s}\n", .{parsed_query.getQuery()});
 
         testing.expectEqual(1, parsed_query.nb_bind_markers);
 
