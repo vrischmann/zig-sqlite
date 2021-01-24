@@ -27,7 +27,7 @@ jobs:
         run: zig build
 
       - name: Run Tests with filesystem
-        run: zig build test
+        run: zig build test -Din_memory=false
 
       - name: Run Tests in memory
-        run: zig build test
+        run: zig build test -Din_memory=true
