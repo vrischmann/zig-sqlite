@@ -149,7 +149,7 @@ while (id < 20) : (id += 1) {
 
 For queries which return data you have multiple options:
 * `Statement.all` which takes an allocator and can allocate memory.
-* `Statement.one` which does not take an allocator and cannot allocate memory (aside from what SQLite allocates itself).
+* `Statement.one` which does not take an allocator and cannot allocate memory (aside from what sqlite allocates itself).
 * `Statement.oneAlloc` which takes an allocator and can allocate memory.
 
 ### Type parameter
