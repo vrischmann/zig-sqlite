@@ -14,7 +14,7 @@ If you use this library, expect to have to make changes when you update the code
 
 For sqlite, you have options depending on your target:
 * On Windows the only supported way at the moment to build `zig-sqlite` is with the bundled sqlite source code file.
-* On Linux we have to options:
+* On Linux we have two options:
   * use the system and development package for sqlite (`libsqlite3-dev` for Debian and derivatives, `sqlite3-devel` for Fedora)
   * use the bundled sqlite source code file.
 
