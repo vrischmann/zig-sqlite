@@ -13,10 +13,10 @@ If you use this library, expect to have to make changes when you update the code
 [Zig master](https://ziglang.org/download/) is the only required dependency.
 
 For sqlite, you have options depending on your target:
-* On Windows the only supported way at the moment to build `zig-sqlite` is with the embedded sqlite source code file.
+* On Windows the only supported way at the moment to build `zig-sqlite` is with the bundled sqlite source code file.
 * On Linux we have to options:
   * use the system and development package for sqlite (`libsqlite3-dev` for Debian and derivatives, `sqlite3-devel` for Fedora)
-  * use the embedded sqlite source code file.
+  * use the bundled sqlite source code file.
 
 # Features
 
@@ -28,24 +28,44 @@ For sqlite, you have options depending on your target:
 Since there's no package manager for Zig yet, the recommended way is to use a git submodule:
 
 ```bash
-$ git submodule add https://github.com/vrischmann/zig-sqlite.git src/sqlite
+$ git submodule add https://github.com/vrischmann/zig-sqlite.git third_party/zig-sqlite
 ```
 
-Then add the following to your `build.zig` target(s):
+## Using the system sqlite library
+
+If you want to use the system sqlite library, add the following to your `build.zig` target(s):
 
 ```zig
 exe.linkLibC();
 exe.linkSystemLibrary("sqlite3");
-exe.addPackage(.{ .name = "sqlite", .path = "src/sqlite/sqlite.zig" });
+exe.addPackage(.{ .name = "sqlite", .path = "third_party/zig-sqlite/sqlite.zig" });
 ```
 
-Now you should be able to import sqlite like this:
+## Using the bundled sqlite source code file
+
+If you want to use the bundled sqlite source code file, first you need to add it as a static library in your `build.zig` file:
+
+```zig
+const sqlite = b.addStaticLibrary("sqlite", null);
+sqlite.addCSourceFile("third_party/zig-sqlite/sqlite3.c", &[_][]const u8{"-std=c99"});
+sqlite.linkLibC();
+```
+
+Now it's just a matter of linking your `build.zig` target(s) to this library instead of the system one:
+
+```zig
+exe.linkLibC();
+exe.linkLibrary(sqlite);
+exe.addPackage(.{ .name = "sqlite", .path = "third_party/zig-sqlite/sqlite.zig" });
+```
+
+# Usage
+
+Import `zig-sqlite` like this:
 
 ```zig
 const sqlite = @import("sqlite");
 ```
-
-# Usage
 
 ## Initialization
 
