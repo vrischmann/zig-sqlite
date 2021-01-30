@@ -166,6 +166,12 @@ pub const Db = struct {
         };
     }
 
+    /// getLastInsertRowID returns the last inserted rowid.
+    pub fn getLastInsertRowID(self: *Self) i64 {
+        const rowid = c.sqlite3_last_insert_rowid(self.db);
+        return rowid;
+    }
+
     /// pragmaAlloc is like `pragma` but can allocate memory.
     ///
     /// Useful when the pragma command returns text, for example:
@@ -941,7 +947,7 @@ const test_users = &[_]TestUser{
     .{ .name = "José", .id = 60, .age = 40, .weight = 240.2 },
 };
 
-fn addTestData(db: *Db) !void {
+fn createTestTables(db: *Db) !void {
     const AllDDL = &[_][]const u8{
         \\CREATE TABLE user(
         \\ id integer PRIMARY KEY,
@@ -963,6 +969,10 @@ fn addTestData(db: *Db) !void {
     inline for (AllDDL) |ddl| {
         try db.exec(ddl, .{});
     }
+}
+
+fn addTestData(db: *Db) !void {
+    try createTestTables(db);
 
     for (test_users) |user| {
         try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", user);
@@ -1013,6 +1023,19 @@ test "sqlite: db pragma" {
             testing.expectEqualStrings("wal", journal_mode.?);
         }
     }
+}
+
+test "sqlite: last insert row id" {
+    var db = try getTestDb();
+    try createTestTables(&db);
+
+    try db.exec("INSERT INTO user(name, age) VALUES(?, ?{u32})", .{
+        .name = "test-user",
+        .age = @as(u32, 400),
+    });
+
+    const id = db.getLastInsertRowID();
+    testing.expectEqual(@as(i64, 1), id);
 }
 
 test "sqlite: statement exec" {
