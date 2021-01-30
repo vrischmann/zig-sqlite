@@ -1,0 +1,16 @@
+pkgs:
+  sqlite:
+    version: 0.0.0
+    description: "Small wrapper around sqlite's C API"
+    license: MIT
+    source_url: "https://github.com/vrischmann/zig-sqlite"
+    tags:
+      sqlite
+
+    root: sqlite.zig
+    files:
+      README.md
+      LICENSE
+      *.zig
+      *.c
+      *.h
