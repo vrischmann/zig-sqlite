@@ -114,6 +114,24 @@ pub const Blob = struct {
         return data.len;
     }
 
+    /// Reset the offset used for reading and writing.
+    pub fn reset(self: *Self) void {
+        self.offset = 0;
+    }
+
+    /// reopen moves this blob to another row of the same table.
+    ///
+    /// See https://sqlite.org/c3ref/blob_reopen.html.
+    pub fn reopen(self: *Self, row: i64) !void {
+        const result = c.sqlite3_blob_reopen(self.handle, row);
+        if (result != c.SQLITE_OK) {
+            return error.CannotReopenBlob;
+        }
+
+        self.size = c.sqlite3_blob_bytes(self.handle);
+        self.offset = 0;
+    }
+
     /// open opens a blob for incremental i/o.
     ///
     /// You can get a std.io.Writer to write data to the blob:
@@ -1711,7 +1729,7 @@ test "sqlite: statement iterator" {
     }
 }
 
-test "sqlite: blob open" {
+test "sqlite: blob open, reopen" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     var allocator = &arena.allocator;
@@ -1719,37 +1737,55 @@ test "sqlite: blob open" {
     var db = try getTestDb();
     defer db.deinit();
 
-    const blob_data = "\xDE\xAD\xBE\xEFabcdefghijklmnopqrstuvwxyz0123456789";
+    const blob_data1 = "\xDE\xAD\xBE\xEFabcdefghijklmnopqrstuvwxyz0123456789";
+    const blob_data2 = "\xCA\xFE\xBA\xBEfoobar";
 
-    // Insert a new blob with a set length
+    // Insert two blobs with a set length
     try db.exec("CREATE TABLE test_blob(id integer primary key, data blob)", .{});
 
     try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{
-        .data = ZeroBlob{ .length = blob_data.len * 2 },
+        .data = ZeroBlob{ .length = blob_data1.len * 2 },
     });
+    const rowid1 = db.getLastInsertRowID();
 
-    const rowid = db.getLastInsertRowID();
+    try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{
+        .data = ZeroBlob{ .length = blob_data2.len * 2 },
+    });
+    const rowid2 = db.getLastInsertRowID();
 
-    // Open the blob for writing
+    // Open the blob in the first row
+    var blob = try db.openBlob(.main, "test_blob", "data", rowid1, .{ .write = true });
+
     {
-        var blob = try db.openBlob(.main, "test_blob", "data", rowid, .{ .write = true });
-
-        // Write the data
-
+        // Write the first blob data
         var blob_writer = blob.writer();
-        try blob_writer.writeAll(blob_data);
-        try blob_writer.writeAll(blob_data);
+        try blob_writer.writeAll(blob_data1);
+        try blob_writer.writeAll(blob_data1);
 
-        try blob.close();
+        blob.reset();
+
+        var blob_reader = blob.reader();
+        const data = try blob_reader.readAllAlloc(allocator, 8192);
+
+        testing.expectEqualSlices(u8, blob_data1 ** 2, data);
     }
 
-    // Now read the data and check the results
-    var blob = try db.openBlob(.main, "test_blob", "data", rowid, .{});
+    // Reopen the blob in the second row
+    try blob.reopen(rowid2);
 
-    var blob_reader = blob.reader();
-    const data = try blob_reader.readAllAlloc(allocator, 8192);
+    {
+        // Write the second blob data
+        var blob_writer = blob.writer();
+        try blob_writer.writeAll(blob_data2);
+        try blob_writer.writeAll(blob_data2);
 
-    testing.expectEqualSlices(u8, blob_data ** 2, data);
+        blob.reset();
+
+        var blob_reader = blob.reader();
+        const data = try blob_reader.readAllAlloc(allocator, 8192);
+
+        testing.expectEqualSlices(u8, blob_data2 ** 2, data);
+    }
 
     try blob.close();
 }
