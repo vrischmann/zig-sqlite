@@ -17,6 +17,7 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
+    const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)") orelse false;
 
     // Build sqlite from source if asked
@@ -43,6 +44,7 @@ pub fn build(b: *std.build.Builder) void {
     main_tests.setTarget(target);
     main_tests.setBuildMode(mode);
     main_tests.addBuildOption(bool, "in_memory", in_memory);
+    main_tests.addBuildOption(?[]const u8, "dbfile", dbfile);
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&main_tests.step);
