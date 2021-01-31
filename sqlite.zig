@@ -1,6 +1,7 @@
 const std = @import("std");
 const build_options = @import("build_options");
 const debug = std.debug;
+const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
 
@@ -12,6 +13,171 @@ usingnamespace @import("query.zig");
 usingnamespace @import("error.zig");
 
 const logger = std.log.scoped(.sqlite);
+
+pub const ZeroBlob = struct {
+    length: usize,
+};
+
+/// Blob is a wrapper for a sqlite BLOB.
+///
+/// This type is useful when reading or binding data and for doing incremental i/o.
+pub const Blob = struct {
+    const Self = @This();
+
+    pub const OpenFlags = struct {
+        read: bool = true,
+        write: bool = false,
+    };
+
+    pub const DatabaseName = union(enum) {
+        main,
+        temp,
+        attached: [:0]const u8,
+
+        fn toString(self: @This()) [:0]const u8 {
+            return switch (self) {
+                .main => "main",
+                .temp => "temp",
+                .attached => |name| name,
+            };
+        }
+    };
+
+    // Used when reading or binding data.
+    data: []const u8,
+
+    // Used for incremental i/o.
+    handle: *c.sqlite3_blob = undefined,
+    offset: c_int = 0,
+    size: c_int = 0,
+
+    /// close closes the blob.
+    pub fn close(self: *Self) !void {
+        const result = c.sqlite3_blob_close(self.handle);
+        if (result != c.SQLITE_OK) {
+            return errorFromResultCode(result);
+        }
+    }
+
+    pub const Reader = io.Reader(*Self, Error, read);
+
+    /// reader returns a io.Reader.
+    pub fn reader(self: *Self) Reader {
+        return .{ .context = self };
+    }
+
+    fn read(self: *Self, buffer: []u8) Error!usize {
+        if (self.offset >= self.size) {
+            return 0;
+        }
+
+        var tmp_buffer = blk: {
+            const remaining = @intCast(usize, self.size) - @intCast(usize, self.offset);
+            break :blk if (buffer.len > remaining) buffer[0..remaining] else buffer;
+        };
+
+        const result = c.sqlite3_blob_read(
+            self.handle,
+            tmp_buffer.ptr,
+            @intCast(c_int, tmp_buffer.len),
+            self.offset,
+        );
+        if (result != c.SQLITE_OK) {
+            return errorFromResultCode(result);
+        }
+
+        self.offset += @intCast(c_int, tmp_buffer.len);
+
+        return tmp_buffer.len;
+    }
+
+    pub const Writer = io.Writer(*Self, Error, write);
+
+    /// writer returns a io.Writer.
+    pub fn writer(self: *Self) Writer {
+        return .{ .context = self };
+    }
+
+    fn write(self: *Self, data: []const u8) Error!usize {
+        const result = c.sqlite3_blob_write(
+            self.handle,
+            data.ptr,
+            @intCast(c_int, data.len),
+            self.offset,
+        );
+        if (result != c.SQLITE_OK) {
+            return errorFromResultCode(result);
+        }
+
+        self.offset += @intCast(c_int, data.len);
+
+        return data.len;
+    }
+
+    /// Reset the offset used for reading and writing.
+    pub fn reset(self: *Self) void {
+        self.offset = 0;
+    }
+
+    /// reopen moves this blob to another row of the same table.
+    ///
+    /// See https://sqlite.org/c3ref/blob_reopen.html.
+    pub fn reopen(self: *Self, row: i64) !void {
+        const result = c.sqlite3_blob_reopen(self.handle, row);
+        if (result != c.SQLITE_OK) {
+            return error.CannotReopenBlob;
+        }
+
+        self.size = c.sqlite3_blob_bytes(self.handle);
+        self.offset = 0;
+    }
+
+    /// open opens a blob for incremental i/o.
+    ///
+    /// You can get a std.io.Writer to write data to the blob:
+    ///
+    ///     var blob = try db.openBlob(.main, "mytable", "mycolumn", 1, .{ .write = true });
+    ///     var blob_writer = blob.writer();
+    ///
+    ///     try blob_writer.writeAll(my_data);
+    ///
+    /// Note that a blob is not extensible, if you want to change the blob size you must use an UPDATE statement.
+    ///
+    /// You can get a std.io.Reader to read the blob data:
+    ///
+    ///     var blob = try db.openBlob(.main, "mytable", "mycolumn", 1, .{});
+    ///     var blob_reader = blob.reader();
+    ///
+    ///     const data = try blob_reader.readAlloc(allocator);
+    ///
+    fn open(db: *c.sqlite3, db_name: DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: OpenFlags) !Blob {
+        comptime if (!flags.read and !flags.write) {
+            @compileError("must open a blob for either read, write or both");
+        };
+
+        const open_flags: c_int = if (flags.write) 1 else 0;
+
+        var blob: Blob = undefined;
+        const result = c.sqlite3_blob_open(
+            db,
+            db_name.toString(),
+            table,
+            column,
+            row,
+            open_flags,
+            @ptrCast([*c]?*c.sqlite3_blob, &blob.handle),
+        );
+        if (result == c.SQLITE_MISUSE) debug.panic("sqlite misuse while opening a blob", .{});
+        if (result != c.SQLITE_OK) {
+            return error.CannotOpenBlob;
+        }
+
+        blob.size = c.sqlite3_blob_bytes(blob.handle);
+        blob.offset = 0;
+
+        return blob;
+    }
+};
 
 /// ThreadingMode controls the threading mode used by SQLite.
 ///
@@ -254,6 +420,11 @@ pub const Db = struct {
     /// rowsAffected returns the number of rows affected by the last statement executed.
     pub fn rowsAffected(self: *Self) usize {
         return @intCast(usize, c.sqlite3_changes(self.db));
+    }
+
+    /// openBlob opens a blob.
+    pub fn openBlob(self: *Self, db_name: Blob.DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: Blob.OpenFlags) !Blob {
+        return Blob.open(self.db, db_name, table, column, row, flags);
     }
 };
 
@@ -764,6 +935,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             switch (FieldType) {
                 Text => _ = c.sqlite3_bind_text(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
                 Blob => _ = c.sqlite3_bind_blob(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
+                ZeroBlob => _ = c.sqlite3_bind_zeroblob64(self.stmt, column, field.length),
                 else => switch (field_type_info) {
                     .Int, .ComptimeInt => _ = c.sqlite3_bind_int64(self.stmt, column, @intCast(c_longlong, field)),
                     .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field),
@@ -949,6 +1121,9 @@ const test_users = &[_]TestUser{
 
 fn createTestTables(db: *Db) !void {
     const AllDDL = &[_][]const u8{
+        "DROP TABLE IF EXISTS user",
+        "DROP TABLE IF EXISTS article",
+        "DROP TABLE IF EXISTS test_blob",
         \\CREATE TABLE user(
         \\ id integer PRIMARY KEY,
         \\ name text,
@@ -1554,6 +1729,67 @@ test "sqlite: statement iterator" {
     }
 }
 
+test "sqlite: blob open, reopen" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var allocator = &arena.allocator;
+
+    var db = try getTestDb();
+    defer db.deinit();
+
+    const blob_data1 = "\xDE\xAD\xBE\xEFabcdefghijklmnopqrstuvwxyz0123456789";
+    const blob_data2 = "\xCA\xFE\xBA\xBEfoobar";
+
+    // Insert two blobs with a set length
+    try db.exec("CREATE TABLE test_blob(id integer primary key, data blob)", .{});
+
+    try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{
+        .data = ZeroBlob{ .length = blob_data1.len * 2 },
+    });
+    const rowid1 = db.getLastInsertRowID();
+
+    try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{
+        .data = ZeroBlob{ .length = blob_data2.len * 2 },
+    });
+    const rowid2 = db.getLastInsertRowID();
+
+    // Open the blob in the first row
+    var blob = try db.openBlob(.main, "test_blob", "data", rowid1, .{ .write = true });
+
+    {
+        // Write the first blob data
+        var blob_writer = blob.writer();
+        try blob_writer.writeAll(blob_data1);
+        try blob_writer.writeAll(blob_data1);
+
+        blob.reset();
+
+        var blob_reader = blob.reader();
+        const data = try blob_reader.readAllAlloc(allocator, 8192);
+
+        testing.expectEqualSlices(u8, blob_data1 ** 2, data);
+    }
+
+    // Reopen the blob in the second row
+    try blob.reopen(rowid2);
+
+    {
+        // Write the second blob data
+        var blob_writer = blob.writer();
+        try blob_writer.writeAll(blob_data2);
+        try blob_writer.writeAll(blob_data2);
+
+        blob.reset();
+
+        var blob_reader = blob.reader();
+        const data = try blob_reader.readAllAlloc(allocator, 8192);
+
+        testing.expectEqualSlices(u8, blob_data2 ** 2, data);
+    }
+
+    try blob.close();
+}
+
 test "sqlite: failing open" {
     var db: Db = undefined;
     const res = db.init(.{
@@ -1610,6 +1846,10 @@ fn dbMode(allocator: *mem.Allocator) Db.Mode {
     return if (build_options.in_memory) blk: {
         break :blk .{ .Memory = {} };
     } else blk: {
+        if (build_options.dbfile) |dbfile| {
+            return .{ .File = allocator.dupeZ(u8, dbfile) catch unreachable };
+        }
+
         const path = tmpDbPath(allocator) catch unreachable;
 
         std.fs.cwd().deleteFile(path) catch {};
