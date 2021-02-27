@@ -498,8 +498,7 @@ pub const QueryOptions = struct {
 ///     defer stmt.deinit();
 ///
 ///     var iter = try stmt.iterator(User, .{});
-///     while (true) {
-///         const row: User = (try iter.next(.{})) orelse break;
+///     while (try iter.next(.{})) |row| {
 ///         ...
 ///     }
 ///
@@ -1066,8 +1065,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// Here is an example of how to use the iterator:
         ///
         ///     var iter = try stmt.iterator(usize, .{});
-        ///     while (true) {
-        ///         const row = (try iter.next(.{})) orelse break;
+        ///     while (try iter.next(.{})) |row| {
         ///         ...
         ///     }
         ///
@@ -1166,8 +1164,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             var iter = try self.iterator(Type, values);
 
             var rows = std.ArrayList(Type).init(allocator);
-            while (true) {
-                const row = (try iter.nextAlloc(allocator, options)) orelse break;
+            while (try iter.nextAlloc(allocator, options)) |row| {
                 try rows.append(row);
             }
 
@@ -1755,8 +1752,7 @@ test "sqlite: statement iterator" {
         var iter = try stmt2.iterator(RowType, .{});
 
         var rows = std.ArrayList(RowType).init(allocator);
-        while (true) {
-            const row = (try iter.next(.{})) orelse break;
+        while (try iter.next(.{})) |row| {
             try rows.append(row);
         }
 
@@ -1783,8 +1779,7 @@ test "sqlite: statement iterator" {
         var iter = try stmt2.iterator(RowType, .{});
 
         var rows = std.ArrayList(RowType).init(allocator);
-        while (true) {
-            const row = (try iter.nextAlloc(allocator, .{})) orelse break;
+        while (try iter.nextAlloc(allocator, .{})) |row| {
             try rows.append(row);
         }
 

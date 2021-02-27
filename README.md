@@ -279,8 +279,7 @@ var iter = try stmt.iterator(usize, .{
     .age = 20,
 });
 
-while (true) {
-    const age = (try iter.next(.{})) orelse break;
+while (try iter.next(.{})) |age| {
     std.debug.print("age: {}\n", .{age});
 }
 ```
