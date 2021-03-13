@@ -12,9 +12,9 @@ fn linkSqlite(b: *std.build.LibExeObjStep) void {
     }
 }
 
-pub fn build(b: *std.build.Builder) void {
-    const target = blk: {
-        var tmp = b.standardTargetOptions(.{});
+fn getTarget(original_target: std.zig.CrossTarget, bundled: bool) std.zig.CrossTarget {
+    if (bundled) {
+        var tmp = original_target;
 
         if (tmp.isGnuLibC()) {
             const min_glibc_version = std.builtin.Version{
@@ -31,14 +31,19 @@ pub fn build(b: *std.build.Builder) void {
             }
         }
 
-        break :blk tmp;
-    };
+        return tmp;
+    }
 
-    const mode = b.standardReleaseOptions();
+    return original_target;
+}
 
+pub fn build(b: *std.build.Builder) void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)") orelse false;
+
+    const target = getTarget(b.standardTargetOptions(.{}), use_bundled);
+    const mode = b.standardReleaseOptions();
 
     // Build sqlite from source if asked
     if (use_bundled) {
