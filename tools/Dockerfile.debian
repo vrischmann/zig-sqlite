@@ -12,7 +12,7 @@ RUN mv /zig/zig-linux-* /zig/zig-master
 
 WORKDIR /work
 
-COPY *.zig .
 COPY c c
+COPY *.zig .
 
 ENTRYPOINT ["/bin/bash"]
