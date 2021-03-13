@@ -4,9 +4,13 @@ on:
   push:
     paths:
     - '**.zig'
+    - '**.c'
+    - '**.h'
   pull_request:
     paths:
     - '**.zig'
+    - '**.c'
+    - '**.h'
   workflow_dispatch:
 
 jobs:
