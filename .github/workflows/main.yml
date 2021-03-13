@@ -23,7 +23,7 @@ jobs:
           version: master
       - run: zig fmt --check *.zig
 
-  build:
+  test-in-memory:
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -36,11 +36,27 @@ jobs:
         with:
           version: master
 
-      - name: Build
-        run: zig build
+      - name: Run Tests in memory
+        run: zig build test -Din_memory=true
+
+      - name: Run Tests in memory using the bundled SQLite
+        run: zig build test -Din_memory=true -Duse_bundled
+
+  test-with-filesystem:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
 
       - name: Run Tests with filesystem
         run: zig build test -Din_memory=false
 
-      - name: Run Tests in memory
-        run: zig build test -Din_memory=true
+      - name: Run Tests with filesystem using the bundled SQLite
+        run: zig build test -Din_memory=false -Duse_bundled
