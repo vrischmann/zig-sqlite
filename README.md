@@ -59,6 +59,20 @@ exe.linkLibrary(sqlite);
 exe.addPackage(.{ .name = "sqlite", .path = "third_party/zig-sqlite/sqlite.zig" });
 ```
 
+If you're building with glibc you must make sure that the version used is at least 2.28.
+
+You can do that in your `build.zig` file:
+```zig
+var target = b.standardTargetOptions(.{});
+target.setGnuLibCVersion(2, 28, 0);
+exe.setTarget(target);
+```
+
+Or with `-Dtarget`:
+```
+$ zig build -Dtarget=native-linux-gnu.2.28
+```
+
 # Usage
 
 Import `zig-sqlite` like this:

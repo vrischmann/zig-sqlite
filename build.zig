@@ -13,7 +13,27 @@ fn linkSqlite(b: *std.build.LibExeObjStep) void {
 }
 
 pub fn build(b: *std.build.Builder) void {
-    const target = b.standardTargetOptions(.{});
+    const target = blk: {
+        var tmp = b.standardTargetOptions(.{});
+
+        if (tmp.isGnuLibC()) {
+            const min_glibc_version = std.builtin.Version{
+                .major = 2,
+                .minor = 28,
+                .patch = 0,
+            };
+            if (tmp.glibc_version) |ver| {
+                if (ver.order(min_glibc_version) == .lt) {
+                    std.debug.panic("sqlite requires glibc version >= 2.28", .{});
+                }
+            } else {
+                tmp.setGnuLibCVersion(2, 28, 0);
+            }
+        }
+
+        break :blk tmp;
+    };
+
     const mode = b.standardReleaseOptions();
 
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
