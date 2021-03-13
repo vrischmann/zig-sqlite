@@ -23,7 +23,7 @@ pub fn build(b: *std.build.Builder) void {
     // Build sqlite from source if asked
     if (use_bundled) {
         const lib = b.addStaticLibrary("sqlite", null);
-        lib.addCSourceFile("sqlite3.c", &[_][]const u8{"-std=c99"});
+        lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
         lib.linkLibC();
         lib.setTarget(target);
         lib.setBuildMode(mode);
@@ -31,14 +31,14 @@ pub fn build(b: *std.build.Builder) void {
     }
 
     const lib = b.addStaticLibrary("zig-sqlite", "sqlite.zig");
-    lib.addIncludeDir(".");
+    lib.addIncludeDir("c");
     linkSqlite(lib);
     lib.setTarget(target);
     lib.setBuildMode(mode);
     lib.install();
 
     var main_tests = b.addTest("sqlite.zig");
-    main_tests.addIncludeDir(".");
+    main_tests.addIncludeDir("c");
     linkSqlite(main_tests);
     main_tests.setBuildMode(mode);
     main_tests.setTarget(target);
