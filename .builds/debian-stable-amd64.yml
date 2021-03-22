@@ -24,7 +24,3 @@ tasks:
   - test_filesystem: |
       cd zig-sqlite
       TERM=dumb zig build test -Din_memory=false
-
-  - test_with_bundled_library: |
-      cd zig-sqlite
-      TERM=dumb zig build test -Din_memory -Duse_bundled
