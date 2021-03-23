@@ -39,9 +39,6 @@ jobs:
       - name: Run Tests in memory
         run: zig build test -Din_memory=true
 
-      - name: Run Tests in memory using the bundled SQLite
-        run: zig build test -Din_memory=true -Duse_bundled
-
   test-with-filesystem:
     strategy:
       matrix:
@@ -57,6 +54,3 @@ jobs:
 
       - name: Run Tests with filesystem
         run: zig build test -Din_memory=false
-
-      - name: Run Tests with filesystem using the bundled SQLite
-        run: zig build test -Din_memory=false -Duse_bundled
