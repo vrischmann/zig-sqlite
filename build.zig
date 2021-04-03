@@ -97,18 +97,8 @@ const all_test_targets = switch (std.Target.current.cpu.arch) {
         },
         .windows => [_]TestTarget{
             TestTarget{
-                .target = .{},
-                .bundled = false,
-            },
-            TestTarget{
                 .target = .{
                     .cpu_arch = .x86_64,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .target = .{
-                    .cpu_arch = .i386,
                 },
                 .bundled = true,
             },
