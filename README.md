@@ -25,11 +25,36 @@ For sqlite, you have options depending on your target:
 
 # Installation
 
-Since there's no package manager for Zig yet, the recommended way is to use a git submodule:
+There are two primary ways to include `zig-sqlite` in your project:
+* using the [zigmod](https://github.com/nektro/zigmod) package manager
+* using a git submodule
 
-```bash
-$ git submodule add https://github.com/vrischmann/zig-sqlite.git third_party/zig-sqlite
+## zigmod
+
+Add this to your `zig.mod` file:
 ```
+dependencies:
+  - src: git https://github.com/vrischmann/zig-sqlite branch-master
+```
+
+Note that if you're building an executable and not a library you should use `dev_dependencies` instead.
+
+Next run `zigmod fetch`; it should create a `deps.zig` file.
+
+Now in your `build.zig` you can access the package like this:
+```zig
+const deps = @import("deps.zig");
+...
+deps.addAllTo(exe);
+```
+
+This is the easiest way to add `zig-sqlite` because it uses the bundled source code, avoiding all sorts of linking problems.
+
+## Git submodule
+
+If you don't want to use a package manager you can simply add this repository as a git submodule.
+
+Then you need to chose if you want to use the system sqlite library or the bundled source code.
 
 ## Using the system sqlite library
 
