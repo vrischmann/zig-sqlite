@@ -200,7 +200,7 @@ pub const Diagnostics = struct {
     pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         if (self.err) |err| {
             if (self.message.len > 0) {
-                _ = try writer.print("{{message: {s}, detailed error: {}}}", .{ self.message, err });
+                _ = try writer.print("{{message: {s}, detailed error: {s}}}", .{ self.message, err });
                 return;
             }
 
@@ -425,10 +425,10 @@ pub const Db = struct {
     }
 
     /// exec is a convenience function which prepares a statement and executes it directly.
-    pub fn exec(self: *Self, comptime query: []const u8, values: anytype) !void {
-        var stmt = try self.prepare(query);
+    pub fn exec(self: *Self, comptime query: []const u8, options: QueryOptions, values: anytype) !void {
+        var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();
-        try stmt.exec(values);
+        try stmt.exec(options, values);
     }
 
     /// one is a convenience function which prepares a statement and reads a single row from the result set.
@@ -1059,17 +1059,24 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 
         /// exec executes a statement which does not return data.
         ///
+        /// The `options` tuple is used to provide additional state in some cases.
+        ///
         /// The `values` variable is used for the bind parameters. It must have as many fields as there are bind markers
         /// in the input query string.
         ///
-        pub fn exec(self: *Self, values: anytype) !void {
+        pub fn exec(self: *Self, options: QueryOptions, values: anytype) !void {
             self.bind(values);
+
+            var dummy_diags = Diagnostics{};
+            var diags = options.diags orelse &dummy_diags;
 
             const result = c.sqlite3_step(self.stmt);
             switch (result) {
                 c.SQLITE_DONE => {},
-                c.SQLITE_BUSY => return errorFromResultCode(result),
-                else => std.debug.panic("invalid result {}", .{result}),
+                else => {
+                    diags.err = getLastDetailedErrorFromDb(self.db);
+                    return errorFromResultCode(result);
+                },
             }
         }
 
@@ -1227,7 +1234,7 @@ fn createTestTables(db: *Db) !void {
 
     // Create the tables
     inline for (AllDDL) |ddl| {
-        try db.exec(ddl, .{});
+        try db.exec(ddl, .{}, .{});
     }
 }
 
@@ -1235,7 +1242,7 @@ fn addTestData(db: *Db) !void {
     try createTestTables(db);
 
     for (test_users) |user| {
-        try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", user);
+        try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", .{}, user);
 
         const rows_inserted = db.rowsAffected();
         try testing.expectEqual(@as(usize, 1), rows_inserted);
@@ -1288,7 +1295,7 @@ test "sqlite: last insert row id" {
     var db = try getTestDb();
     try createTestTables(&db);
 
-    try db.exec("INSERT INTO user(name, age) VALUES(?, ?{u32})", .{
+    try db.exec("INSERT INTO user(name, age) VALUES(?, ?{u32})", .{}, .{
         .name = "test-user",
         .age = @as(u32, 400),
     });
@@ -1303,7 +1310,7 @@ test "sqlite: statement exec" {
 
     // Test with a Blob struct
     {
-        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{blob}, ?{u32})", .{
+        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{blob}, ?{u32})", .{}, .{
             .id = @as(usize, 200),
             .name = Blob{ .data = "hello" },
             .age = @as(u32, 20),
@@ -1312,7 +1319,7 @@ test "sqlite: statement exec" {
 
     // Test with a Text struct
     {
-        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{text}, ?{u32})", .{
+        try db.exec("INSERT INTO user(id, name, age) VALUES(?{usize}, ?{text}, ?{u32})", .{}, .{
             .id = @as(usize, 201),
             .name = Text{ .data = "hello" },
             .age = @as(u32, 20),
@@ -1583,7 +1590,7 @@ test "sqlite: insert bool and bind bool" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    try db.exec("INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})", .{
+    try db.exec("INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})", .{}, .{
         .id = @as(usize, 1),
         .author_id = @as(usize, 20),
         .is_published = true,
@@ -1605,7 +1612,7 @@ test "sqlite: bind string literal" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    try db.exec("INSERT INTO article(id, data) VALUES(?, ?)", .{
+    try db.exec("INSERT INTO article(id, data) VALUES(?, ?)", .{}, .{
         @as(usize, 10),
         "foobar",
     });
@@ -1682,7 +1689,7 @@ test "sqlite: optional" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{ 1, null, true });
+    try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 1, null, true });
 
     var stmt = try db.prepare("SELECT data, is_published FROM article");
     defer stmt.deinit();
@@ -1718,7 +1725,7 @@ test "sqlite: statement reset" {
 
     for (users) |user| {
         stmt.reset();
-        try stmt.exec(user);
+        try stmt.exec(.{}, user);
 
         const rows_inserted = db.rowsAffected();
         try testing.expectEqual(@as(usize, 1), rows_inserted);
@@ -1734,7 +1741,7 @@ test "sqlite: statement iterator" {
     try addTestData(&db);
 
     // Cleanup first
-    try db.exec("DELETE FROM user", .{});
+    try db.exec("DELETE FROM user", .{}, .{});
 
     // Add data
     var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})");
@@ -1749,7 +1756,7 @@ test "sqlite: statement iterator" {
         try expected_rows.append(user);
 
         stmt.reset();
-        try stmt.exec(user);
+        try stmt.exec(.{}, user);
 
         const rows_inserted = db.rowsAffected();
         try testing.expectEqual(@as(usize, 1), rows_inserted);
@@ -1822,14 +1829,14 @@ test "sqlite: blob open, reopen" {
     const blob_data2 = "\xCA\xFE\xBA\xBEfoobar";
 
     // Insert two blobs with a set length
-    try db.exec("CREATE TABLE test_blob(id integer primary key, data blob)", .{});
+    try db.exec("CREATE TABLE test_blob(id integer primary key, data blob)", .{}, .{});
 
-    try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{
+    try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{}, .{
         .data = ZeroBlob{ .length = blob_data1.len * 2 },
     });
     const rowid1 = db.getLastInsertRowID();
 
-    try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{
+    try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{}, .{
         .data = ZeroBlob{ .length = blob_data2.len * 2 },
     });
     const rowid2 = db.getLastInsertRowID();
@@ -1942,6 +1949,25 @@ test "sqlite: diagnostics format" {
 
         try testing.expectEqualStrings(tc.exp, str);
     }
+}
+
+test "sqlite: exec with diags, failing statement" {
+    var db = try getTestDb();
+
+    var diags = Diagnostics{};
+
+    const result = blk: {
+        var stmt = try db.prepareWithDiags("ROLLBACK", .{ .diags = &diags });
+        break :blk stmt.exec(.{ .diags = &diags }, .{});
+    };
+
+    try testing.expectError(error.SQLiteError, result);
+    try testing.expect(diags.err != null);
+    try testing.expectEqualStrings("cannot rollback - no transaction is active", diags.err.?.message);
+
+    const detailed_err = db.getDetailedError();
+    try testing.expectEqual(@as(usize, 1), detailed_err.code);
+    try testing.expectEqualStrings("cannot rollback - no transaction is active", detailed_err.message);
 }
 
 fn getTestDb() !Db {
