@@ -200,11 +200,11 @@ pub const Diagnostics = struct {
     pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         if (self.err) |err| {
             if (self.message.len > 0) {
-                _ = try writer.print("{{message: {s}, error: {s}}}", .{ self.message, err.message });
+                _ = try writer.print("{{message: {s}, detailed error: {}}}", .{ self.message, err });
                 return;
             }
 
-            _ = try writer.write(err.message);
+            _ = try err.format(fmt, options, writer);
             return;
         }
 
@@ -241,6 +241,10 @@ pub const InitOptions = struct {
 pub const DetailedError = struct {
     code: usize,
     message: []const u8,
+
+    pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = try writer.print("{{code: {}, message: {s}}}", .{ self.code, self.message });
+    }
 };
 
 fn isThreadSafe() bool {
@@ -1903,7 +1907,7 @@ test "sqlite: diagnostics format" {
                     .message = "barbaz",
                 },
             },
-            .exp = "my diagnostics: barbaz",
+            .exp = "my diagnostics: {code: 20, message: barbaz}",
         },
         .{
             .input = .{
@@ -1913,7 +1917,7 @@ test "sqlite: diagnostics format" {
                     .message = "barbaz",
                 },
             },
-            .exp = "my diagnostics: {message: foobar, error: barbaz}",
+            .exp = "my diagnostics: {message: foobar, detailed error: {code: 20, message: barbaz}}",
         },
     };
 
