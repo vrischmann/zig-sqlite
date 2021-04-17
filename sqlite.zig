@@ -946,7 +946,8 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         pub fn deinit(self: *Self) void {
             const result = c.sqlite3_finalize(self.stmt);
             if (result != c.SQLITE_OK) {
-                logger.err("unable to finalize prepared statement, result: {}", .{result});
+                const detailed_error = getLastDetailedErrorFromDb(self.db);
+                logger.err("unable to finalize prepared statement, result: {}, detailed error: {}", .{ result, detailed_error });
             }
         }
 
@@ -954,12 +955,14 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         pub fn reset(self: *Self) void {
             const result = c.sqlite3_clear_bindings(self.stmt);
             if (result != c.SQLITE_OK) {
-                logger.err("unable to clear prepared statement bindings, result: {}", .{result});
+                const detailed_error = getLastDetailedErrorFromDb(self.db);
+                logger.err("unable to clear prepared statement bindings, result: {}, detailed error: {}", .{ result, detailed_error });
             }
 
             const result2 = c.sqlite3_reset(self.stmt);
             if (result2 != c.SQLITE_OK) {
-                logger.err("unable to reset prepared statement, result: {}", .{result2});
+                const detailed_error = getLastDetailedErrorFromDb(self.db);
+                logger.err("unable to reset prepared statement, result: {}, detailed error: {}", .{ result2, detailed_error });
             }
         }
 
