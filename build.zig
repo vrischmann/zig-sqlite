@@ -133,7 +133,7 @@ const all_test_targets = switch (std.Target.current.cpu.arch) {
 pub fn build(b: *std.build.Builder) void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
-    const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)") orelse false;
+    const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
     const enable_qemu = b.option(bool, "enable_qemu", "Enable qemu for running tests (default false)") orelse false;
 
     const target = b.standardTargetOptions(.{});
@@ -143,16 +143,17 @@ pub fn build(b: *std.build.Builder) void {
     else
         &[_]TestTarget{.{
             .target = target,
-            .bundled = use_bundled,
+            .bundled = use_bundled orelse false,
         }};
 
     const test_step = b.step("test", "Run library tests");
     for (test_targets) |test_target| {
-        const cross_target = getTarget(test_target.target, test_target.bundled);
+        const bundled = use_bundled orelse test_target.bundled;
+        const cross_target = getTarget(test_target.target, bundled);
 
         const tests = b.addTest("sqlite.zig");
 
-        if (test_target.bundled) {
+        if (bundled) {
             const lib = b.addStaticLibrary("sqlite", null);
             lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
             lib.linkLibC();
