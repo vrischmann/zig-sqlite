@@ -168,7 +168,7 @@ const query =
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-try stmt.exec({
+try stmt.exec(.{
     .salary = 20000,
     .id = 40,
 });
@@ -274,7 +274,7 @@ const names = try stmt.all([]const u8, allocator, .{}, .{
     .age2 = 40,
 });
 for (names) |name| {
-    std.log.debug("name: {}", .{ row.name });
+    std.log.debug("name: {s}", .{ name });
 }
 ```
 
