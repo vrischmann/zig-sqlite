@@ -630,32 +630,33 @@ pub fn Iterator(comptime Type: type) type {
 
         // readArray reads a sqlite BLOB or TEXT column into an array of u8.
         //
-        // We also require the array to have a sentinel because otherwise we have no way
-        // of communicating the end of the data to the caller.
+        // We also require the array to be the exact size of the data, or have a sentinel;
+        // otherwise we have no way of communicating the end of the data to the caller.
         //
         // If the array is too small for the data an error will be returned.
-        fn readArray(self: *Self, comptime ArrayType: type, _i: usize) error{ArrayTooSmall}!ArrayType {
+        fn readArray(self: *Self, comptime ArrayType: type, _i: usize) !ArrayType {
             const i = @intCast(c_int, _i);
             const type_info = @typeInfo(ArrayType);
 
             var ret: ArrayType = undefined;
             switch (type_info) {
                 .Array => |arr| {
-                    comptime if (arr.sentinel == null) {
-                        @compileError("cannot populate array of " ++ @typeName(arr.child) ++ ", arrays must have a sentinel");
-                    };
-
                     switch (arr.child) {
                         u8 => {
-                            const data = c.sqlite3_column_blob(self.stmt, i);
                             const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+                            if (arr.sentinel == null) {
+                                if (size != arr.len) return error.ArraySizeMisMatch;
+                            } else if (size >= @as(usize, arr.len)) {
+                                return error.ArrayTooSmall;
+                            }
 
-                            if (size >= @as(usize, arr.len)) return error.ArrayTooSmall;
-
+                            const data = c.sqlite3_column_blob(self.stmt, i);
                             const ptr = @ptrCast([*c]const u8, data)[0..size];
 
                             mem.copy(u8, ret[0..], ptr);
-                            ret[size] = arr.sentinel.?;
+                            if (arr.sentinel) |s| {
+                                ret[size] = s;
+                            }
                         },
                         else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
                     }
