@@ -645,7 +645,7 @@ pub fn Iterator(comptime Type: type) type {
                         u8 => {
                             const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
                             if (arr.sentinel == null) {
-                                if (size != arr.len) return error.ArraySizeMisMatch;
+                                if (size != arr.len) return error.ArraySizeMismatch;
                             } else if (size >= @as(usize, arr.len)) {
                                 return error.ArrayTooSmall;
                             }
