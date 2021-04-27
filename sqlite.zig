@@ -667,19 +667,25 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         // readInt reads a sqlite INTEGER column into an integer.
-        fn readInt(self: *Self, comptime IntType: type, i: usize) !IntType {
+        //
+        // TODO remove the workaround once https://github.com/ziglang/zig/issues/5149 is resolved or if we actually return an error
+        fn readInt(self: *Self, comptime IntType: type, i: usize) error{Workaround}!IntType {
             const n = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return @intCast(IntType, n);
         }
 
         // readFloat reads a sqlite REAL column into a float.
-        fn readFloat(self: *Self, comptime FloatType: type, i: usize) !FloatType {
+        //
+        // TODO remove the workaround once https://github.com/ziglang/zig/issues/5149 is resolved or if we actually return an error
+        fn readFloat(self: *Self, comptime FloatType: type, i: usize) error{Workaround}!FloatType {
             const d = c.sqlite3_column_double(self.stmt, @intCast(c_int, i));
             return @floatCast(FloatType, d);
         }
 
         // readFloat reads a sqlite INTEGER column into a bool (true is anything > 0, false is anything <= 0).
-        fn readBool(self: *Self, i: usize) !bool {
+        //
+        // TODO remove the workaround once https://github.com/ziglang/zig/issues/5149 is resolved or if we actually return an error
+        fn readBool(self: *Self, i: usize) error{Workaround}!bool {
             const d = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
             return d > 0;
         }
