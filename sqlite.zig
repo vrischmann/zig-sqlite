@@ -306,7 +306,7 @@ pub const Db = struct {
 
         // Validate the threading mode
         if (options.threading_mode != .SingleThread and !isThreadSafe()) {
-            return error.CannotUseSingleThreadedSQLite;
+            return error.SQLiteBuildNotThreadSafe;
         }
 
         // Compute the flags
