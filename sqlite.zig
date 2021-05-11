@@ -1233,7 +1233,7 @@ fn addTestData(db: *Db) !void {
         try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", user);
 
         const rows_inserted = db.rowsAffected();
-        testing.expectEqual(@as(usize, 1), rows_inserted);
+        try testing.expectEqual(@as(usize, 1), rows_inserted);
     }
 }
 
@@ -1248,32 +1248,32 @@ test "sqlite: db pragma" {
     var db = try getTestDb();
 
     const foreign_keys = try db.pragma(usize, .{}, "foreign_keys", null);
-    testing.expect(foreign_keys != null);
-    testing.expectEqual(@as(usize, 0), foreign_keys.?);
+    try testing.expect(foreign_keys != null);
+    try testing.expectEqual(@as(usize, 0), foreign_keys.?);
 
     if (build_options.in_memory) {
         {
             const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", "wal");
-            testing.expect(journal_mode != null);
-            testing.expectEqualStrings("memory", mem.spanZ(&journal_mode.?));
+            try testing.expect(journal_mode != null);
+            try testing.expectEqualStrings("memory", mem.spanZ(&journal_mode.?));
         }
 
         {
             const journal_mode = try db.pragmaAlloc([]const u8, &arena.allocator, .{}, "journal_mode", "wal");
-            testing.expect(journal_mode != null);
-            testing.expectEqualStrings("memory", journal_mode.?);
+            try testing.expect(journal_mode != null);
+            try testing.expectEqualStrings("memory", journal_mode.?);
         }
     } else {
         {
             const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", "wal");
-            testing.expect(journal_mode != null);
-            testing.expectEqualStrings("wal", mem.spanZ(&journal_mode.?));
+            try testing.expect(journal_mode != null);
+            try testing.expectEqualStrings("wal", mem.spanZ(&journal_mode.?));
         }
 
         {
             const journal_mode = try db.pragmaAlloc([]const u8, &arena.allocator, .{}, "journal_mode", "wal");
-            testing.expect(journal_mode != null);
-            testing.expectEqualStrings("wal", journal_mode.?);
+            try testing.expect(journal_mode != null);
+            try testing.expectEqualStrings("wal", journal_mode.?);
         }
     }
 }
@@ -1288,7 +1288,7 @@ test "sqlite: last insert row id" {
     });
 
     const id = db.getLastInsertRowID();
-    testing.expectEqual(@as(i64, 1), id);
+    try testing.expectEqual(@as(i64, 1), id);
 }
 
 test "sqlite: statement exec" {
@@ -1328,9 +1328,9 @@ test "sqlite: read a single user into a struct" {
         .id = @as(usize, 20),
     });
     for (rows) |row| {
-        testing.expectEqual(test_users[0].id, row.id);
-        testing.expectEqualStrings(test_users[0].name, row.name);
-        testing.expectEqual(test_users[0].age, row.age);
+        try testing.expectEqual(test_users[0].id, row.id);
+        try testing.expectEqualStrings(test_users[0].name, row.name);
+        try testing.expectEqual(test_users[0].age, row.age);
     }
 
     // Read a row with db.one()
@@ -1345,12 +1345,12 @@ test "sqlite: read a single user into a struct" {
             .{},
             .{@as(usize, 20)},
         );
-        testing.expect(row != null);
+        try testing.expect(row != null);
 
         const exp = test_users[0];
-        testing.expectEqual(exp.id, row.?.id);
-        testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name));
-        testing.expectEqual(exp.age, row.?.age);
+        try testing.expectEqual(exp.id, row.?.id);
+        try testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name));
+        try testing.expectEqual(exp.age, row.?.age);
     }
 
     // Read a row with db.oneAlloc()
@@ -1366,12 +1366,12 @@ test "sqlite: read a single user into a struct" {
             .{},
             .{@as(usize, 20)},
         );
-        testing.expect(row != null);
+        try testing.expect(row != null);
 
         const exp = test_users[0];
-        testing.expectEqual(exp.id, row.?.id);
-        testing.expectEqualStrings(exp.name, row.?.name.data);
-        testing.expectEqual(exp.age, row.?.age);
+        try testing.expectEqual(exp.id, row.?.id);
+        try testing.expectEqualStrings(exp.name, row.?.name.data);
+        try testing.expectEqual(exp.age, row.?.age);
     }
 }
 
@@ -1386,13 +1386,13 @@ test "sqlite: read all users into a struct" {
     defer stmt.deinit();
 
     var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{});
-    testing.expectEqual(@as(usize, 3), rows.len);
+    try testing.expectEqual(@as(usize, 3), rows.len);
     for (rows) |row, i| {
         const exp = test_users[i];
-        testing.expectEqual(exp.id, row.id);
-        testing.expectEqualStrings(exp.name, row.name);
-        testing.expectEqual(exp.age, row.age);
-        testing.expectEqual(exp.weight, row.weight);
+        try testing.expectEqual(exp.id, row.id);
+        try testing.expectEqualStrings(exp.name, row.name);
+        try testing.expectEqual(exp.age, row.age);
+        try testing.expectEqual(exp.weight, row.weight);
     }
 }
 
@@ -1419,15 +1419,15 @@ test "sqlite: read in an anonymous struct" {
         .{},
         .{ .id = @as(usize, 20) },
     );
-    testing.expect(row != null);
+    try testing.expect(row != null);
 
     const exp = test_users[0];
-    testing.expectEqual(exp.id, row.?.id);
-    testing.expectEqualStrings(exp.name, row.?.name);
-    testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name_2));
-    testing.expectEqual(exp.age, row.?.age);
-    testing.expect(row.?.is_id);
-    testing.expectEqual(exp.weight, @floatCast(f32, row.?.weight));
+    try testing.expectEqual(exp.id, row.?.id);
+    try testing.expectEqualStrings(exp.name, row.?.name);
+    try testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name_2));
+    try testing.expectEqual(exp.age, row.?.age);
+    try testing.expect(row.?.is_id);
+    try testing.expectEqual(exp.weight, @floatCast(f32, row.?.weight));
 }
 
 test "sqlite: read in a Text struct" {
@@ -1450,12 +1450,12 @@ test "sqlite: read in a Text struct" {
         .{},
         .{@as(usize, 20)},
     );
-    testing.expect(row != null);
+    try testing.expect(row != null);
 
     const exp = test_users[0];
-    testing.expectEqual(exp.id, row.?.id);
-    testing.expectEqualStrings(exp.name, row.?.name.data);
-    testing.expectEqual(exp.age, row.?.age);
+    try testing.expectEqual(exp.id, row.?.id);
+    try testing.expectEqualStrings(exp.name, row.?.name.data);
+    try testing.expectEqual(exp.age, row.?.age);
 }
 
 test "sqlite: read a single text value" {
@@ -1490,10 +1490,10 @@ test "sqlite: read a single text value" {
         const name = try stmt.oneAlloc(typ, &arena.allocator, .{}, .{
             .id = @as(usize, 20),
         });
-        testing.expect(name != null);
+        try testing.expect(name != null);
         switch (typ) {
             Text, Blob => {
-                testing.expectEqualStrings("Vincent", name.?.data);
+                try testing.expectEqualStrings("Vincent", name.?.data);
             },
             else => {
                 const span = blk: {
@@ -1505,7 +1505,7 @@ test "sqlite: read a single text value" {
                     };
                 };
 
-                testing.expectEqualStrings("Vincent", span);
+                try testing.expectEqualStrings("Vincent", span);
             },
         }
     }
@@ -1538,9 +1538,9 @@ test "sqlite: read a single integer value" {
         var age = try stmt.one(typ, .{}, .{
             .id = @as(usize, 20),
         });
-        testing.expect(age != null);
+        try testing.expect(age != null);
 
-        testing.expectEqual(@as(typ, 33), age.?);
+        try testing.expectEqual(@as(typ, 33), age.?);
     }
 }
 
@@ -1570,8 +1570,8 @@ test "sqlite: read a single value into bool" {
     const b = try stmt.one(bool, .{}, .{
         .id = @as(usize, 20),
     });
-    testing.expect(b != null);
-    testing.expect(b.?);
+    try testing.expect(b != null);
+    try testing.expect(b.?);
 }
 
 test "sqlite: insert bool and bind bool" {
@@ -1592,8 +1592,8 @@ test "sqlite: insert bool and bind bool" {
     const b = try stmt.one(bool, .{}, .{
         .is_published = true,
     });
-    testing.expect(b != null);
-    testing.expect(b.?);
+    try testing.expect(b != null);
+    try testing.expect(b.?);
 }
 
 test "sqlite: bind string literal" {
@@ -1611,8 +1611,8 @@ test "sqlite: bind string literal" {
     defer stmt.deinit();
 
     const b = try stmt.one(usize, .{}, .{"foobar"});
-    testing.expect(b != null);
-    testing.expectEqual(@as(usize, 10), b.?);
+    try testing.expect(b != null);
+    try testing.expectEqual(@as(usize, 10), b.?);
 }
 
 test "sqlite: bind pointer" {
@@ -1631,8 +1631,8 @@ test "sqlite: bind pointer" {
         stmt.reset();
 
         const name = try stmt.oneAlloc([]const u8, &arena.allocator, .{}, .{&test_user.id});
-        testing.expect(name != null);
-        testing.expectEqualStrings(test_users[i].name, name.?);
+        try testing.expect(name != null);
+        try testing.expectEqualStrings(test_users[i].name, name.?);
     }
 }
 
@@ -1660,13 +1660,13 @@ test "sqlite: read pointers" {
         .{},
     );
 
-    testing.expectEqual(@as(usize, 3), rows.len);
+    try testing.expectEqual(@as(usize, 3), rows.len);
     for (rows) |row, i| {
         const exp = test_users[i];
-        testing.expectEqual(exp.id, row.id.*);
-        testing.expectEqualStrings(exp.name, row.name.*);
-        testing.expectEqual(exp.age, row.age.*);
-        testing.expectEqual(exp.weight, row.weight.*);
+        try testing.expectEqual(exp.id, row.id.*);
+        try testing.expectEqualStrings(exp.name, row.name.*);
+        try testing.expectEqual(exp.age, row.age.*);
+        try testing.expectEqual(exp.weight, row.weight.*);
     }
 }
 
@@ -1691,9 +1691,9 @@ test "sqlite: optional" {
         .{},
     );
 
-    testing.expect(row != null);
-    testing.expect(row.?.data == null);
-    testing.expectEqual(true, row.?.is_published.?);
+    try testing.expect(row != null);
+    try testing.expect(row.?.data == null);
+    try testing.expectEqual(true, row.?.is_published.?);
 }
 
 test "sqlite: statement reset" {
@@ -1716,7 +1716,7 @@ test "sqlite: statement reset" {
         try stmt.exec(user);
 
         const rows_inserted = db.rowsAffected();
-        testing.expectEqual(@as(usize, 1), rows_inserted);
+        try testing.expectEqual(@as(usize, 1), rows_inserted);
     }
 }
 
@@ -1747,7 +1747,7 @@ test "sqlite: statement iterator" {
         try stmt.exec(user);
 
         const rows_inserted = db.rowsAffected();
-        testing.expectEqual(@as(usize, 1), rows_inserted);
+        try testing.expectEqual(@as(usize, 1), rows_inserted);
     }
 
     // Get data with a non-allocating iterator.
@@ -1768,12 +1768,12 @@ test "sqlite: statement iterator" {
         }
 
         // Check the data
-        testing.expectEqual(expected_rows.items.len, rows.items.len);
+        try testing.expectEqual(expected_rows.items.len, rows.items.len);
 
         for (rows.items) |row, j| {
             const exp_row = expected_rows.items[j];
-            testing.expectEqualStrings(exp_row.name, mem.spanZ(&row.name));
-            testing.expectEqual(exp_row.age, row.age);
+            try testing.expectEqualStrings(exp_row.name, mem.spanZ(&row.name));
+            try testing.expectEqual(exp_row.age, row.age);
         }
     }
 
@@ -1795,12 +1795,12 @@ test "sqlite: statement iterator" {
         }
 
         // Check the data
-        testing.expectEqual(expected_rows.items.len, rows.items.len);
+        try testing.expectEqual(expected_rows.items.len, rows.items.len);
 
         for (rows.items) |row, j| {
             const exp_row = expected_rows.items[j];
-            testing.expectEqualStrings(exp_row.name, row.name.data);
-            testing.expectEqual(exp_row.age, row.age);
+            try testing.expectEqualStrings(exp_row.name, row.name.data);
+            try testing.expectEqual(exp_row.age, row.age);
         }
     }
 }
@@ -1843,7 +1843,7 @@ test "sqlite: blob open, reopen" {
         var blob_reader = blob.reader();
         const data = try blob_reader.readAllAlloc(allocator, 8192);
 
-        testing.expectEqualSlices(u8, blob_data1 ** 2, data);
+        try testing.expectEqualSlices(u8, blob_data1 ** 2, data);
     }
 
     // Reopen the blob in the second row
@@ -1860,7 +1860,7 @@ test "sqlite: blob open, reopen" {
         var blob_reader = blob.reader();
         const data = try blob_reader.readAllAlloc(allocator, 8192);
 
-        testing.expectEqualSlices(u8, blob_data2 ** 2, data);
+        try testing.expectEqualSlices(u8, blob_data2 ** 2, data);
     }
 
     try blob.close();
@@ -1875,9 +1875,9 @@ test "sqlite: failing open" {
         .open_flags = .{},
         .mode = .{ .File = "/tmp/not_existing.db" },
     });
-    testing.expectError(error.SQLiteCantOpen, res);
-    testing.expectEqual(@as(usize, 14), diags.err.?.code);
-    testing.expectEqualStrings("unable to open database file", diags.err.?.message);
+    try testing.expectError(error.SQLiteCantOpen, res);
+    try testing.expectEqual(@as(usize, 14), diags.err.?.code);
+    try testing.expectEqualStrings("unable to open database file", diags.err.?.message);
 }
 
 test "sqlite: failing prepare statement" {
@@ -1886,11 +1886,11 @@ test "sqlite: failing prepare statement" {
     var diags: Diagnostics = undefined;
 
     const result = db.prepareWithDiags("SELECT id FROM foobar", .{ .diags = &diags });
-    testing.expectError(error.SQLiteError, result);
+    try testing.expectError(error.SQLiteError, result);
 
     const detailed_err = db.getDetailedError();
-    testing.expectEqual(@as(usize, 1), detailed_err.code);
-    testing.expectEqualStrings("no such table: foobar", detailed_err.message);
+    try testing.expectEqual(@as(usize, 1), detailed_err.code);
+    try testing.expectEqualStrings("no such table: foobar", detailed_err.message);
 }
 
 test "sqlite: diagnostics format" {
@@ -1935,7 +1935,7 @@ test "sqlite: diagnostics format" {
         var buf: [1024]u8 = undefined;
         const str = try std.fmt.bufPrint(&buf, "my diagnostics: {s}", .{tc.input});
 
-        testing.expectEqualStrings(tc.exp, str);
+        try testing.expectEqualStrings(tc.exp, str);
     }
 }
 

@@ -169,7 +169,7 @@ test "parsed query: query" {
 
     inline for (testCases) |tc| {
         comptime var parsed_query = ParsedQuery.from(tc.query);
-        testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
+        try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
     }
 }
 
@@ -201,12 +201,12 @@ test "parsed query: bind markers types" {
     inline for (testCases) |tc| {
         comptime var parsed_query = ParsedQuery.from(tc.query);
 
-        testing.expectEqual(1, parsed_query.nb_bind_markers);
+        try testing.expectEqual(1, parsed_query.nb_bind_markers);
 
         const bind_marker = parsed_query.bind_markers[0];
         switch (tc.expected_marker) {
-            .Typed => |typ| testing.expectEqual(typ, bind_marker.Typed),
-            .Untyped => |typ| testing.expectEqual(typ, bind_marker.Untyped),
+            .Typed => |typ| try testing.expectEqual(typ, bind_marker.Typed),
+            .Untyped => |typ| try testing.expectEqual(typ, bind_marker.Untyped),
         }
     }
 }
