@@ -1,4 +1,3 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
@@ -112,8 +111,8 @@ pub const ParsedQuery = struct {
         if (mem.eql(u8, "isize", type_info)) return isize;
 
         if (type_info[0] == 'u' or type_info[0] == 'i') {
-            return @Type(builtin.TypeInfo{
-                .Int = builtin.TypeInfo.Int{
+            return @Type(std.builtin.TypeInfo{
+                .Int = std.builtin.TypeInfo.Int{
                     .signedness = if (type_info[0] == 'i') .signed else .unsigned,
                     .bits = std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
                         @compileError("invalid type info " ++ type_info);
