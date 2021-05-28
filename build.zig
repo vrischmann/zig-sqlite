@@ -1,4 +1,3 @@
-const builtin = @import("builtin");
 const std = @import("std");
 
 var sqlite3: ?*std.build.LibExeObjStep = null;
@@ -40,7 +39,7 @@ fn getTarget(original_target: std.zig.CrossTarget, bundled: bool) std.zig.CrossT
 
 const TestTarget = struct {
     target: std.zig.CrossTarget = @as(std.zig.CrossTarget, .{}),
-    mode: builtin.Mode = .Debug,
+    mode: std.builtin.Mode = .Debug,
     single_threaded: bool = false,
     bundled: bool,
 };
