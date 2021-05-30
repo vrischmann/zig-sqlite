@@ -443,8 +443,11 @@ pub const Db = struct {
     }
 
     /// prepareWithDiags is like `prepare` but takes an additional options argument.
-    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !Statement(.{}, ParsedQuery.from(query)) {
-        @setEvalBranchQuota(10000);
+    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !comptime blk: {
+        @setEvalBranchQuota(100000);
+        break :blk Statement(.{}, ParsedQuery.from(query));
+    } {
+        @setEvalBranchQuota(100000);
         const parsed_query = ParsedQuery.from(query);
         return Statement(.{}, comptime parsed_query).prepare(self, options, 0);
     }
@@ -463,8 +466,11 @@ pub const Db = struct {
     /// This is done because we type check the bind parameters when executing the statement later.
     ///
     /// If you want additional error information in case of failures, use `prepareWithDiags`.
-    pub fn prepare(self: *Self, comptime query: []const u8) !Statement(.{}, ParsedQuery.from(query)) {
-        @setEvalBranchQuota(10000);
+    pub fn prepare(self: *Self, comptime query: []const u8) !comptime blk: {
+        @setEvalBranchQuota(100000);
+        break :blk Statement(.{}, ParsedQuery.from(query));
+    } {
+        @setEvalBranchQuota(100000);
         const parsed_query = ParsedQuery.from(query);
         return Statement(.{}, comptime parsed_query).prepare(self, .{}, 0);
     }
@@ -1531,7 +1537,6 @@ test "sqlite: read a single integer value" {
     inline for (types) |typ| {
         const query = "SELECT age FROM user WHERE id = ?{usize}";
 
-        @setEvalBranchQuota(5000);
         var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
         defer stmt.deinit();
 
