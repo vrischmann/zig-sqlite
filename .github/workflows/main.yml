@@ -11,6 +11,8 @@ on:
     - '**.zig'
     - '**.c'
     - '**.h'
+  schedule:
+    - cron: "0 13 * * *"
   workflow_dispatch:
 
 jobs:
