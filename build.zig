@@ -98,6 +98,14 @@ const all_test_targets = switch (std.Target.current.cpu.arch) {
             TestTarget{
                 .target = .{
                     .cpu_arch = .x86_64,
+                    .abi = .gnu,
+                },
+                .bundled = true,
+            },
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .i386,
+                    .abi = .gnu,
                 },
                 .bundled = true,
             },
