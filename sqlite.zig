@@ -243,6 +243,9 @@ pub const DetailedError = struct {
     message: []const u8,
 
     pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+
         _ = try writer.print("{{code: {}, message: {s}}}", .{ self.code, self.message });
     }
 };
@@ -918,6 +921,8 @@ pub const StatementOptions = struct {};
 /// Look at each function for more complete documentation.
 ///
 pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) type {
+    _ = opts;
+
     return struct {
         const Self = @This();
 
