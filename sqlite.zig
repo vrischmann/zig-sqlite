@@ -735,12 +735,6 @@ pub fn Iterator(comptime Type: type) type {
         // The options must contain an `allocator` field which will be used to create a copy of the data.
         fn readBytes(self: *Self, comptime BytesType: type, allocator: *mem.Allocator, _i: usize, comptime mode: ReadBytesMode) !BytesType {
             const i = @intCast(c_int, _i);
-            const type_info = @typeInfo(BytesType);
-
-            var ret: BytesType = switch (BytesType) {
-                Text, Blob => .{ .data = "" },
-                else => try dupeWithSentinel(BytesType, allocator, ""),
-            };
 
             switch (mode) {
                 .Blob => {
@@ -1250,6 +1244,7 @@ fn addTestData(db: *Db) !void {
 
 test "sqlite: db init" {
     var db = try getTestDb();
+    _ = db;
 }
 
 test "sqlite: db pragma" {
