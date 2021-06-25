@@ -446,7 +446,7 @@ pub const Db = struct {
     }
 
     /// prepareWithDiags is like `prepare` but takes an additional options argument.
-    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !comptime blk: {
+    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !blk: {
         @setEvalBranchQuota(100000);
         break :blk Statement(.{}, ParsedQuery.from(query));
     } {
@@ -469,7 +469,7 @@ pub const Db = struct {
     /// This is done because we type check the bind parameters when executing the statement later.
     ///
     /// If you want additional error information in case of failures, use `prepareWithDiags`.
-    pub fn prepare(self: *Self, comptime query: []const u8) !comptime blk: {
+    pub fn prepare(self: *Self, comptime query: []const u8) !blk: {
         @setEvalBranchQuota(100000);
         break :blk Statement(.{}, ParsedQuery.from(query));
     } {
