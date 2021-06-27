@@ -22,12 +22,6 @@ pub const ParsedQuery = struct {
     query_size: usize,
 
     pub fn from(comptime query: []const u8) Self {
-        const State = enum {
-            Start,
-            BindMarker,
-            BindMarkerType,
-        };
-
         comptime var buf: [query.len]u8 = undefined;
         comptime var pos = 0;
         comptime var state = .Start;
@@ -38,7 +32,7 @@ pub const ParsedQuery = struct {
         comptime var parsed_query: ParsedQuery = undefined;
         parsed_query.nb_bind_markers = 0;
 
-        inline for (query) |c, i| {
+        inline for (query) |c| {
             switch (state) {
                 .Start => switch (c) {
                     '?' => {
@@ -71,7 +65,7 @@ pub const ParsedQuery = struct {
                     '}' => {
                         state = .Start;
 
-                        const typ = parsed_query.parseType(current_bind_marker_type[0..current_bind_marker_type_pos]);
+                        const typ = parseType(current_bind_marker_type[0..current_bind_marker_type_pos]);
 
                         parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{ .Typed = typ };
                         parsed_query.nb_bind_markers += 1;
@@ -103,7 +97,7 @@ pub const ParsedQuery = struct {
         return parsed_query;
     }
 
-    fn parseType(comptime self: *Self, type_info: []const u8) type {
+    fn parseType(type_info: []const u8) type {
         if (type_info.len <= 0) @compileError("invalid type info " ++ type_info);
 
         // Integer

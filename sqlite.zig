@@ -243,6 +243,9 @@ pub const DetailedError = struct {
     message: []const u8,
 
     pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+
         _ = try writer.print("{{code: {}, message: {s}}}", .{ self.code, self.message });
     }
 };
@@ -443,7 +446,7 @@ pub const Db = struct {
     }
 
     /// prepareWithDiags is like `prepare` but takes an additional options argument.
-    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !comptime blk: {
+    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !blk: {
         @setEvalBranchQuota(100000);
         break :blk Statement(.{}, ParsedQuery.from(query));
     } {
@@ -466,7 +469,7 @@ pub const Db = struct {
     /// This is done because we type check the bind parameters when executing the statement later.
     ///
     /// If you want additional error information in case of failures, use `prepareWithDiags`.
-    pub fn prepare(self: *Self, comptime query: []const u8) !comptime blk: {
+    pub fn prepare(self: *Self, comptime query: []const u8) !blk: {
         @setEvalBranchQuota(100000);
         break :blk Statement(.{}, ParsedQuery.from(query));
     } {
@@ -732,12 +735,6 @@ pub fn Iterator(comptime Type: type) type {
         // The options must contain an `allocator` field which will be used to create a copy of the data.
         fn readBytes(self: *Self, comptime BytesType: type, allocator: *mem.Allocator, _i: usize, comptime mode: ReadBytesMode) !BytesType {
             const i = @intCast(c_int, _i);
-            const type_info = @typeInfo(BytesType);
-
-            var ret: BytesType = switch (BytesType) {
-                Text, Blob => .{ .data = "" },
-                else => try dupeWithSentinel(BytesType, allocator, ""),
-            };
 
             switch (mode) {
                 .Blob => {
@@ -918,6 +915,8 @@ pub const StatementOptions = struct {};
 /// Look at each function for more complete documentation.
 ///
 pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) type {
+    _ = opts;
+
     return struct {
         const Self = @This();
 
@@ -1245,6 +1244,7 @@ fn addTestData(db: *Db) !void {
 
 test "sqlite: db init" {
     var db = try getTestDb();
+    _ = db;
 }
 
 test "sqlite: db pragma" {
