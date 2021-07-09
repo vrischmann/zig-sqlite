@@ -200,7 +200,7 @@ pub const Diagnostics = struct {
     pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         if (self.err) |err| {
             if (self.message.len > 0) {
-                _ = try writer.print("{{message: {s}, detailed error: {}}}", .{ self.message, err });
+                _ = try writer.print("{{message: {s}, detailed error: {s}}}", .{ self.message, err });
                 return;
             }
 
@@ -429,6 +429,13 @@ pub const Db = struct {
         var stmt = try self.prepare(query);
         defer stmt.deinit();
         try stmt.exec(values);
+    }
+
+    /// execWithDiags is like `exec` but takes an additional options argument.
+    pub fn execWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions, values: anytype) !void {
+        var stmt = try self.prepareWithDiags(query, options);
+        defer stmt.deinit();
+        try stmt.execWithDiags(options, values);
     }
 
     /// one is a convenience function which prepares a statement and reads a single row from the result set.
@@ -1057,6 +1064,27 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             }
         }
 
+        /// execWithDiags executes a statement which does not return data.
+        ///
+        /// The `values` variable is used for the bind parameters. It must have as many fields as there are bind markers
+        /// in the input query string.
+        ///
+        pub fn execWithDiags(self: *Self, options: QueryOptions, values: anytype) !void {
+            self.bind(values);
+
+            var dummy_diags = Diagnostics{};
+            var diags = options.diags orelse &dummy_diags;
+
+            const result = c.sqlite3_step(self.stmt);
+            switch (result) {
+                c.SQLITE_DONE => {},
+                else => {
+                    diags.err = getLastDetailedErrorFromDb(self.db);
+                    return errorFromResultCode(result);
+                },
+            }
+        }
+
         /// exec executes a statement which does not return data.
         ///
         /// The `values` variable is used for the bind parameters. It must have as many fields as there are bind markers
@@ -1068,8 +1096,11 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             const result = c.sqlite3_step(self.stmt);
             switch (result) {
                 c.SQLITE_DONE => {},
-                c.SQLITE_BUSY => return errorFromResultCode(result),
-                else => std.debug.panic("invalid result {}", .{result}),
+                else => {
+                    const detailed_err = getLastDetailedErrorFromDb(self.db);
+                    logger.err("unable to execute statement, result: {}, message: {s}", .{ result, detailed_err.message });
+                    return errorFromResultCode(result);
+                },
             }
         }
 
@@ -1942,6 +1973,25 @@ test "sqlite: diagnostics format" {
 
         try testing.expectEqualStrings(tc.exp, str);
     }
+}
+
+test "sqlite: execWithDiags, failing statement" {
+    var db = try getTestDb();
+
+    var diags = Diagnostics{};
+
+    const result = blk: {
+        var stmt = try db.prepareWithDiags("ROLLBACK", .{ .diags = &diags });
+        break :blk stmt.execWithDiags(.{ .diags = &diags }, .{});
+    };
+
+    try testing.expectError(error.SQLiteError, result);
+    try testing.expect(diags.err != null);
+    try testing.expectEqualStrings("cannot rollback - no transaction is active", diags.err.?.message);
+
+    const detailed_err = db.getDetailedError();
+    try testing.expectEqual(@as(usize, 1), detailed_err.code);
+    try testing.expectEqualStrings("cannot rollback - no transaction is active", detailed_err.message);
 }
 
 fn getTestDb() !Db {
