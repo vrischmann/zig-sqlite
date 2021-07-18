@@ -996,7 +996,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery, c
         ///
         /// The `values` variable must be a struct where each field has the type of the corresponding bind marker.
         /// For example this query:
-        ///   SELECT 1 FROM user WHERE name = ?{text} AND age < ?{u32}
+        ///   SELECT 1 FROM user WHERE name = ? AND age < ?
         ///
         /// Has two bind markers, so `values` must have at least the following fields:
         ///   struct {
@@ -1250,7 +1250,7 @@ fn addTestData(db: *Db) !void {
     try createTestTables(db);
 
     for (test_users) |user| {
-        try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", .{
+        try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?, ?, ?, ?)", .{
             .bind_markers = [_]type{ []const u8, usize, usize, f32 },
         }, user);
 
@@ -1306,7 +1306,7 @@ test "sqlite: last insert row id" {
     try createTestTables(&db);
 
     try db.exec(
-        "INSERT INTO user(name, age) VALUES(?, ?{u32})",
+        "INSERT INTO user(name, age) VALUES(?, ?)",
         .{
             .bind_markers = [_]type{ [:0]const u8, u32 },
         },
@@ -1327,7 +1327,7 @@ test "sqlite: statement exec" {
     // Test with a Blob struct
     {
         try db.exec(
-            "INSERT INTO user(id, name, age) VALUES(?{usize}, ?{blob}, ?{u32})",
+            "INSERT INTO user(id, name, age) VALUES(?, ?, ?)",
             .{
                 .bind_markers = [_]type{ usize, Blob, u32 },
             },
@@ -1342,8 +1342,10 @@ test "sqlite: statement exec" {
     // Test with a Text struct
     {
         try db.exec(
-            "INSERT INTO user(id, name, age) VALUES(?{usize}, ?{text}, ?{u32})",
-            .{},
+            "INSERT INTO user(id, name, age) VALUES(?, ?, ?)",
+            .{
+                .bind_markers = [_]type{ usize, Text, u32 },
+            },
             .{
                 .id = @as(usize, 201),
                 .name = Text{ .data = "hello" },
@@ -1360,7 +1362,7 @@ test "sqlite: read a single user into a struct" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT name, id, age, weight FROM user WHERE id = ?{usize}", .{
+    var stmt = try db.prepare("SELECT name, id, age, weight FROM user WHERE id = ?", .{
         .bind_markers = [_]type{usize},
     });
     defer stmt.deinit();
@@ -1382,7 +1384,7 @@ test "sqlite: read a single user into a struct" {
                 id: usize,
                 age: usize,
             },
-            "SELECT name, id, age FROM user WHERE id = ?{usize}",
+            "SELECT name, id, age FROM user WHERE id = ?",
             .{ .bind_markers = [_]type{usize} },
             .{},
             .{@as(usize, 20)},
@@ -1404,7 +1406,7 @@ test "sqlite: read a single user into a struct" {
                 age: usize,
             },
             &arena.allocator,
-            "SELECT name, id, age FROM user WHERE id = ?{usize}",
+            "SELECT name, id, age FROM user WHERE id = ?",
             .{ .bind_markers = [_]type{usize} },
             .{},
             .{@as(usize, 20)},
@@ -1448,7 +1450,7 @@ test "sqlite: read in an anonymous struct" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT name, id, name, age, id, weight FROM user WHERE id = ?{usize}", .{
+    var stmt = try db.prepare("SELECT name, id, name, age, id, weight FROM user WHERE id = ?", .{
         .columns = [_]type{ []const u8, usize, [200:0xAD]u8, usize, bool, f64 },
         .bind_markers = [_]type{usize},
     });
@@ -1485,7 +1487,7 @@ test "sqlite: read in a Text struct" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT name, id, age FROM user WHERE id = ?{usize}", .{
+    var stmt = try db.prepare("SELECT name, id, age FROM user WHERE id = ?", .{
         .bind_markers = [_]type{usize},
     });
     defer stmt.deinit();
@@ -1532,7 +1534,7 @@ test "sqlite: read a single text value" {
     };
 
     inline for (types) |typ| {
-        const query = "SELECT name FROM user WHERE id = ?{usize}";
+        const query = "SELECT name FROM user WHERE id = ?";
 
         var stmt = try db.prepare(query, .{
             .bind_markers = [_]type{usize},
@@ -1581,7 +1583,7 @@ test "sqlite: read a single integer value" {
     };
 
     inline for (types) |typ| {
-        const query = "SELECT age FROM user WHERE id = ?{usize}";
+        const query = "SELECT age FROM user WHERE id = ?";
 
         var stmt = try db.prepare(query, .{
             .bind_markers = [_]type{usize},
@@ -1601,7 +1603,7 @@ test "sqlite: read a single value into void" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    const query = "SELECT age FROM user WHERE id = ?{usize}";
+    const query = "SELECT age FROM user WHERE id = ?";
 
     var stmt = try db.prepare(query, .{
         .bind_markers = [_]type{usize},
@@ -1617,7 +1619,7 @@ test "sqlite: read a single value into bool" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    const query = "SELECT id FROM user WHERE id = ?{usize}";
+    const query = "SELECT id FROM user WHERE id = ?";
 
     var stmt = try db.prepare(query, .{
         .bind_markers = [_]type{usize},
@@ -1636,7 +1638,7 @@ test "sqlite: insert bool and bind bool" {
     try addTestData(&db);
 
     try db.exec(
-        "INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})",
+        "INSERT INTO article(id, author_id, is_published) VALUES(?, ?, ?)",
         .{
             .bind_markers = [_]type{ usize, usize, bool },
         },
@@ -1647,7 +1649,7 @@ test "sqlite: insert bool and bind bool" {
         },
     );
 
-    const query = "SELECT id FROM article WHERE is_published = ?{bool}";
+    const query = "SELECT id FROM article WHERE is_published = ?";
 
     var stmt = try db.prepare(query, .{
         .columns = [_]type{bool},
@@ -1784,7 +1786,7 @@ test "sqlite: statement reset" {
 
     // Add data
 
-    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", .{
+    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?, ?, ?, ?)", .{
         .bind_markers = [_]type{ []const u8, usize, usize, f32 },
     });
     defer stmt.deinit();
@@ -1816,7 +1818,7 @@ test "sqlite: statement iterator" {
     try db.exec("DELETE FROM user", .{}, .{});
 
     // Add data
-    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", .{
+    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?, ?, ?, ?)", .{
         .bind_markers = [_]type{ []const u8, usize, usize, f32 },
     });
     defer stmt.deinit();
