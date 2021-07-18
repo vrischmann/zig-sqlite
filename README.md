@@ -242,7 +242,29 @@ if (row) |row| {
 ```
 Notice that to read text we need to use a 0-terminated array; if the `name` column is bigger than 127 bytes the call to `one` will fail.
 
-The sentinel is mandatory: without one there would be no way to know where the data ends in the array.
+If the length of the data is variable then the sentinel is mandatory: without one there would be no way to know where the data ends in the array.
+
+However if the length is fixed, you can read into a non 0-terminated array, for example:
+
+```zig
+const query =
+    \\SELECT id FROM employees WHERE name = ?
+;
+
+var stmt = try db.prepare(query);
+defer stmt.deinit();
+
+const row = try stmt.one(
+    [16]u8,
+    .{},
+    .{ .name = "Vincent" },
+);
+if (row) |id| {
+    std.log.debug("id: {s}", .{std.fmt.fmtSliceHexLower(&id)});
+}
+```
+
+If the column data doesn't have the correct length a `error.ArraySizeMismatch` will be returned.
 
 The convenience function `sqlite.Db.one` works exactly the same way:
 
