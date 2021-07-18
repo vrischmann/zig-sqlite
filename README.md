@@ -165,7 +165,7 @@ const query =
     \\UPDATE foo SET salary = ? WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 try stmt.exec(.{
@@ -184,7 +184,7 @@ const query =
     \\UPDATE foo SET salary = ? WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 var id: usize = 0;
@@ -225,7 +225,7 @@ const query =
     \\SELECT name, age FROM employees WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 const row = try stmt.one(
@@ -251,7 +251,7 @@ const query =
     \\SELECT age FROM employees WHERE id = ?
 ;
 
-const row = try db.one(usize, query, .{}, .{ .id = 20 });
+const row = try db.one(usize, query, .{}, .{}, .{ .id = 20 });
 if (row) |age| {
     std.log.debug("age: {}", .{age});
 }
@@ -266,7 +266,7 @@ const query =
     \\SELECT name FROM employees WHERE age > ? AND age < ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 const names = try stmt.all([]const u8, allocator, .{}, .{
@@ -285,7 +285,7 @@ const query =
     \\SELECT name FROM employees WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 const row = try stmt.oneAlloc([]const u8, allocator, .{}, .{
