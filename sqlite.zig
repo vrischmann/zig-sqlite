@@ -167,6 +167,7 @@ pub const Blob = struct {
     ///
     ///     const data = try blob_reader.readAlloc(allocator);
     ///
+    /// See https://sqlite.org/c3ref/blob_open.html for more details.
     fn open(db: *c.sqlite3, db_name: DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: OpenFlags) !Blob {
         comptime if (!flags.read and !flags.write) {
             @compileError("must open a blob for either read, write or both");
