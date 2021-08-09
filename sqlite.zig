@@ -303,7 +303,7 @@ pub const Db = struct {
     };
 
     /// init creates a database with the provided options.
-    pub fn init(self: *Self, options: InitOptions) !void {
+    pub fn init(options: InitOptions) !Self {
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
 
@@ -339,7 +339,7 @@ pub const Db = struct {
                     return errorFromResultCode(result);
                 }
 
-                self.db = db.?;
+                return Self{ .db = db.? };
             },
             .Memory => {
                 logger.info("opening in memory", .{});
@@ -357,7 +357,7 @@ pub const Db = struct {
                     return errorFromResultCode(result);
                 }
 
-                self.db = db.?;
+                return Self{ .db = db.? };
             },
         }
     }
