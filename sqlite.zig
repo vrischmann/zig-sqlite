@@ -291,6 +291,10 @@ pub const Db = struct {
     db: *c.sqlite3,
 
     /// Mode determines how the database will be opened.
+    ///
+    /// * File means opening the database at this path with sqlite3_open_v2.
+    /// * Memory means opening the database in memory.
+    ///   This works by opening the :memory: path with sqlite3_open_v2 with the flag SQLITE_OPEN_MEMORY.
     pub const Mode = union(enum) {
         File: [:0]const u8,
         Memory,
