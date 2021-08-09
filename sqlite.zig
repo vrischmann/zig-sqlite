@@ -997,7 +997,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
             if (comptime query.nb_bind_markers != StructTypeInfo.fields.len) {
-                @compileError("number of bind markers not equal to number of fields");
+                @compileError(comptime std.fmt.comptimePrint("number of bind markers ({d}) not equal to number of fields ({d})", .{
+                    query.nb_bind_markers,
+                    StructTypeInfo.fields.len,
+                }));
             }
 
             inline for (StructTypeInfo.fields) |struct_field, _i| {
