@@ -565,7 +565,7 @@ pub fn Iterator(comptime Type: type) type {
                 },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
-                    return try self.readStruct(.{});
+                    return try self.readStruct(options);
                 },
                 else => @compileError("cannot read into type " ++ @typeName(Type) ++ " ; if dynamic memory allocation is required use nextAlloc"),
             }
