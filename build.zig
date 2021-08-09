@@ -122,6 +122,14 @@ const all_test_targets = switch (std.Target.current.cpu.arch) {
                 .bundled = true,
             },
         },
+        .macos => [_]TestTarget{
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86_64,
+                },
+                .bundled = true,
+            },
+        },
         else => [_]TestTarget{
             TestTarget{
                 .target = .{},
