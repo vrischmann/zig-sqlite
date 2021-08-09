@@ -14,6 +14,23 @@ usingnamespace @import("error.zig");
 
 const logger = std.log.scoped(.sqlite);
 
+/// ZeroBlob is a blob with a fixed length containing only zeroes.
+///
+/// A ZeroBlob is intended to serve as a placeholder; content can later be written with incremental i/o.
+///
+/// Here is an example allowing you to write up to 1024 bytes to a blob with incremental i/o.
+///
+///    try db.exec("INSERT INTO user VALUES(1, ?)", .{}, .{sqlite.ZeroBlob{ .length = 1024 }});
+///    const row_id = db.getLastInsertRowID();
+///
+///    var blob = try db.openBlob(.main, "user", "data", row_id, .{ .write = true });
+///
+///    var blob_writer = blob.writer();
+///    try blob_writer.writeAll("foobar");
+///
+///    try blob.close();
+///
+/// Search for "zeroblob" on https://sqlite.org/c3ref/blob_open.html for more details.
 pub const ZeroBlob = struct {
     length: usize,
 };
