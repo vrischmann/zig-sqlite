@@ -301,6 +301,11 @@ pub const Db = struct {
     };
 
     /// OpenFlags contains various flags used when opening a SQLite databse.
+    ///
+    /// These flags partially map to the flags defined in https://sqlite.org/c3ref/open.html
+    ///  * write=false and create=false means SQLITE_OPEN_READONLY
+    ///  * write=true and create=false means SQLITE_OPEN_READWRITE
+    ///  * write=true and create=true means SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE
     pub const OpenFlags = struct {
         write: bool = false,
         create: bool = false,
