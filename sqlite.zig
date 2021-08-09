@@ -150,24 +150,6 @@ pub const Blob = struct {
     }
 
     /// open opens a blob for incremental i/o.
-    ///
-    /// You can get a std.io.Writer to write data to the blob:
-    ///
-    ///     var blob = try db.openBlob(.main, "mytable", "mycolumn", 1, .{ .write = true });
-    ///     var blob_writer = blob.writer();
-    ///
-    ///     try blob_writer.writeAll(my_data);
-    ///
-    /// Note that a blob is not extensible, if you want to change the blob size you must use an UPDATE statement.
-    ///
-    /// You can get a std.io.Reader to read the blob data:
-    ///
-    ///     var blob = try db.openBlob(.main, "mytable", "mycolumn", 1, .{});
-    ///     var blob_reader = blob.reader();
-    ///
-    ///     const data = try blob_reader.readAlloc(allocator);
-    ///
-    /// See https://sqlite.org/c3ref/blob_open.html for more details.
     fn open(db: *c.sqlite3, db_name: DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: OpenFlags) !Blob {
         comptime if (!flags.read and !flags.write) {
             @compileError("must open a blob for either read, write or both");
@@ -510,7 +492,32 @@ pub const Db = struct {
         return @intCast(usize, c.sqlite3_changes(self.db));
     }
 
-    /// openBlob opens a blob.
+    /// openBlob opens a blob for incremental i/o.
+    ///
+    /// Incremental i/o enables writing and reading data using a std.io.Writer and std.io.Reader:
+    ///  * the writer type wraps sqlite3_blob_write, see https://sqlite.org/c3ref/blob_write.html
+    ///  * the reader type wraps sqlite3_blob_read, see https://sqlite.org/c3ref/blob_read.html
+    ///
+    /// Note that:
+    /// * the blob must exist before writing; you must use INSERT to create one first (either with data or using a placeholder with ZeroBlob).
+    /// * the blob is not extensible, if you want to change the blob size you must use an UPDATE statement.
+    ///
+    /// You can get a std.io.Writer to write data to the blob:
+    ///
+    ///     var blob = try db.openBlob(.main, "mytable", "mycolumn", 1, .{ .write = true });
+    ///     var blob_writer = blob.writer();
+    ///
+    ///     try blob_writer.writeAll(my_data);
+    ///
+    /// You can get a std.io.Reader to read the blob data:
+    ///
+    ///     var blob = try db.openBlob(.main, "mytable", "mycolumn", 1, .{});
+    ///     var blob_reader = blob.reader();
+    ///
+    ///     const data = try blob_reader.readAlloc(allocator);
+    ///
+    /// See https://sqlite.org/c3ref/blob_open.html for more details on incremental i/o.
+    ///
     pub fn openBlob(self: *Self, db_name: Blob.DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: Blob.OpenFlags) !Blob {
         return Blob.open(self.db, db_name, table, column, row, flags);
     }
