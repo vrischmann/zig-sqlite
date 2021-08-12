@@ -492,7 +492,6 @@ pub const Db = struct {
 pub const QueryOptions = struct {
     /// if provided, diags will be populated in case of failures.
     diags: ?*Diagnostics = null,
-    allocator: *std.mem.Allocator = undefined,
 };
 
 /// Iterator allows iterating over a result set.
