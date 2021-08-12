@@ -111,8 +111,7 @@ const sqlite = @import("sqlite");
 You must create and initialize an instance of `sqlite.Db`:
 
 ```zig
-var db: sqlite.Db = undefined;
-try db.init(.{
+var db = try sqlite.Db.init(.{
     .mode = sqlite.Db.Mode{ .File = "/home/vincent/mydata.db" },
     .open_flags = .{
         .write = true,

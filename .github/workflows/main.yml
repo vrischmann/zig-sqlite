@@ -27,6 +27,7 @@ jobs:
 
   test-in-memory:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -43,6 +44,7 @@ jobs:
 
   test-with-filesystem:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}

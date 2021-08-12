@@ -312,7 +312,7 @@ pub const Db = struct {
     };
 
     /// init creates a database with the provided options.
-    pub fn init(self: *Self, options: InitOptions) !void {
+    pub fn init(options: InitOptions) !Self {
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
 
@@ -348,7 +348,7 @@ pub const Db = struct {
                     return errorFromResultCode(result);
                 }
 
-                self.db = db.?;
+                return Self{ .db = db.? };
             },
             .Memory => {
                 logger.info("opening in memory", .{});
@@ -366,7 +366,7 @@ pub const Db = struct {
                     return errorFromResultCode(result);
                 }
 
-                self.db = db.?;
+                return Self{ .db = db.? };
             },
         }
     }
@@ -599,7 +599,7 @@ pub fn Iterator(comptime Type: type) type {
                 },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
-                    return try self.readStruct(.{});
+                    return try self.readStruct(options);
                 },
                 else => @compileError("cannot read into type " ++ @typeName(Type) ++ " ; if dynamic memory allocation is required use nextAlloc"),
             }
@@ -1030,7 +1030,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
             if (comptime query.nb_bind_markers != StructTypeInfo.fields.len) {
-                @compileError("number of bind markers not equal to number of fields");
+                @compileError(comptime std.fmt.comptimePrint("number of bind markers ({d}) not equal to number of fields ({d})", .{
+                    query.nb_bind_markers,
+                    StructTypeInfo.fields.len,
+                }));
             }
 
             inline for (StructTypeInfo.fields) |struct_field, _i| {
@@ -1915,8 +1918,7 @@ test "sqlite: blob open, reopen" {
 test "sqlite: failing open" {
     var diags: Diagnostics = undefined;
 
-    var db: Db = undefined;
-    const res = db.init(.{
+    const res = Db.init(.{
         .diags = &diags,
         .open_flags = .{},
         .mode = .{ .File = "/tmp/not_existing.db" },
@@ -2010,16 +2012,13 @@ fn getTestDb() !Db {
 
     var mode = dbMode(&fba.allocator);
 
-    var db: Db = undefined;
-    try db.init(.{
+    return try Db.init(.{
         .open_flags = .{
             .write = true,
             .create = true,
         },
         .mode = mode,
     });
-
-    return db;
 }
 
 fn tmpDbPath(allocator: *mem.Allocator) ![:0]const u8 {
