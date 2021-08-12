@@ -1884,8 +1884,7 @@ test "sqlite: blob open, reopen" {
 test "sqlite: failing open" {
     var diags: Diagnostics = undefined;
 
-    var db: Db = undefined;
-    const res = db.init(.{
+    const res = Db.init(.{
         .diags = &diags,
         .open_flags = .{},
         .mode = .{ .File = "/tmp/not_existing.db" },
@@ -1979,16 +1978,13 @@ fn getTestDb() !Db {
 
     var mode = dbMode(&fba.allocator);
 
-    var db: Db = undefined;
-    try db.init(.{
+    return try Db.init(.{
         .open_flags = .{
             .write = true,
             .create = true,
         },
         .mode = mode,
     });
-
-    return db;
 }
 
 fn tmpDbPath(allocator: *mem.Allocator) ![:0]const u8 {
