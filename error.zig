@@ -263,6 +263,6 @@ pub fn errorFromResultCode(code: c_int) Error {
         c.SQLITE_CONSTRAINT_VTAB => return error.SQLiteConstraintVTab,
         c.SQLITE_CONSTRAINT_ROWID => return error.SQLiteConstraintRowID,
 
-        else => std.debug.panic("invalid result code {}", .{code}),
+        else => std.debug.panic("invalid result code {}", .{code}), // Check https://www.sqlite.org/rescode.html for more info.
     }
 }
