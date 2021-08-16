@@ -916,6 +916,17 @@ pub fn Iterator(comptime Type: type) type {
                     .Array => try self.readArray(FieldType, i),
                     .Pointer => try self.readPointer(FieldType, options.allocator, i),
                     .Optional => try self.readOptional(FieldType, options, i),
+                    .Enum => {
+                        const int = self.readInt(usize, i) catch null;
+                        if (int) |_| {
+                            return std.meta.intToEnum(FieldType, int.?) catch unreachable;
+                        }
+                        const str = self.readBytes(Text, options.allocator, i, .Text) catch null;
+                        if (str) |_| {
+                            return std.meta.stringToEnum(FieldType, str.?.data).?;
+                        }
+                        std.debug.panic("cannot populate field of type " ++ @typeName(FieldType), .{});
+                    },
                     else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
             };
