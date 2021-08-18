@@ -18,7 +18,3 @@ tasks:
   - test_in_memory: |
       cd zig-sqlite
       TERM=dumb zig build test -Din_memory=true
-
-  - test_filesystem: |
-      cd zig-sqlite
-      TERM=dumb zig build test -Din_memory=false
