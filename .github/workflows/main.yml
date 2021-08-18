@@ -41,20 +41,3 @@ jobs:
 
       - name: Run Tests in memory
         run: zig build test -Din_memory=true
-
-  test-with-filesystem:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: true
-      - uses: goto-bus-stop/setup-zig@v1
-        with:
-          version: master
-
-      - name: Run Tests with filesystem
-        run: zig build test -Din_memory=false

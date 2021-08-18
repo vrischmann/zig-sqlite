@@ -20,14 +20,6 @@ tasks:
       cd zig-sqlite
       TERM=dumb zig build test -Din_memory=true
 
-  - test_filesystem: |
-      cd zig-sqlite
-      TERM=dumb zig build test -Din_memory=false
-
   - test_in_memory_with_qemu: |
       cd zig-sqlite
       TERM=dumb zig build test -Din_memory=true -Denable_qemu=true
-
-  - test_filesystem_with_qemu: |
-      cd zig-sqlite
-      TERM=dumb zig build test -Din_memory=false -Denable_qemu=true
