@@ -1391,7 +1391,7 @@ test "sqlite: read a single user into a struct" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT name, id, age, weight FROM user WHERE id = ?{usize}");
+    var stmt = try db.prepare("SELECT * FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
     var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{
@@ -1452,7 +1452,7 @@ test "sqlite: read all users into a struct" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    var stmt = try db.prepare("SELECT name, id, age, weight FROM user");
+    var stmt = try db.prepare("SELECT * FROM user");
     defer stmt.deinit();
 
     var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{});
