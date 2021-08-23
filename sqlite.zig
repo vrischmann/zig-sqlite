@@ -1260,12 +1260,30 @@ const TestUser = struct {
     id: usize,
     age: usize,
     weight: f32,
+    favorite_color: Color,
+
+    pub const Color = enum {
+        red,
+        majenta,
+        violet,
+        indigo,
+        blue,
+        cyan,
+        green,
+        lime,
+        yellow,
+        //
+        orange,
+        //
+
+        pub const BaseType = []const u8;
+    };
 };
 
 const test_users = &[_]TestUser{
-    .{ .name = "Vincent", .id = 20, .age = 33, .weight = 85.4 },
-    .{ .name = "Julien", .id = 40, .age = 35, .weight = 100.3 },
-    .{ .name = "José", .id = 60, .age = 40, .weight = 240.2 },
+    .{ .name = "Vincent", .id = 20, .age = 33, .weight = 85.4, .favorite_color = .violet },
+    .{ .name = "Julien", .id = 40, .age = 35, .weight = 100.3, .favorite_color = .green },
+    .{ .name = "José", .id = 60, .age = 40, .weight = 240.2, .favorite_color = .indigo },
 };
 
 fn createTestTables(db: *Db) !void {
@@ -1274,10 +1292,11 @@ fn createTestTables(db: *Db) !void {
         "DROP TABLE IF EXISTS article",
         "DROP TABLE IF EXISTS test_blob",
         \\CREATE TABLE user(
-        \\ id integer PRIMARY KEY,
         \\ name text,
+        \\ id integer PRIMARY KEY,
         \\ age integer,
-        \\ weight real
+        \\ weight real,
+        \\ favorite_color text
         \\)
         ,
         \\CREATE TABLE article(
@@ -1299,7 +1318,7 @@ fn addTestData(db: *Db) !void {
     try createTestTables(db);
 
     for (test_users) |user| {
-        try db.exec("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})", .{}, user);
+        try db.exec("INSERT INTO user(name, id, age, weight, favorite_color) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32}, ?{[]const u8})", .{}, user);
 
         const rows_inserted = db.rowsAffected();
         try testing.expectEqual(@as(usize, 1), rows_inserted);
@@ -1771,13 +1790,13 @@ test "sqlite: statement reset" {
 
     // Add data
 
-    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})");
+    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight, favorite_color) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32}, ?{[]const u8})");
     defer stmt.deinit();
 
     const users = &[_]TestUser{
-        .{ .id = 200, .name = "Vincent", .age = 33, .weight = 10.0 },
-        .{ .id = 400, .name = "Julien", .age = 35, .weight = 12.0 },
-        .{ .id = 600, .name = "José", .age = 40, .weight = 14.0 },
+        .{ .id = 200, .name = "Vincent", .age = 33, .weight = 10.0, .favorite_color = .violet },
+        .{ .id = 400, .name = "Julien", .age = 35, .weight = 12.0, .favorite_color = .green },
+        .{ .id = 600, .name = "José", .age = 40, .weight = 14.0, .favorite_color = .indigo },
     };
 
     for (users) |user| {
@@ -1801,14 +1820,14 @@ test "sqlite: statement iterator" {
     try db.exec("DELETE FROM user", .{}, .{});
 
     // Add data
-    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32})");
+    var stmt = try db.prepare("INSERT INTO user(name, id, age, weight, favorite_color) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32}, ?{[]const u8})");
     defer stmt.deinit();
 
     var expected_rows = std.ArrayList(TestUser).init(allocator);
     var i: usize = 0;
     while (i < 20) : (i += 1) {
         const name = try std.fmt.allocPrint(allocator, "Vincent {d}", .{i});
-        const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @intToFloat(f32, i + 200) };
+        const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @intToFloat(f32, i + 200), .favorite_color = .indigo };
 
         try expected_rows.append(user);
 
