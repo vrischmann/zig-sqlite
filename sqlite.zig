@@ -906,6 +906,17 @@ pub fn Iterator(comptime Type: type) type {
                     .Array => try self.readArray(FieldType, i),
                     .Pointer => try self.readPointer(FieldType, options.allocator, i),
                     .Optional => try self.readOptional(FieldType, options, i),
+                    .Enum => |TI| {
+                        const innervalue = try self.readField(FieldType.BaseType, i, options);
+
+                        if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
+                            return std.meta.stringToEnum(FieldType, innervalue) orelse @intToEnum(FieldType, 0);
+                        }
+                        if (@typeInfo(FieldType.BaseType) == .Int) {
+                            return @intToEnum(FieldType, @intCast(TI.tag_type, innervalue));
+                        }
+                        @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
+                    },
                     else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
             };
@@ -1039,7 +1050,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             inline for (StructTypeInfo.fields) |struct_field, _i| {
                 const bind_marker = query.bind_markers[_i];
                 switch (bind_marker) {
-                    .Typed => |typ| if (struct_field.field_type != typ) {
+                    .Typed => |typ| if (struct_field.field_type != typ and struct_field.field_type.BaseType != typ) {
                         @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
                     },
                     .Untyped => {},
@@ -1089,6 +1100,15 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                         _ = c.sqlite3_bind_null(self.stmt, column);
                     },
                     .Null => _ = c.sqlite3_bind_null(self.stmt, column),
+                    .Enum => {
+                        if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
+                            return self.bindField(FieldType.BaseType, field_name, column, @tagName(field));
+                        }
+                        if (@typeInfo(FieldType.BaseType) == .Int) {
+                            return self.bindField(FieldType.BaseType, field_name, column, @enumToInt(field));
+                        }
+                        @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
+                    },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                 },
             }
