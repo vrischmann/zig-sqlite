@@ -1050,8 +1050,24 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             inline for (StructTypeInfo.fields) |struct_field, _i| {
                 const bind_marker = query.bind_markers[_i];
                 switch (bind_marker) {
-                    .Typed => |typ| if (struct_field.field_type != typ and struct_field.field_type.BaseType != typ) {
-                        @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
+                    .Typed => |typ| {
+                        const FieldTypeInfo = @typeInfo(struct_field.field_type);
+                        switch (FieldTypeInfo) {
+                            .Struct, .Enum, .Union => {
+                                if (@hasDecl(struct_field.field_type, "BaseType")) {
+                                    if (struct_field.field_type.BaseType != typ) {
+                                        @compileError("value type " ++ @typeName(struct_field.field_type.BaseType) ++ " is not the bind marker type " ++ @typeName(typ));
+                                    }
+                                } else if (struct_field.field_type != typ) {
+                                    @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
+                                }
+                            },
+                            else => {
+                                if (struct_field.field_type != typ) {
+                                    @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
+                                }
+                            },
+                        }
                     },
                     .Untyped => {},
                 }
