@@ -1053,20 +1053,11 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     .Typed => |typ| {
                         const FieldTypeInfo = @typeInfo(struct_field.field_type);
                         switch (FieldTypeInfo) {
-                            .Struct, .Enum, .Union => {
-                                if (@hasDecl(struct_field.field_type, "BaseType")) {
-                                    if (struct_field.field_type.BaseType != typ) {
-                                        @compileError("value type " ++ @typeName(struct_field.field_type.BaseType) ++ " is not the bind marker type " ++ @typeName(typ));
-                                    }
-                                } else if (struct_field.field_type != typ) {
-                                    @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
-                                }
-                            },
-                            else => {
-                                if (struct_field.field_type != typ) {
-                                    @compileError("value type " ++ @typeName(struct_field.field_type) ++ " is not the bind marker type " ++ @typeName(typ));
-                                }
-                            },
+                            .Struct, .Enum, .Union => comptime assertMarkerType(
+                                if (@hasDecl(struct_field.field_type, "BaseType")) struct_field.field_type.BaseType else struct_field.field_type,
+                                typ,
+                            ),
+                            else => comptime assertMarkerType(struct_field.field_type, typ),
                         }
                     },
                     .Untyped => {},
@@ -1075,6 +1066,12 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                 const field_value = @field(values, struct_field.name);
 
                 self.bindField(struct_field.field_type, struct_field.name, _i, field_value);
+            }
+        }
+
+        fn assertMarkerType(comptime Actual: type, comptime Expected: type) void {
+            if (Actual != Expected) {
+                @compileError("value type " ++ @typeName(Actual) ++ " is not the bind marker type " ++ @typeName(Expected));
             }
         }
 
