@@ -1102,10 +1102,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     .Null => _ = c.sqlite3_bind_null(self.stmt, column),
                     .Enum => {
                         if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
-                            return self.bindField(FieldType.BaseType, field_name, column, @tagName(field));
+                            return self.bindField(FieldType.BaseType, field_name, i, @tagName(field));
                         }
                         if (@typeInfo(FieldType.BaseType) == .Int) {
-                            return self.bindField(FieldType.BaseType, field_name, column, @enumToInt(field));
+                            return self.bindField(FieldType.BaseType, field_name, i, @enumToInt(field));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
                     },
