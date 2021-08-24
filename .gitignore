@@ -1,2 +1,4 @@
 /build_runner.zig
 zig-*
+.zigmod
+deps.zig
