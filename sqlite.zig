@@ -910,7 +910,7 @@ pub fn Iterator(comptime Type: type) type {
                         const innervalue = try self.readField(FieldType.BaseType, i, options);
 
                         if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
-                            return std.meta.stringToEnum(FieldType, innervalue) orelse @intToEnum(FieldType, 0);
+                            return std.meta.stringToEnum(FieldType, innervalue) orelse unreachable;
                         }
                         if (@typeInfo(FieldType.BaseType) == .Int) {
                             return @intToEnum(FieldType, @intCast(TI.tag_type, innervalue));
