@@ -5,7 +5,7 @@ const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
 
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("sqlite3.h");
 });
 
@@ -233,6 +233,12 @@ pub const InitOptions = struct {
     /// Defaults to Serialized.
     threading_mode: ThreadingMode = .Serialized,
 
+    /// shared_cache controls whether or not concurrent SQLite
+    /// connections share the same cache.
+    ///
+    /// Defaults to false.
+    shared_cache: bool = false,
+
     /// if provided, diags will be populated in case of failures.
     diags: ?*Diagnostics = null,
 };
@@ -326,6 +332,9 @@ pub const Db = struct {
         flags |= @as(c_int, if (options.open_flags.write) c.SQLITE_OPEN_READWRITE else c.SQLITE_OPEN_READONLY);
         if (options.open_flags.create) {
             flags |= c.SQLITE_OPEN_CREATE;
+        }
+        if (options.shared_cache) {
+            flags |= c.SQLITE_OPEN_SHAREDCACHE;
         }
         switch (options.threading_mode) {
             .MultiThread => flags |= c.SQLITE_OPEN_NOMUTEX,
