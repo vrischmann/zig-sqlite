@@ -604,11 +604,25 @@ pub fn Iterator(comptime Type: type) type {
                     debug.assert(columns == 1);
                     return try self.readArray(Type, 0);
                 },
+                .Enum => |TI| {
+                    debug.assert(columns == 1);
+
+                    if (comptime std.meta.trait.isZigString(Type.BaseType)) {
+                        @compileError("cannot read into type " ++ @typeName(Type) ++ " ; BaseType " ++ @typeName(Type.BaseType) ++ " requires allocation, use nextAlloc or oneAlloc");
+                    }
+
+                    if (@typeInfo(Type.BaseType) == .Int) {
+                        const innervalue = try self.readField(Type.BaseType, 0, options);
+                        return @intToEnum(Type, @intCast(TI.tag_type, innervalue));
+                    }
+
+                    @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
+                },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
                     return try self.readStruct(options);
                 },
-                else => @compileError("cannot read into type " ++ @typeName(Type) ++ " ; if dynamic memory allocation is required use nextAlloc"),
+                else => @compileError("cannot read into type " ++ @typeName(Type) ++ " ; if dynamic memory allocation is required use nextAlloc or oneAlloc"),
             }
         }
 
@@ -667,6 +681,21 @@ pub fn Iterator(comptime Type: type) type {
                 .Pointer => {
                     debug.assert(columns == 1);
                     return try self.readPointer(Type, allocator, 0);
+                },
+                .Enum => |TI| {
+                    debug.assert(columns == 1);
+
+                    const innervalue = try self.readField(Type.BaseType, 0, .{
+                        .allocator = allocator,
+                    });
+
+                    if (comptime std.meta.trait.isZigString(Type.BaseType)) {
+                        return std.meta.stringToEnum(Type, innervalue) orelse unreachable;
+                    }
+                    if (@typeInfo(Type.BaseType) == .Int) {
+                        return @intToEnum(Type, @intCast(TI.tag_type, innervalue));
+                    }
+                    @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
@@ -1650,6 +1679,75 @@ test "sqlite: read a single integer value" {
 
         try testing.expectEqual(@as(typ, 33), age.?);
     }
+}
+
+test "sqlite: read a single value into an enum backed by an integer" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try createTestTables(&db);
+
+    try db.exec("INSERT INTO user(id, age) VALUES(?{usize}, ?{usize})", .{}, .{
+        .id = @as(usize, 10),
+        .age = @as(usize, 0),
+    });
+
+    const query = "SELECT age FROM user WHERE id = ?{usize}";
+
+    const IntColor = enum {
+        violet,
+
+        pub const BaseType = u1;
+    };
+
+    // Use one
+    {
+        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+        defer stmt.deinit();
+
+        const b = try stmt.one(IntColor, .{}, .{
+            .id = @as(usize, 10),
+        });
+        try testing.expect(b != null);
+        try testing.expectEqual(IntColor.violet, b.?);
+    }
+
+    // Use oneAlloc
+    {
+        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+        defer stmt.deinit();
+
+        const b = try stmt.oneAlloc(IntColor, &arena.allocator, .{}, .{
+            .id = @as(usize, 10),
+        });
+        try testing.expect(b != null);
+        try testing.expectEqual(IntColor.violet, b.?);
+    }
+}
+
+test "sqlite: read a single value into an enum backed by a string" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try createTestTables(&db);
+
+    try db.exec("INSERT INTO user(id, favorite_color) VALUES(?{usize}, ?{[]const u8})", .{}, .{
+        .id = @as(usize, 10),
+        .age = @as([]const u8, "violet"),
+    });
+
+    const query = "SELECT favorite_color FROM user WHERE id = ?{usize}";
+
+    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    defer stmt.deinit();
+
+    const b = try stmt.oneAlloc(TestUser.Color, &arena.allocator, .{}, .{
+        .id = @as(usize, 10),
+    });
+    try testing.expect(b != null);
+    try testing.expectEqual(TestUser.Color.violet, b.?);
 }
 
 test "sqlite: read a single value into void" {
