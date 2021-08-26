@@ -284,12 +284,10 @@ fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
 /// A Db can be opened with a file database or a in-memory database:
 ///
 ///     // File database
-///     var db: sqlite.Db = undefined;
-///     try db.init(.{ .mode = { .File = "/tmp/data.db" } });
+///     var db = try sqlite.Db.init(.{ .mode = .{ .File = "/tmp/data.db" } });
 ///
 ///     // In memory database
-///     var db: sqlite.Db = undefined;
-///     try db.init(.{ .mode = { .Memory = {} } });
+///     var db = try sqlite.Db.init(.{ .mode = .{ .Memory = {} } });
 ///
 pub const Db = struct {
     const Self = @This();
