@@ -682,6 +682,21 @@ pub fn Iterator(comptime Type: type) type {
                     debug.assert(columns == 1);
                     return try self.readPointer(Type, allocator, 0);
                 },
+                .Enum => |TI| {
+                    debug.assert(columns == 1);
+
+                    const innervalue = try self.readField(Type.BaseType, 0, .{
+                        .allocator = allocator,
+                    });
+
+                    if (comptime std.meta.trait.isZigString(Type.BaseType)) {
+                        return std.meta.stringToEnum(Type, innervalue) orelse unreachable;
+                    }
+                    if (@typeInfo(Type.BaseType) == .Int) {
+                        return @intToEnum(Type, @intCast(TI.tag_type, innervalue));
+                    }
+                    @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
+                },
                 .Struct => {
                     std.debug.assert(columns == TypeInfo.Struct.fields.len);
                     return try self.readStruct(.{
@@ -1709,6 +1724,30 @@ test "sqlite: read a single value into an enum backed by an integer" {
         try testing.expect(b != null);
         try testing.expectEqual(IntColor.violet, b.?);
     }
+}
+
+test "sqlite: read a single value into an enum backed by a string" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try createTestTables(&db);
+
+    try db.exec("INSERT INTO user(id, favorite_color) VALUES(?{usize}, ?{[]const u8})", .{}, .{
+        .id = @as(usize, 10),
+        .age = @as([]const u8, "violet"),
+    });
+
+    const query = "SELECT favorite_color FROM user WHERE id = ?{usize}";
+
+    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    defer stmt.deinit();
+
+    const b = try stmt.oneAlloc(TestUser.Color, &arena.allocator, .{}, .{
+        .id = @as(usize, 10),
+    });
+    try testing.expect(b != null);
+    try testing.expectEqual(TestUser.Color.violet, b.?);
 }
 
 test "sqlite: read a single value into void" {
