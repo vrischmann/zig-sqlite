@@ -328,7 +328,7 @@ pub const Db = struct {
         }
 
         // Compute the flags
-        var flags: c_int = 0;
+        var flags: c_int = c.SQLITE_OPEN_URI;
         flags |= @as(c_int, if (options.open_flags.write) c.SQLITE_OPEN_READWRITE else c.SQLITE_OPEN_READONLY);
         if (options.open_flags.create) {
             flags |= c.SQLITE_OPEN_CREATE;
