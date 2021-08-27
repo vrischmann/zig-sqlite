@@ -196,8 +196,11 @@ pub fn build(b: *std.build.Builder) void {
         linkSqlite(tests);
         tests.enable_qemu = enable_qemu;
 
-        tests.addBuildOption(bool, "in_memory", in_memory);
-        tests.addBuildOption(?[]const u8, "dbfile", dbfile);
+        const tests_options = b.addOptions();
+        tests.addOptions("build_options", tests_options);
+
+        tests_options.addOption(bool, "in_memory", in_memory);
+        tests_options.addOption(?[]const u8, "dbfile", dbfile);
 
         test_step.dependOn(&tests.step);
     }
