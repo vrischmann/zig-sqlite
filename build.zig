@@ -151,6 +151,10 @@ pub fn build(b: *std.build.Builder) void {
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
     const enable_qemu = b.option(bool, "enable_qemu", "Enable qemu for running tests (default false)") orelse false;
 
+    const build_options = b.addOptions();
+    build_options.addOption(bool, "in_memory", in_memory);
+    build_options.addOption(?[]const u8, "dbfile", dbfile);
+
     const target = b.standardTargetOptions(.{});
 
     const test_targets = if (target.isNative())
@@ -196,8 +200,7 @@ pub fn build(b: *std.build.Builder) void {
         linkSqlite(tests);
         tests.enable_qemu = enable_qemu;
 
-        tests.addBuildOption(bool, "in_memory", in_memory);
-        tests.addBuildOption(?[]const u8, "dbfile", dbfile);
+        tests.addPackage(build_options.getPackage("build_options"));
 
         test_step.dependOn(&tests.step);
     }

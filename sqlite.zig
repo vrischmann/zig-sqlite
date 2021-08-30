@@ -585,7 +585,7 @@ pub fn Iterator(comptime Type: type) type {
         // If it returns null iterating is done.
         //
         // This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call nextAlloc.
-        pub fn next(self: *Self, options: anytype) !?Type {
+        pub fn next(self: *Self, options: QueryOptions) !?Type {
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
 
@@ -988,35 +988,13 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
     return struct {
         const Self = @This();
 
-        db: *c.sqlite3,
-        stmt: *c.sqlite3_stmt,
+        untyped: UntypedStatement,
 
         fn prepare(db: *Db, options: QueryOptions, flags: c_uint) !Self {
-            var dummy_diags = Diagnostics{};
-            var diags = options.diags orelse &dummy_diags;
-
-            var stmt = blk: {
-                const real_query = query.getQuery();
-
-                var tmp: ?*c.sqlite3_stmt = undefined;
-                const result = c.sqlite3_prepare_v3(
-                    db.db,
-                    real_query.ptr,
-                    @intCast(c_int, real_query.len),
-                    flags,
-                    &tmp,
-                    null,
-                );
-                if (result != c.SQLITE_OK) {
-                    diags.err = getLastDetailedErrorFromDb(db.db);
-                    return errorFromResultCode(result);
-                }
-                break :blk tmp.?;
-            };
+            const real_query = query.getQuery();
 
             return Self{
-                .db = db.db,
-                .stmt = stmt,
+                .untyped = try UntypedStatement.prepare(db, real_query, options, flags),
             };
         }
 
@@ -1024,26 +1002,13 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///
         /// After a call to `deinit` the statement must not be used.
         pub fn deinit(self: *Self) void {
-            const result = c.sqlite3_finalize(self.stmt);
-            if (result != c.SQLITE_OK) {
-                const detailed_error = getLastDetailedErrorFromDb(self.db);
-                logger.err("unable to finalize prepared statement, result: {}, detailed error: {}", .{ result, detailed_error });
-            }
+            self.untyped.deinit();
+            self.* = undefined;
         }
 
         /// reset resets the prepared statement to make it reusable.
         pub fn reset(self: *Self) void {
-            const result = c.sqlite3_clear_bindings(self.stmt);
-            if (result != c.SQLITE_OK) {
-                const detailed_error = getLastDetailedErrorFromDb(self.db);
-                logger.err("unable to clear prepared statement bindings, result: {}, detailed error: {}", .{ result, detailed_error });
-            }
-
-            const result2 = c.sqlite3_reset(self.stmt);
-            if (result2 != c.SQLITE_OK) {
-                const detailed_error = getLastDetailedErrorFromDb(self.db);
-                logger.err("unable to reset prepared statement, result: {}, detailed error: {}", .{ result2, detailed_error });
-            }
+            self.untyped.reset();
         }
 
         /// bind binds values to every bind marker in the prepared statement.
@@ -1088,65 +1053,13 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 
                 const field_value = @field(values, struct_field.name);
 
-                self.bindField(struct_field.field_type, struct_field.name, _i, field_value);
+                self.untyped.bindField(struct_field.field_type, struct_field.name, _i, field_value);
             }
         }
 
         fn assertMarkerType(comptime Actual: type, comptime Expected: type) void {
             if (Actual != Expected) {
                 @compileError("value type " ++ @typeName(Actual) ++ " is not the bind marker type " ++ @typeName(Expected));
-            }
-        }
-
-        fn bindField(self: *Self, comptime FieldType: type, comptime field_name: []const u8, i: c_int, field: FieldType) void {
-            const field_type_info = @typeInfo(FieldType);
-            const column = i + 1;
-
-            switch (FieldType) {
-                Text => _ = c.sqlite3_bind_text(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
-                Blob => _ = c.sqlite3_bind_blob(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
-                ZeroBlob => _ = c.sqlite3_bind_zeroblob64(self.stmt, column, field.length),
-                else => switch (field_type_info) {
-                    .Int, .ComptimeInt => _ = c.sqlite3_bind_int64(self.stmt, column, @intCast(c_longlong, field)),
-                    .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field),
-                    .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field)),
-                    .Pointer => |ptr| switch (ptr.size) {
-                        .One => self.bindField(ptr.child, field_name, i, field.*),
-                        .Slice => switch (ptr.child) {
-                            u8 => {
-                                _ = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), null);
-                            },
-                            else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
-                        },
-                        else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
-                    },
-                    .Array => |arr| {
-                        switch (arr.child) {
-                            u8 => {
-                                const data: []const u8 = field[0..field.len];
-
-                                _ = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
-                            },
-                            else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
-                        }
-                    },
-                    .Optional => |opt| if (field) |non_null_field| {
-                        self.bindField(opt.child, field_name, i, non_null_field);
-                    } else {
-                        _ = c.sqlite3_bind_null(self.stmt, column);
-                    },
-                    .Null => _ = c.sqlite3_bind_null(self.stmt, column),
-                    .Enum => {
-                        if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
-                            return self.bindField(FieldType.BaseType, field_name, i, @tagName(field));
-                        }
-                        if (@typeInfo(FieldType.BaseType) == .Int) {
-                            return self.bindField(FieldType.BaseType, field_name, i, @enumToInt(field));
-                        }
-                        @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
-                    },
-                    else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
-                },
             }
         }
 
@@ -1163,11 +1076,11 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
 
-            const result = c.sqlite3_step(self.stmt);
+            const result = c.sqlite3_step(self.untyped.stmt);
             switch (result) {
                 c.SQLITE_DONE => {},
                 else => {
-                    diags.err = getLastDetailedErrorFromDb(self.db);
+                    diags.err = getLastDetailedErrorFromDb(self.untyped.db);
                     return errorFromResultCode(result);
                 },
             }
@@ -1195,9 +1108,8 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             self.bind(values);
 
             var res: Iterator(Type) = undefined;
-            res.db = self.db;
-            res.stmt = self.stmt;
-
+            res.db = self.untyped.db;
+            res.stmt = self.untyped.stmt;
             return res;
         }
 
@@ -1226,7 +1138,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// in the input query string.
         ///
         /// This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call `oneAlloc`.
-        pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
+        pub fn one(self: *Self, comptime Type: type, options: QueryOptions, values: anytype) !?Type {
             if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
                 @compileError("options passed to iterator must be a struct");
             }
@@ -1406,12 +1318,6 @@ const UntypedStatement = struct {
         return null;
     }
 
-    fn assertMarkerType(comptime Actual: type, comptime Expected: type) void {
-        if (Actual != Expected) {
-            @compileError("value type " ++ @typeName(Actual) ++ " is not the bind marker type " ++ @typeName(Expected));
-        }
-    }
-
     fn bindField(self: *Self, comptime FieldType: type, comptime field_name: []const u8, i: c_int, field: FieldType) void {
         const field_type_info = @typeInfo(FieldType);
         const column = i + 1;
@@ -1540,7 +1446,7 @@ const UntypedStatement = struct {
     /// in the input query string.
     ///
     /// This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call `oneAlloc`.
-    pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
+    pub fn one(self: *Self, comptime Type: type, options: QueryOptions, values: anytype) !?Type {
         if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
             @compileError("options passed to iterator must be a struct");
         }
@@ -1552,7 +1458,7 @@ const UntypedStatement = struct {
     }
 
     /// oneAlloc is like `one` but can allocate memory.
-    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) !?Type {
+    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
         if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
             @compileError("options passed to iterator must be a struct");
         }
@@ -1589,7 +1495,7 @@ const UntypedStatement = struct {
     /// in the input query string.
     ///
     /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
-    pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) ![]Type {
+    pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
         if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
             @compileError("options passed to iterator must be a struct");
         }
