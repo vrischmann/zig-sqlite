@@ -487,6 +487,29 @@ pub const Db = struct {
         return Statement(.{}, comptime parsed_query).prepare(self, .{}, 0);
     }
 
+    /// prepare prepares a statement for the `query` provided.
+    ///
+    /// The query is analysed at comptime to search for bind markers.
+    /// prepare enforces having as much fields in the `values` tuple as there are bind markers.
+    ///
+    /// Example usage:
+    ///
+    ///     var stmt = try db.prepare("INSERT INTO foo(id, name) VALUES(?, ?)");
+    ///     defer stmt.deinit();
+    ///
+    /// The statement returned is only compatible with the number of bind markers in the input query.
+    /// This is done because we type check the bind parameters when executing the statement later.
+    ///
+    /// If you want additional error information in case of failures, use `prepareWithDiags`.
+    pub fn prepareDynamic(self: *Self, query: []const u8) !UntypedStatement {
+        return UntypedStatement.prepare(self, query, .{}, 0);
+    }
+
+    /// prepareWithDiags is like `prepareDynamic` but takes an additional options argument.
+    pub fn prepareDynamicWithDiags(self: *Self, query: []const u8, options: QueryOptions) !UntypedStatement {
+        return UntypedStatement.prepare(self, query, options, 0);
+    }
+
     /// rowsAffected returns the number of rows affected by the last statement executed.
     pub fn rowsAffected(self: *Self) usize {
         return @intCast(usize, c.sqlite3_changes(self.db));
@@ -562,7 +585,7 @@ pub fn Iterator(comptime Type: type) type {
         // If it returns null iterating is done.
         //
         // This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call nextAlloc.
-        pub fn next(self: *Self, options: QueryOptions) !?Type {
+        pub fn next(self: *Self, options: anytype) !?Type {
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
 
@@ -1267,6 +1290,319 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         }
     };
 }
+
+const UntypedStatement = struct {
+    const Self = @This();
+
+    db: *c.sqlite3,
+    stmt: *c.sqlite3_stmt,
+
+    fn prepare(db: *Db, query: []const u8, options: QueryOptions, flags: c_uint) !Self {
+        var dummy_diags = Diagnostics{};
+        var diags = options.diags orelse &dummy_diags;
+
+        var stmt = blk: {
+            var tmp: ?*c.sqlite3_stmt = undefined;
+            const result = c.sqlite3_prepare_v3(
+                db.db,
+                query.ptr,
+                @intCast(c_int, query.len),
+                flags,
+                &tmp,
+                null,
+            );
+            if (result != c.SQLITE_OK) {
+                diags.err = getLastDetailedErrorFromDb(db.db);
+                return errorFromResultCode(result);
+            }
+            break :blk tmp.?;
+        };
+
+        return Self{
+            .db = db.db,
+            .stmt = stmt,
+        };
+    }
+
+    /// deinit releases the prepared statement.
+    ///
+    /// After a call to `deinit` the statement must not be used.
+    pub fn deinit(self: *Self) void {
+        const result = c.sqlite3_finalize(self.stmt);
+        if (result != c.SQLITE_OK) {
+            const detailed_error = getLastDetailedErrorFromDb(self.db);
+            logger.err("unable to finalize prepared statement, result: {}, detailed error: {}", .{ result, detailed_error });
+        }
+    }
+
+    /// reset resets the prepared statement to make it reusable.
+    pub fn reset(self: *Self) void {
+        const result = c.sqlite3_clear_bindings(self.stmt);
+        if (result != c.SQLITE_OK) {
+            const detailed_error = getLastDetailedErrorFromDb(self.db);
+            logger.err("unable to clear prepared statement bindings, result: {}, detailed error: {}", .{ result, detailed_error });
+        }
+
+        const result2 = c.sqlite3_reset(self.stmt);
+        if (result2 != c.SQLITE_OK) {
+            const detailed_error = getLastDetailedErrorFromDb(self.db);
+            logger.err("unable to reset prepared statement, result: {}, detailed error: {}", .{ result2, detailed_error });
+        }
+    }
+
+    /// bind binds values to every bind marker in the prepared statement.
+    ///
+    /// The `values` variable must be a struct where each field has the type of the corresponding bind marker.
+    /// For example this query:
+    ///   SELECT 1 FROM user WHERE name = ?{text} AND age < ?{u32}
+    ///
+    /// Has two bind markers, so `values` must have at least the following fields:
+    ///   struct {
+    ///     name: Text,
+    ///     age: u32
+    ///   }
+    ///
+    /// The types are checked at comptime.
+    fn bind(self: *Self, values: anytype) void {
+        const StructType = @TypeOf(values);
+        const StructTypeInfo: std.builtin.TypeInfo.Struct = @typeInfo(StructType).Struct;
+
+        if (StructTypeInfo.is_tuple) {
+            // bind by index
+            inline for (StructTypeInfo.fields) |struct_field| {
+                const field_value = @field(values, struct_field.name);
+
+                const index = std.fmt.parseInt(c_int, struct_field.name, 10);
+
+                self.bindField(struct_field.field_type, struct_field.name, index, field_value);
+            }
+        } else {
+            // bind by name
+            inline for (StructTypeInfo.fields) |struct_field| {
+                if (self.getIndex(struct_field.name)) |index| {
+                    const field_value = @field(values, struct_field.name);
+                    self.bindField(struct_field.field_type, struct_field.name, index - 1, field_value);
+                }
+            }
+        }
+    }
+
+    /// Converts a named parameter without prefix to the parameter index for this prepared statement.
+    /// All three prefixed `:`, `@` and `$` will be tested.
+    /// Returns `null` when a matching parameter could not be found, otherwise, returns the index.
+    fn getIndex(self: Self, comptime field_name: []const u8) ?c_int {
+        const @":zname" = @as([:0]const u8, (":" ++ field_name ++ [_]u8{0})[0 .. field_name.len + 1 :0]);
+        const @"$zname" = @as([:0]const u8, ("$" ++ field_name ++ [_]u8{0})[0 .. field_name.len + 1 :0]);
+        const @"@zname" = @as([:0]const u8, ("@" ++ field_name ++ [_]u8{0})[0 .. field_name.len + 1 :0]);
+        var index = c.sqlite3_bind_parameter_index(self.stmt, @as([*:0]const u8, @":zname".ptr));
+        if (index > 0)
+            return index;
+        index = c.sqlite3_bind_parameter_index(self.stmt, @as([*:0]const u8, @"$zname".ptr));
+        if (index > 0)
+            return index;
+        index = c.sqlite3_bind_parameter_index(self.stmt, @as([*:0]const u8, @"@zname".ptr));
+        if (index > 0)
+            return index;
+        return null;
+    }
+
+    fn assertMarkerType(comptime Actual: type, comptime Expected: type) void {
+        if (Actual != Expected) {
+            @compileError("value type " ++ @typeName(Actual) ++ " is not the bind marker type " ++ @typeName(Expected));
+        }
+    }
+
+    fn bindField(self: *Self, comptime FieldType: type, comptime field_name: []const u8, i: c_int, field: FieldType) void {
+        const field_type_info = @typeInfo(FieldType);
+        const column = i + 1;
+
+        switch (FieldType) {
+            Text => _ = c.sqlite3_bind_text(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
+            Blob => _ = c.sqlite3_bind_blob(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null),
+            ZeroBlob => _ = c.sqlite3_bind_zeroblob64(self.stmt, column, field.length),
+            else => switch (field_type_info) {
+                .Int, .ComptimeInt => _ = c.sqlite3_bind_int64(self.stmt, column, @intCast(c_longlong, field)),
+                .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field),
+                .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field)),
+                .Pointer => |ptr| switch (ptr.size) {
+                    .One => self.bindField(ptr.child, field_name, i, field.*),
+                    .Slice => switch (ptr.child) {
+                        u8 => {
+                            _ = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), null);
+                        },
+                        else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
+                    },
+                    else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
+                },
+                .Array => |arr| {
+                    switch (arr.child) {
+                        u8 => {
+                            const data: []const u8 = field[0..field.len];
+
+                            _ = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
+                        },
+                        else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
+                    }
+                },
+                .Optional => |opt| if (field) |non_null_field| {
+                    self.bindField(opt.child, field_name, i, non_null_field);
+                } else {
+                    _ = c.sqlite3_bind_null(self.stmt, column);
+                },
+                .Null => _ = c.sqlite3_bind_null(self.stmt, column),
+                .Enum => {
+                    if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
+                        return self.bindField(FieldType.BaseType, field_name, i, @tagName(field));
+                    }
+                    if (@typeInfo(FieldType.BaseType) == .Int) {
+                        return self.bindField(FieldType.BaseType, field_name, i, @enumToInt(field));
+                    }
+                    @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
+                },
+                else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
+            },
+        }
+    }
+
+    /// exec executes a statement which does not return data.
+    ///
+    /// The `options` tuple is used to provide additional state in some cases.
+    ///
+    /// The `values` variable is used for the bind parameters. It must have as many fields as there are bind markers
+    /// in the input query string.
+    ///
+    pub fn exec(self: *Self, options: QueryOptions, values: anytype) !void {
+        self.bind(values);
+
+        var dummy_diags = Diagnostics{};
+        var diags = options.diags orelse &dummy_diags;
+
+        const result = c.sqlite3_step(self.stmt);
+        switch (result) {
+            c.SQLITE_DONE => {},
+            else => {
+                diags.err = getLastDetailedErrorFromDb(self.db);
+                return errorFromResultCode(result);
+            },
+        }
+    }
+
+    /// iterator returns an iterator to read data from the result set, one row at a time.
+    ///
+    /// The data in the row is used to populate a value of the type `Type`.
+    /// This means that `Type` must have as many fields as is returned in the query
+    /// executed by this statement.
+    /// This also means that the type of each field must be compatible with the SQLite type.
+    ///
+    /// Here is an example of how to use the iterator:
+    ///
+    ///     var iter = try stmt.iterator(usize, .{});
+    ///     while (try iter.next(.{})) |row| {
+    ///         ...
+    ///     }
+    ///
+    /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+    /// in the input query string.
+    ///
+    /// The iterator _must not_ outlive the statement.
+    pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
+        self.bind(values);
+
+        var res: Iterator(Type) = undefined;
+        res.db = self.db;
+        res.stmt = self.stmt;
+
+        return res;
+    }
+
+    /// one reads a single row from the result set of this statement.
+    ///
+    /// The data in the row is used to populate a value of the type `Type`.
+    /// This means that `Type` must have as many fields as is returned in the query
+    /// executed by this statement.
+    /// This also means that the type of each field must be compatible with the SQLite type.
+    ///
+    /// Here is an example of how to use an anonymous struct type:
+    ///
+    ///     const row = try stmt.one(
+    ///         struct {
+    ///             id: usize,
+    ///             name: [400]u8,
+    ///             age: usize,
+    ///         },
+    ///         .{},
+    ///         .{ .foo = "bar", .age = 500 },
+    ///     );
+    ///
+    /// The `options` tuple is used to provide additional state in some cases.
+    ///
+    /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+    /// in the input query string.
+    ///
+    /// This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call `oneAlloc`.
+    pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
+        if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            @compileError("options passed to iterator must be a struct");
+        }
+
+        var iter = try self.iterator(Type, values);
+
+        const row = (try iter.next(options)) orelse return null;
+        return row;
+    }
+
+    /// oneAlloc is like `one` but can allocate memory.
+    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) !?Type {
+        if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            @compileError("options passed to iterator must be a struct");
+        }
+
+        var iter = try self.iterator(Type, values);
+
+        const row = (try iter.nextAlloc(allocator, options)) orelse return null;
+        return row;
+    }
+
+    /// all reads all rows from the result set of this statement.
+    ///
+    /// The data in each row is used to populate a value of the type `Type`.
+    /// This means that `Type` must have as many fields as is returned in the query
+    /// executed by this statement.
+    /// This also means that the type of each field must be compatible with the SQLite type.
+    ///
+    /// Here is an example of how to use an anonymous struct type:
+    ///
+    ///     const rows = try stmt.all(
+    ///         struct {
+    ///             id: usize,
+    ///             name: []const u8,
+    ///             age: usize,
+    ///         },
+    ///         allocator,
+    ///         .{},
+    ///         .{ .foo = "bar", .age = 500 },
+    ///     );
+    ///
+    /// The `options` tuple is used to provide additional state in some cases.
+    ///
+    /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+    /// in the input query string.
+    ///
+    /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
+    pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) ![]Type {
+        if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            @compileError("options passed to iterator must be a struct");
+        }
+        var iter = try self.iterator(Type, values);
+
+        var rows = std.ArrayList(Type).init(allocator);
+        while (try iter.nextAlloc(allocator, options)) |row| {
+            try rows.append(row);
+        }
+
+        return rows.toOwnedSlice();
+    }
+};
 
 const TestUser = struct {
     name: []const u8,
