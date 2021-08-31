@@ -737,10 +737,10 @@ pub fn Iterator(comptime Type: type) type {
                                 ret[size] = s;
                             }
                         },
-                        else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
+                        else => @compileError("cannot read into array of " ++ @typeName(arr.child)),
                     }
                 },
-                else => @compileError("cannot populate field " ++ field.name ++ " of type array of " ++ @typeName(arr.child)),
+                else => @compileError("cannot read into type " ++ @typeName(ret)),
             }
             return ret;
         }
