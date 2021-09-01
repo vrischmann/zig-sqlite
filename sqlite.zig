@@ -1028,32 +1028,39 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             const StructType = @TypeOf(values);
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
-            if (comptime query.nb_bind_markers != StructTypeInfo.fields.len) {
-                @compileError(comptime std.fmt.comptimePrint("number of bind markers ({d}) not equal to number of fields ({d})", .{
-                    query.nb_bind_markers,
-                    StructTypeInfo.fields.len,
-                }));
-            }
+            // Fall back to dynamic name binding when we pass a regular struct.
+            if (!StructTypeInfo.is_tuple) {
 
-            inline for (StructTypeInfo.fields) |struct_field, _i| {
-                const bind_marker = query.bind_markers[_i];
-                switch (bind_marker) {
-                    .Typed => |typ| {
-                        const FieldTypeInfo = @typeInfo(struct_field.field_type);
-                        switch (FieldTypeInfo) {
-                            .Struct, .Enum, .Union => comptime assertMarkerType(
-                                if (@hasDecl(struct_field.field_type, "BaseType")) struct_field.field_type.BaseType else struct_field.field_type,
-                                typ,
-                            ),
-                            else => comptime assertMarkerType(struct_field.field_type, typ),
-                        }
-                    },
-                    .Untyped => {},
+                // TODO: We could also introduce type checking here!
+                return self.untyped.bind(values);
+            } else {
+                if (comptime query.nb_bind_markers != values.len) {
+                    @compileError(comptime std.fmt.comptimePrint("number of bind markers ({d}) not equal to number of fields ({d})", .{
+                        query.nb_bind_markers,
+                        values.len,
+                    }));
                 }
 
-                const field_value = @field(values, struct_field.name);
+                inline for (StructTypeInfo.fields) |struct_field, _i| {
+                    const bind_marker = query.bind_markers[_i];
+                    switch (bind_marker) {
+                        .Typed => |typ| {
+                            const FieldTypeInfo = @typeInfo(struct_field.field_type);
+                            switch (FieldTypeInfo) {
+                                .Struct, .Enum, .Union => comptime assertMarkerType(
+                                    if (@hasDecl(struct_field.field_type, "BaseType")) struct_field.field_type.BaseType else struct_field.field_type,
+                                    typ,
+                                ),
+                                else => comptime assertMarkerType(struct_field.field_type, typ),
+                            }
+                        },
+                        .Untyped => {},
+                    }
 
-                self.untyped.bindField(struct_field.field_type, struct_field.name, _i, field_value);
+                    const field_value = @field(values, struct_field.name);
+
+                    self.untyped.bindField(struct_field.field_type, struct_field.name, _i, field_value);
+                }
             }
         }
 
