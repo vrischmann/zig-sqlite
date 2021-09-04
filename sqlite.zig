@@ -9,8 +9,11 @@ pub const c = @cImport({
     @cInclude("sqlite3.h");
 });
 
-usingnamespace @import("query.zig");
-usingnamespace @import("error.zig");
+const Text = @import("query.zig").Text;
+const ParsedQuery = @import("query.zig").ParsedQuery;
+
+const errors = @import("errors.zig");
+const Error = errors.Error;
 
 const logger = std.log.scoped(.sqlite);
 
@@ -72,11 +75,11 @@ pub const Blob = struct {
     pub fn close(self: *Self) !void {
         const result = c.sqlite3_blob_close(self.handle);
         if (result != c.SQLITE_OK) {
-            return errorFromResultCode(result);
+            return errors.errorFromResultCode(result);
         }
     }
 
-    pub const Reader = io.Reader(*Self, Error, read);
+    pub const Reader = io.Reader(*Self, errors.Error, read);
 
     /// reader returns a io.Reader.
     pub fn reader(self: *Self) Reader {
@@ -100,7 +103,7 @@ pub const Blob = struct {
             self.offset,
         );
         if (result != c.SQLITE_OK) {
-            return errorFromResultCode(result);
+            return errors.errorFromResultCode(result);
         }
 
         self.offset += @intCast(c_int, tmp_buffer.len);
@@ -123,7 +126,7 @@ pub const Blob = struct {
             self.offset,
         );
         if (result != c.SQLITE_OK) {
-            return errorFromResultCode(result);
+            return errors.errorFromResultCode(result);
         }
 
         self.offset += @intCast(c_int, data.len);
@@ -352,7 +355,7 @@ pub const Db = struct {
                     } else {
                         diags.err = getDetailedErrorFromResultCode(result);
                     }
-                    return errorFromResultCode(result);
+                    return errors.errorFromResultCode(result);
                 }
 
                 return Self{ .db = db.? };
@@ -370,7 +373,7 @@ pub const Db = struct {
                     } else {
                         diags.err = getDetailedErrorFromResultCode(result);
                     }
-                    return errorFromResultCode(result);
+                    return errors.errorFromResultCode(result);
                 }
 
                 return Self{ .db = db.? };
@@ -579,7 +582,7 @@ pub fn Iterator(comptime Type: type) type {
             }
             if (result != c.SQLITE_ROW) {
                 diags.err = getLastDetailedErrorFromDb(self.db);
-                return errorFromResultCode(result);
+                return errors.errorFromResultCode(result);
             }
 
             const columns = c.sqlite3_column_count(self.stmt);
@@ -637,7 +640,7 @@ pub fn Iterator(comptime Type: type) type {
             }
             if (result != c.SQLITE_ROW) {
                 diags.err = getLastDetailedErrorFromDb(self.db);
-                return errorFromResultCode(result);
+                return errors.errorFromResultCode(result);
             }
 
             const columns = c.sqlite3_column_count(self.stmt);
@@ -1022,7 +1025,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                 );
                 if (result != c.SQLITE_OK) {
                     diags.err = getLastDetailedErrorFromDb(db.db);
-                    return errorFromResultCode(result);
+                    return errors.errorFromResultCode(result);
                 }
                 break :blk tmp.?;
             };
@@ -1181,7 +1184,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                 c.SQLITE_DONE => {},
                 else => {
                     diags.err = getLastDetailedErrorFromDb(self.db);
-                    return errorFromResultCode(result);
+                    return errors.errorFromResultCode(result);
                 },
             }
         }
