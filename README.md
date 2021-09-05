@@ -136,11 +136,11 @@ const query =
     \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 ```
 
-The `Db.prepare` method takes a `comptime` query string.
+The `Db.prepare` method takes a `comptime` query string and a `comptime` mappings type. It will be explained in detail below, for now we will leave it empty.
 
 ### Diagnostics
 
@@ -148,7 +148,7 @@ If you want failure diagnostics you can use `prepareWithDiags` like this:
 
 ```zig
 var diags = sqlite.Diagnostics{};
-var stmt = db.prepareWithDiags(query, .{ .diags = &diags }) catch |err| {
+var stmt = db.prepareWithDiags(query, .{}, .{ .diags = &diags }) catch |err| {
     std.log.err("unable to prepare statement, got error {s}. diagnostics: {s}", .{ err, diags });
     return err;
 };
@@ -164,7 +164,7 @@ const query =
     \\UPDATE foo SET salary = ? WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 try stmt.exec(.{
@@ -183,7 +183,7 @@ const query =
     \\UPDATE foo SET salary = ? WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 var id: usize = 0;
@@ -224,7 +224,7 @@ const query =
     \\SELECT name, age FROM employees WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 const row = try stmt.one(
@@ -272,7 +272,7 @@ const query =
     \\SELECT age FROM employees WHERE id = ?
 ;
 
-const row = try db.one(usize, query, .{}, .{ .id = 20 });
+const row = try db.one(usize, query, .{}, .{}, .{ .id = 20 });
 if (row) |age| {
     std.log.debug("age: {}", .{age});
 }
@@ -287,7 +287,7 @@ const query =
     \\SELECT name FROM employees WHERE age > ? AND age < ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 const names = try stmt.all([]const u8, allocator, .{}, .{
@@ -306,7 +306,7 @@ const query =
     \\SELECT name FROM employees WHERE id = ?
 ;
 
-var stmt = try db.prepare(query);
+var stmt = try db.prepare(query, .{});
 defer stmt.deinit();
 
 const row = try stmt.oneAlloc([]const u8, allocator, .{}, .{
@@ -427,7 +427,7 @@ pub fn main() anyerror!void {
 
 The second (and more interesting) check makes sure you provide appropriately typed values as bind parameters.
 
-This check is not automatic since with a standard SQL query we have no way to know the types of the bind parameters, to use it you must provide theses types in the SQL query with a custom syntax.
+This check is not automatic since with a standard SQL query we have no way to know the types of the bind parameters, to use it you must provide theses types in the `mappings` argument when preparing a statement.
 
 For example, take the same code as above but now we also bind the last parameter:
 ```zig
@@ -444,9 +444,11 @@ _ = rows;
 
 This compiles correctly even if the `weight` field in our `user` table is of the type `INTEGER`.
 
-We can make sure the bind parameters have the right type if we rewrite the query like this:
+We can make sure the bind parameters have the right type if we provide the following mappings:
 ```zig
-var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?{usize}");
+var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?", .{
+    .bind_markers = [_]type{ usize, usize, usize },
+});
 defer stmt.deinit();
 
 const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
