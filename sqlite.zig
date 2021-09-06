@@ -781,8 +781,7 @@ pub fn Iterator(comptime Type: type) type {
 
         // dupeWithSentinel is like dupe/dupeZ but allows for any sentinel value.
         fn dupeWithSentinel(comptime SliceType: type, allocator: *mem.Allocator, data: []const u8) !SliceType {
-            const type_info = @typeInfo(SliceType);
-            switch (type_info) {
+            switch (@typeInfo(SliceType)) {
                 .Pointer => |ptr_info| {
                     if (ptr_info.sentinel) |sentinel| {
                         const slice = try allocator.alloc(u8, data.len + 1);
@@ -857,10 +856,8 @@ pub fn Iterator(comptime Type: type) type {
                 @compileError("options passed to readPointer must have an allocator field");
             }
 
-            const type_info = @typeInfo(PointerType);
-
             var ret: PointerType = undefined;
-            switch (type_info) {
+            switch (@typeInfo(PointerType)) {
                 .Pointer => |ptr| {
                     switch (ptr.size) {
                         .One => {
@@ -887,14 +884,11 @@ pub fn Iterator(comptime Type: type) type {
                 @compileError("options passed to readOptional must be a struct");
             }
 
-            const i = @intCast(c_int, _i);
-            const type_info = @typeInfo(OptionalType);
-
             var ret: OptionalType = undefined;
-            switch (type_info) {
+            switch (@typeInfo(OptionalType)) {
                 .Optional => |opt| {
                     // Easy way to know if the column represents a null value.
-                    const value = c.sqlite3_column_value(self.stmt, i);
+                    const value = c.sqlite3_column_value(self.stmt, @intCast(c_int, _i));
                     const datatype = c.sqlite3_value_type(value);
 
                     if (datatype == c.SQLITE_NULL) {
