@@ -410,7 +410,7 @@ pub const Db = struct {
     ///
     ///     const journal_mode = try db.pragma([]const u8, allocator, .{}, "journal_mode", null);
     ///
-    pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
+    pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
         comptime var buf: [1024]u8 = undefined;
         comptime var query = getPragmaQuery(&buf, name, arg);
 
@@ -433,7 +433,7 @@ pub const Db = struct {
     /// The pragma name must be known at comptime.
     ///
     /// This cannot allocate memory. If your pragma command returns text you must use an array or call `pragmaAlloc`.
-    pub fn pragma(self: *Self, comptime Type: type, options: anytype, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
+    pub fn pragma(self: *Self, comptime Type: type, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
         comptime var buf: [1024]u8 = undefined;
         comptime var query = getPragmaQuery(&buf, name, arg);
 
@@ -615,7 +615,7 @@ pub fn Iterator(comptime Type: type) type {
                     }
 
                     if (@typeInfo(Type.BaseType) == .Int) {
-                        const innervalue = try self.readField(Type.BaseType, 0, options);
+                        const innervalue = try self.readField(Type.BaseType, options, 0);
                         return @intToEnum(Type, @intCast(TI.tag_type, innervalue));
                     }
 
@@ -683,14 +683,16 @@ pub fn Iterator(comptime Type: type) type {
                 },
                 .Pointer => {
                     debug.assert(columns == 1);
-                    return try self.readPointer(Type, allocator, 0);
+                    return try self.readPointer(Type, .{
+                        .allocator = allocator,
+                    }, 0);
                 },
                 .Enum => |TI| {
                     debug.assert(columns == 1);
 
-                    const innervalue = try self.readField(Type.BaseType, 0, .{
+                    const innervalue = try self.readField(Type.BaseType, .{
                         .allocator = allocator,
-                    });
+                    }, 0);
 
                     if (comptime std.meta.trait.isZigString(Type.BaseType)) {
                         return std.meta.stringToEnum(Type, innervalue) orelse unreachable;
@@ -847,7 +849,14 @@ pub fn Iterator(comptime Type: type) type {
             }
         }
 
-        fn readPointer(self: *Self, comptime PointerType: type, allocator: *mem.Allocator, i: usize) !PointerType {
+        fn readPointer(self: *Self, comptime PointerType: type, options: anytype, i: usize) !PointerType {
+            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+                @compileError("options passed to readPointer must be a struct");
+            }
+            if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+                @compileError("options passed to readPointer must have an allocator field");
+            }
+
             const type_info = @typeInfo(PointerType);
 
             var ret: PointerType = undefined;
@@ -855,13 +864,13 @@ pub fn Iterator(comptime Type: type) type {
                 .Pointer => |ptr| {
                     switch (ptr.size) {
                         .One => {
-                            ret = try allocator.create(ptr.child);
-                            errdefer allocator.destroy(ret);
+                            ret = try options.allocator.create(ptr.child);
+                            errdefer options.allocator.destroy(ret);
 
-                            ret.* = try self.readField(ptr.child, i, .{ .allocator = allocator });
+                            ret.* = try self.readField(ptr.child, options, i);
                         },
                         .Slice => switch (ptr.child) {
-                            u8 => ret = try self.readBytes(PointerType, allocator, i, .Text),
+                            u8 => ret = try self.readBytes(PointerType, options.allocator, i, .Text),
                             else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
                         },
                         else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
@@ -874,6 +883,10 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         fn readOptional(self: *Self, comptime OptionalType: type, options: anytype, _i: usize) !OptionalType {
+            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+                @compileError("options passed to readOptional must be a struct");
+            }
+
             const i = @intCast(c_int, _i);
             const type_info = @typeInfo(OptionalType);
 
@@ -887,7 +900,7 @@ pub fn Iterator(comptime Type: type) type {
                     if (datatype == c.SQLITE_NULL) {
                         return null;
                     } else {
-                        const val = try self.readField(opt.child, _i, options);
+                        const val = try self.readField(opt.child, options, _i);
                         ret = val;
                         return ret;
                     }
@@ -918,12 +931,16 @@ pub fn Iterator(comptime Type: type) type {
         //
         // TODO(vincent): add comptime checks for the fields/columns.
         fn readStruct(self: *Self, options: anytype) !Type {
+            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+                @compileError("options passed to readStruct must be a struct");
+            }
+
             var value: Type = undefined;
 
             inline for (@typeInfo(Type).Struct.fields) |field, _i| {
                 const i = @as(usize, _i);
 
-                const ret = try self.readField(field.field_type, i, options);
+                const ret = try self.readField(field.field_type, options, i);
 
                 @field(value, field.name) = ret;
             }
@@ -931,22 +948,36 @@ pub fn Iterator(comptime Type: type) type {
             return value;
         }
 
-        fn readField(self: *Self, comptime FieldType: type, i: usize, options: anytype) !FieldType {
+        fn readField(self: *Self, comptime FieldType: type, options: anytype, i: usize) !FieldType {
+            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+                @compileError("options passed to readField must be a struct");
+            }
+
             const field_type_info = @typeInfo(FieldType);
 
             return switch (FieldType) {
-                Blob => try self.readBytes(Blob, options.allocator, i, .Blob),
-                Text => try self.readBytes(Text, options.allocator, i, .Text),
+                Blob => blk: {
+                    if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+                        @compileError("options passed to readPointer must have an allocator field when reading a Blob");
+                    }
+                    break :blk try self.readBytes(Blob, options.allocator, i, .Blob);
+                },
+                Text => blk: {
+                    if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+                        @compileError("options passed to readField must have an allocator field when reading a Text");
+                    }
+                    break :blk try self.readBytes(Text, options.allocator, i, .Text);
+                },
                 else => switch (field_type_info) {
                     .Int => try self.readInt(FieldType, i),
                     .Float => try self.readFloat(FieldType, i),
                     .Bool => try self.readBool(i),
                     .Void => {},
                     .Array => try self.readArray(FieldType, i),
-                    .Pointer => try self.readPointer(FieldType, options.allocator, i),
+                    .Pointer => try self.readPointer(FieldType, options, i),
                     .Optional => try self.readOptional(FieldType, options, i),
                     .Enum => |TI| {
-                        const innervalue = try self.readField(FieldType.BaseType, i, options);
+                        const innervalue = try self.readField(FieldType.BaseType, options, i);
 
                         if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
                             return std.meta.stringToEnum(FieldType, innervalue) orelse unreachable;
@@ -1242,11 +1273,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// in the input query string.
         ///
         /// This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call `oneAlloc`.
-        pub fn one(self: *Self, comptime Type: type, options: anytype, values: anytype) !?Type {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
-                @compileError("options passed to iterator must be a struct");
-            }
-
+        pub fn one(self: *Self, comptime Type: type, options: QueryOptions, values: anytype) !?Type {
             var iter = try self.iterator(Type, values);
 
             const row = (try iter.next(options)) orelse return null;
@@ -1254,11 +1281,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         }
 
         /// oneAlloc is like `one` but can allocate memory.
-        pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) !?Type {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
-                @compileError("options passed to iterator must be a struct");
-            }
-
+        pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
             var iter = try self.iterator(Type, values);
 
             const row = (try iter.nextAlloc(allocator, options)) orelse return null;
@@ -1291,10 +1314,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// in the input query string.
         ///
         /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
-        pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: anytype, values: anytype) ![]Type {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
-                @compileError("options passed to iterator must be a struct");
-            }
+        pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
             var iter = try self.iterator(Type, values);
 
             var rows = std.ArrayList(Type).init(allocator);
