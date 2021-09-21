@@ -10,6 +10,12 @@ pub const Text = struct { data: []const u8 };
 const BindMarker = struct {
     typed: ?type = null, // null == untyped
     identifier: ?[]const u8 = null,
+    idType: IdType = .Integer,
+
+    pub const IdType = enum {
+        Integer,
+        String,
+    };
 };
 
 pub const ParsedQuery = struct {
@@ -42,6 +48,7 @@ pub const ParsedQuery = struct {
                         parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
                         current_bind_marker_type_pos = 0;
                         current_bind_marker_id_pos = 0;
+                        parsed_query.bind_markers[parsed_query.nb_bind_markers].idType = if (c == '?') .Integer else .String;
                         state = .BindMarker;
                         buf[pos] = c;
                         pos += 1;
@@ -52,7 +59,7 @@ pub const ParsedQuery = struct {
                     },
                 },
                 .BindMarker => switch (c) {
-                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':' or '@'."),
+                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
                     '{' => {
                         state = .BindMarkerType;
                     },
@@ -73,7 +80,7 @@ pub const ParsedQuery = struct {
                     },
                 },
                 .BindMarkerIdentifier => switch (c) {
-                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':' or '@'."),
+                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
                     '{' => {
                         state = .BindMarkerType;
                         current_bind_marker_type_pos = 0;
@@ -297,5 +304,44 @@ test "parsed query: query bind identifier" {
     inline for (testCases) |tc| {
         comptime var parsed_query = ParsedQuery.from(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
+    }
+}
+
+test "parsed query: bind markers identifier type" {
+    const testCase = struct {
+        query: []const u8,
+        expected_marker: BindMarker,
+    };
+
+    const testCases = &[_]testCase{
+        .{
+            .query = "foobar @ABC{usize}",
+            .expected_marker = .{ .idType = .String },
+        },
+        .{
+            .query = "foobar ?123{text}",
+            .expected_marker = .{ .idType = .Integer },
+        },
+        .{
+            .query = "foobar $abc{blob}",
+            .expected_marker = .{ .idType = .String },
+        },
+        .{
+            .query = "foobar ?123",
+            .expected_marker = .{ .idType = .Integer },
+        },
+        .{
+            .query = "foobar :abc",
+            .expected_marker = .{ .idType = .String },
+        }
+    };
+
+    inline for (testCases) |tc| {
+        comptime var parsed_query = ParsedQuery.from(tc.query);
+
+        try testing.expectEqual(@as(usize, 1), parsed_query.nb_bind_markers);
+
+        const bind_marker = parsed_query.bind_markers[0];
+        try testing.expectEqual(tc.expected_marker.idType, bind_marker.idType);
     }
 }
