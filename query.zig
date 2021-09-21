@@ -38,7 +38,10 @@ pub const ParsedQuery = struct {
         inline for (query) |c| {
             switch (state) {
                 .Start => switch (c) {
-                    '?' => {
+                    '?', ':', '@', '$' => {
+                        parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
+                        current_bind_marker_type_pos = 0;
+                        current_bind_marker_id_pos = 0;
                         state = .BindMarker;
                         buf[pos] = c;
                         pos += 1;
@@ -49,23 +52,20 @@ pub const ParsedQuery = struct {
                     },
                 },
                 .BindMarker => switch (c) {
+                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':' or '@'."),
                     '{' => {
-                        parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
                         state = .BindMarkerType;
-                        current_bind_marker_type_pos = 0;
                     },
                     else => {
                         if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)){
-                            parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
                             state = .BindMarkerIdentifier;
-                            current_bind_marker_id_pos = 0;
                             current_bind_marker_id[current_bind_marker_id_pos] = c;
                             current_bind_marker_id_pos += 1;
                         } else {
                             // This is a bind marker without a type.
                             state = .Start;
 
-                            parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
+                            parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
                             parsed_query.nb_bind_markers += 1;
                         }
                         buf[pos] = c;
@@ -73,6 +73,7 @@ pub const ParsedQuery = struct {
                     },
                 },
                 .BindMarkerIdentifier => switch (c) {
+                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':' or '@'."),
                     '{' => {
                         state = .BindMarkerType;
                         current_bind_marker_type_pos = 0;
@@ -123,9 +124,7 @@ pub const ParsedQuery = struct {
         } else if (state == .BindMarkerIdentifier) {
             parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = std.fmt.comptimePrint("{s}", .{current_bind_marker_id[0..current_bind_marker_id_pos]});
             parsed_query.nb_bind_markers += 1;
-        }
-
-        if (state == .BindMarkerType) {
+        } else if (state == .BindMarkerType) {
             @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type");
         }
 
@@ -247,7 +246,7 @@ test "parsed query: bind markers identifier" {
 
     const testCases = &[_]testCase{
         .{
-            .query = "foobar ?ABC{usize}",
+            .query = "foobar @ABC{usize}",
             .expected_marker = .{ .identifier = "ABC" },
         },
         .{
@@ -255,7 +254,7 @@ test "parsed query: bind markers identifier" {
             .expected_marker = .{ .identifier = "123" },
         },
         .{
-            .query = "foobar ?abc{blob}",
+            .query = "foobar $abc{blob}",
             .expected_marker = .{ .identifier = "abc" },
         },
         .{
@@ -267,7 +266,7 @@ test "parsed query: bind markers identifier" {
     inline for (testCases) |tc| {
         comptime var parsed_query = ParsedQuery.from(tc.query);
 
-        try testing.expectEqual(1, parsed_query.nb_bind_markers);
+        try testing.expectEqual(@as(usize, 1), parsed_query.nb_bind_markers);
 
         const bind_marker = parsed_query.bind_markers[0];
         try testing.expectEqualStrings(tc.expected_marker.identifier.?, bind_marker.identifier.?);
@@ -282,16 +281,16 @@ test "parsed query: query bind identifier" {
 
     const testCases = &[_]testCase{
         .{
-            .query = "INSERT INTO user(id, name, age) VALUES(?id{usize}, ?name{[]const u8}, ?age{u32})",
-            .expected_query = "INSERT INTO user(id, name, age) VALUES(?id, ?name, ?age)",
+            .query = "INSERT INTO user(id, name, age) VALUES(@id{usize}, :name{[]const u8}, $age{u32})",
+            .expected_query = "INSERT INTO user(id, name, age) VALUES(@id, :name, $age)",
         },
         .{
-            .query = "SELECT id, name, age FROM user WHER age > ?ageGT{u32} AND age < ?ageLT{u32}",
-            .expected_query = "SELECT id, name, age FROM user WHER age > ?ageGT AND age < ?ageLT",
+            .query = "SELECT id, name, age FROM user WHER age > :ageGT{u32} AND age < @ageLT{u32}",
+            .expected_query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < @ageLT",
         },
         .{
-            .query = "SELECT id, name, age FROM user WHER age > ?ageGT AND age < ?ageLT",
-            .expected_query = "SELECT id, name, age FROM user WHER age > ?ageGT AND age < ?ageLT",
+            .query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < $ageLT",
+            .expected_query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < $ageLT",
         },
     };
 
