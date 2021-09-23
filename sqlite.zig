@@ -391,11 +391,11 @@ pub const Db = struct {
         return getLastDetailedErrorFromDb(self.db);
     }
 
-    fn getPragmaQuery(comptime buf: []u8, comptime name: []const u8, comptime arg: ?[]const u8) []const u8 {
+    fn getPragmaQuery(comptime name: []const u8, comptime arg: ?[]const u8) []const u8 {
         if (arg) |a| {
-            return try std.fmt.bufPrint(buf, "PRAGMA {s} = {s}", .{ name, a });
+            return std.fmt.comptimePrint("PRAGMA {s} = {s}", .{ name, a });
         }
-        return try std.fmt.bufPrint(buf, "PRAGMA {s}", .{name});
+        return std.fmt.comptimePrint("PRAGMA {s}", .{name});
     }
 
     /// getLastInsertRowID returns the last inserted rowid.
@@ -411,8 +411,7 @@ pub const Db = struct {
     ///     const journal_mode = try db.pragma([]const u8, allocator, .{}, "journal_mode", null);
     ///
     pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
-        comptime var buf: [1024]u8 = undefined;
-        comptime var query = getPragmaQuery(&buf, name, arg);
+        comptime var query = getPragmaQuery(name, arg);
 
         var stmt = try self.prepare(query);
         defer stmt.deinit();
@@ -434,8 +433,7 @@ pub const Db = struct {
     ///
     /// This cannot allocate memory. If your pragma command returns text you must use an array or call `pragmaAlloc`.
     pub fn pragma(self: *Self, comptime Type: type, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
-        comptime var buf: [1024]u8 = undefined;
-        comptime var query = getPragmaQuery(&buf, name, arg);
+        comptime var query = getPragmaQuery(name, arg);
 
         var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();
