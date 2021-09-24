@@ -981,6 +981,10 @@ pub fn Iterator(comptime Type: type) type {
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
+                    .Struct => {
+                        const innervalue = try self.readField(FieldType.BaseType, options, i);
+                        return try FieldType.readField(options.allocator, innervalue);
+                    },
                     else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
             };
@@ -1185,6 +1189,9 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                             return try self.bindField(FieldType.BaseType, options, field_name, i, @enumToInt(field));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
+                    },
+                    .Struct => {
+                        return try self.bindField(FieldType.BaseType, options, field_name, i, try field.bindField(options.allocator));
                     },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                 },
