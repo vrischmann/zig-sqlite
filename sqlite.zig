@@ -525,10 +525,10 @@ pub const Db = struct {
 
     /// prepareDynamic prepares a dynamic statement for the `query` provided.
     ///
-    /// The query will be directly sent to create statement without any analysing.
-    /// That means such statement does not support comptime type-checking.
+    /// The query will be directly sent to create statement without analysing.
+    /// That means such statements does not support comptime type-checking.
     ///
-    /// Dynamic statement supports host parameter names. See `DynamicStatement`
+    /// Dynamic statement supports host parameter names. See `DynamicStatement`.
     pub fn prepareDynamic(self: *Self, query: []const u8) !DynamicStatement {
         return try self.prepareDynamicWithDiags(query, .{});
     }
@@ -1047,9 +1047,9 @@ pub const StatementOptions = struct {};
 ///
 /// It doesn't matter "@", "$" or ":" is being used, the one will be automatically chosen,
 /// but it's not recommended to mix them up, because: sqlite3 thinks @A, $A and :A are
-/// different, but `DynamicStatement` will try :A, @A, $A in order when you passing an 'A' field.
+/// different, but `DynamicStatement` will try :A, @A, $A in order when you passing a 'A' field.
 /// The ":A" will be binded while "@A", "$A" are left behind.
-/// TL;DR: don't use same name with different indicator ("@", "$", ":").
+/// TL;DR: don't use same name with different prefix ("@", "$", ":").
 ///
 /// You can use unnamed markers with tuple:
 /// ````
