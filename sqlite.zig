@@ -1214,6 +1214,23 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             }
         }
 
+        /// execAlloc is like `exec` but can allocate memory.
+        pub fn execAlloc(self: *Self, allocator: *std.mem.Allocator, options: QueryOptions, values: anytype) !void {
+            try self.bind(.{ .allocator = allocator }, values);
+
+            var dummy_diags = Diagnostics{};
+            var diags = options.diags orelse &dummy_diags;
+
+            const result = c.sqlite3_step(self.stmt);
+            switch (result) {
+                c.SQLITE_DONE => {},
+                else => {
+                    diags.err = getLastDetailedErrorFromDb(self.db);
+                    return errors.errorFromResultCode(result);
+                },
+            }
+        }
+
         /// iterator returns an iterator to read data from the result set, one row at a time.
         ///
         /// The data in the row is used to populate a value of the type `Type`.
@@ -1234,6 +1251,17 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// The iterator _must not_ outlive the statement.
         pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
             try self.bind({}, values);
+
+            var res: Iterator(Type) = undefined;
+            res.db = self.db;
+            res.stmt = self.stmt;
+
+            return res;
+        }
+
+        /// iteratorAlloc is like `iterator` but can allocate memory.
+        pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: *std.mem.Allocator, values: anytype) !Iterator(Type) {
+            try self.bind(.{ .allocator = allocator }, values);
 
             var res: Iterator(Type) = undefined;
             res.db = self.db;
@@ -1276,7 +1304,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 
         /// oneAlloc is like `one` but can allocate memory.
         pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
-            var iter = try self.iterator(Type, values);
+            var iter = try self.iteratorAlloc(Type, allocator, values);
 
             const row = (try iter.nextAlloc(allocator, options)) orelse return null;
             return row;
@@ -1309,7 +1337,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///
         /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
         pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
-            var iter = try self.iterator(Type, values);
+            var iter = try self.iteratorAlloc(Type, allocator, values);
 
             var rows = std.ArrayList(Type).init(allocator);
             while (try iter.nextAlloc(allocator, options)) |row| {
