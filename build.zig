@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 var sqlite3: ?*std.build.LibExeObjStep = null;
 
@@ -44,8 +45,8 @@ const TestTarget = struct {
     bundled: bool,
 };
 
-const all_test_targets = switch (std.Target.current.cpu.arch) {
-    .x86_64 => switch (std.Target.current.os.tag) {
+const all_test_targets = switch (builtin.target.cpu.arch) {
+    .x86_64 => switch (builtin.target.os.tag) {
         .linux => [_]TestTarget{
             TestTarget{
                 .target = .{},
