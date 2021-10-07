@@ -2275,7 +2275,7 @@ const MyData = struct {
         var i: usize = 0;
         while (i < result.len) : (i += 1) {
             const j = i * 2;
-            result[i] = std.fmt.parseUnsigned(u8, value[j..][0..2], 16) catch unreachable;
+            result[i] = try std.fmt.parseUnsigned(u8, value[j..][0..2], 16);
         }
         return MyData{ .data = result };
     }
