@@ -2258,3 +2258,60 @@ fn dbMode(allocator: *mem.Allocator) Db.Mode {
         break :blk .{ .File = path };
     };
 }
+
+const MyData = struct {
+    data: [16]u8,
+
+    const BaseType = []const u8;
+
+    pub fn bindField(self: MyData, allocator: *std.mem.Allocator) !BaseType {
+        return try std.fmt.allocPrint(allocator, "{}", .{std.fmt.fmtSliceHexLower(&self.data)});
+    }
+
+    pub fn readField(alloc: *std.mem.Allocator, value: BaseType) !MyData {
+        _ = alloc;
+
+        var result = [_]u8{0} ** 16;
+        var i: usize = 0;
+        while (i < result.len) : (i += 1) {
+            const j = i * 2;
+            result[i] = std.fmt.parseUnsigned(u8, value[j..][0..2], 16) catch unreachable;
+        }
+        return MyData{ .data = result };
+    }
+};
+
+test "sqlite: bind custom type" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try addTestData(&db);
+
+    const my_data = MyData{
+        .data = [_]u8{'x'} ** 16,
+    };
+
+    {
+        // insertion
+        var stmt = try db.prepare("INSERT INTO article(data) VALUES(?)");
+        try stmt.execAlloc(&arena.allocator, .{}, .{my_data});
+    }
+    {
+        // reading back
+        var stmt = try db.prepare("SELECT * FROM article");
+        defer stmt.deinit();
+
+        const Article = struct {
+            id: u32,
+            author_id: u32,
+            data: MyData,
+            is_published: bool,
+        };
+
+        const row = try stmt.oneAlloc(Article, &arena.allocator, .{}, .{});
+
+        try testing.expect(row != null);
+        try testing.expectEqualSlices(u8, &my_data.data, &row.?.data.data);
+    }
+}
