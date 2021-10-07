@@ -981,6 +981,10 @@ pub fn Iterator(comptime Type: type) type {
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
+                    .Struct => {
+                        const innervalue = try self.readField(FieldType.BaseType, options, i);
+                        return try FieldType.readField(options.allocator, innervalue);
+                    },
                     else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
             };
@@ -1100,7 +1104,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///   }
         ///
         /// The types are checked at comptime.
-        fn bind(self: *Self, values: anytype) void {
+        fn bind(self: *Self, options: anytype, values: anytype) !void {
             const StructType = @TypeOf(values);
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
@@ -1129,7 +1133,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 
                 const field_value = @field(values, struct_field.name);
 
-                self.bindField(struct_field.field_type, struct_field.name, _i, field_value);
+                try self.bindField(struct_field.field_type, options, struct_field.name, _i, field_value);
             }
         }
 
@@ -1139,7 +1143,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             }
         }
 
-        fn bindField(self: *Self, comptime FieldType: type, comptime field_name: []const u8, i: c_int, field: FieldType) void {
+        fn bindField(self: *Self, comptime FieldType: type, options: anytype, comptime field_name: []const u8, i: c_int, field: FieldType) !void {
             const field_type_info = @typeInfo(FieldType);
             const column = i + 1;
 
@@ -1152,7 +1156,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                     .Float, .ComptimeFloat => _ = c.sqlite3_bind_double(self.stmt, column, field),
                     .Bool => _ = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field)),
                     .Pointer => |ptr| switch (ptr.size) {
-                        .One => self.bindField(ptr.child, field_name, i, field.*),
+                        .One => try self.bindField(ptr.child, options, field_name, i, field.*),
                         .Slice => switch (ptr.child) {
                             u8 => {
                                 _ = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), null);
@@ -1172,19 +1176,22 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
                         }
                     },
                     .Optional => |opt| if (field) |non_null_field| {
-                        self.bindField(opt.child, field_name, i, non_null_field);
+                        try self.bindField(opt.child, options, field_name, i, non_null_field);
                     } else {
                         _ = c.sqlite3_bind_null(self.stmt, column);
                     },
                     .Null => _ = c.sqlite3_bind_null(self.stmt, column),
                     .Enum => {
                         if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
-                            return self.bindField(FieldType.BaseType, field_name, i, @tagName(field));
+                            return try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
                         }
                         if (@typeInfo(FieldType.BaseType) == .Int) {
-                            return self.bindField(FieldType.BaseType, field_name, i, @enumToInt(field));
+                            return try self.bindField(FieldType.BaseType, options, field_name, i, @enumToInt(field));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
+                    },
+                    .Struct => {
+                        return try self.bindField(FieldType.BaseType, options, field_name, i, try field.bindField(options.allocator));
                     },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                 },
@@ -1199,7 +1206,24 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// in the input query string.
         ///
         pub fn exec(self: *Self, options: QueryOptions, values: anytype) !void {
-            self.bind(values);
+            try self.bind({}, values);
+
+            var dummy_diags = Diagnostics{};
+            var diags = options.diags orelse &dummy_diags;
+
+            const result = c.sqlite3_step(self.stmt);
+            switch (result) {
+                c.SQLITE_DONE => {},
+                else => {
+                    diags.err = getLastDetailedErrorFromDb(self.db);
+                    return errors.errorFromResultCode(result);
+                },
+            }
+        }
+
+        /// execAlloc is like `exec` but can allocate memory.
+        pub fn execAlloc(self: *Self, allocator: *std.mem.Allocator, options: QueryOptions, values: anytype) !void {
+            try self.bind(.{ .allocator = allocator }, values);
 
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
@@ -1233,7 +1257,18 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///
         /// The iterator _must not_ outlive the statement.
         pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
-            self.bind(values);
+            try self.bind({}, values);
+
+            var res: Iterator(Type) = undefined;
+            res.db = self.db;
+            res.stmt = self.stmt;
+
+            return res;
+        }
+
+        /// iteratorAlloc is like `iterator` but can allocate memory.
+        pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: *std.mem.Allocator, values: anytype) !Iterator(Type) {
+            try self.bind(.{ .allocator = allocator }, values);
 
             var res: Iterator(Type) = undefined;
             res.db = self.db;
@@ -1276,7 +1311,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 
         /// oneAlloc is like `one` but can allocate memory.
         pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
-            var iter = try self.iterator(Type, values);
+            var iter = try self.iteratorAlloc(Type, allocator, values);
 
             const row = (try iter.nextAlloc(allocator, options)) orelse return null;
             return row;
@@ -1309,7 +1344,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///
         /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
         pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
-            var iter = try self.iterator(Type, values);
+            var iter = try self.iteratorAlloc(Type, allocator, values);
 
             var rows = std.ArrayList(Type).init(allocator);
             while (try iter.nextAlloc(allocator, options)) |row| {
@@ -2222,4 +2257,61 @@ fn dbMode(allocator: *mem.Allocator) Db.Mode {
         std.fs.cwd().deleteFile(path) catch {};
         break :blk .{ .File = path };
     };
+}
+
+const MyData = struct {
+    data: [16]u8,
+
+    const BaseType = []const u8;
+
+    pub fn bindField(self: MyData, allocator: *std.mem.Allocator) !BaseType {
+        return try std.fmt.allocPrint(allocator, "{}", .{std.fmt.fmtSliceHexLower(&self.data)});
+    }
+
+    pub fn readField(alloc: *std.mem.Allocator, value: BaseType) !MyData {
+        _ = alloc;
+
+        var result = [_]u8{0} ** 16;
+        var i: usize = 0;
+        while (i < result.len) : (i += 1) {
+            const j = i * 2;
+            result[i] = try std.fmt.parseUnsigned(u8, value[j..][0..2], 16);
+        }
+        return MyData{ .data = result };
+    }
+};
+
+test "sqlite: bind custom type" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try addTestData(&db);
+
+    const my_data = MyData{
+        .data = [_]u8{'x'} ** 16,
+    };
+
+    {
+        // insertion
+        var stmt = try db.prepare("INSERT INTO article(data) VALUES(?)");
+        try stmt.execAlloc(&arena.allocator, .{}, .{my_data});
+    }
+    {
+        // reading back
+        var stmt = try db.prepare("SELECT * FROM article");
+        defer stmt.deinit();
+
+        const Article = struct {
+            id: u32,
+            author_id: u32,
+            data: MyData,
+            is_published: bool,
+        };
+
+        const row = try stmt.oneAlloc(Article, &arena.allocator, .{}, .{});
+
+        try testing.expect(row != null);
+        try testing.expectEqualSlices(u8, &my_data.data, &row.?.data.data);
+    }
 }
