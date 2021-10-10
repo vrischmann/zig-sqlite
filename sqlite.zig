@@ -424,7 +424,7 @@ pub const Db = struct {
     ///
     /// Here is how to set a pragma value:
     ///
-    ///     try db.pragma(void, .{}, "foreign_keys", "1");
+    ///     _ = try db.pragma(void, .{}, "foreign_keys", "1");
     ///
     /// Here is how to query a pragama value:
     ///
