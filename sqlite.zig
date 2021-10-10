@@ -426,7 +426,7 @@ pub const Db = struct {
     ///
     ///     _ = try db.pragma(void, .{}, "foreign_keys", "1");
     ///
-    /// Here is how to query a pragama value:
+    /// Here is how to query a pragma value:
     ///
     ///     const journal_mode = try db.pragma([128:0]const u8, .{}, "journal_mode", null);
     ///
