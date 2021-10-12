@@ -467,7 +467,7 @@ pub const Db = struct {
     /// prepareWithDiags is like `prepare` but takes an additional options argument.
     pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !blk: {
         @setEvalBranchQuota(100000);
-        break :blk Statement(.{}, ParsedQuery.from(query));
+        break :blk StatementType(.{}, query);
     } {
         @setEvalBranchQuota(100000);
         const parsed_query = ParsedQuery.from(query);
@@ -490,7 +490,7 @@ pub const Db = struct {
     /// If you want additional error information in case of failures, use `prepareWithDiags`.
     pub fn prepare(self: *Self, comptime query: []const u8) !blk: {
         @setEvalBranchQuota(100000);
-        break :blk Statement(.{}, ParsedQuery.from(query));
+        break :blk StatementType(.{}, query);
     } {
         @setEvalBranchQuota(100000);
         const parsed_query = ParsedQuery.from(query);
@@ -990,6 +990,20 @@ pub fn Iterator(comptime Type: type) type {
             };
         }
     };
+}
+
+/// StatementType returns the type of a statement you would get by calling Db.prepare and derivatives.
+///
+/// Useful if you want to store a statement in a struct, for example:
+///
+///     const MyStatements = struct {
+///         insert_stmt: sqlite.StatementType(.{}, insert_query),
+///         delete_stmt: sqlite.StatementType(.{}, delete_query),
+///     };
+///
+pub fn StatementType(comptime opts: StatementOptions, comptime query: []const u8) type {
+    @setEvalBranchQuota(100000);
+    return Statement(opts, ParsedQuery.from(query));
 }
 
 pub const StatementOptions = struct {};
@@ -1674,7 +1688,7 @@ test "sqlite: read a single text value" {
     inline for (types) |typ| {
         const query = "SELECT name FROM user WHERE id = ?{usize}";
 
-        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+        var stmt: StatementType(.{}, query) = try db.prepare(query);
         defer stmt.deinit();
 
         const name = try stmt.oneAlloc(typ, &arena.allocator, .{}, .{
@@ -1721,7 +1735,7 @@ test "sqlite: read a single integer value" {
     inline for (types) |typ| {
         const query = "SELECT age FROM user WHERE id = ?{usize}";
 
-        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+        var stmt: StatementType(.{}, query) = try db.prepare(query);
         defer stmt.deinit();
 
         var age = try stmt.one(typ, .{}, .{
@@ -1755,7 +1769,7 @@ test "sqlite: read a single value into an enum backed by an integer" {
 
     // Use one
     {
-        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+        var stmt: StatementType(.{}, query) = try db.prepare(query);
         defer stmt.deinit();
 
         const b = try stmt.one(IntColor, .{}, .{
@@ -1767,7 +1781,7 @@ test "sqlite: read a single value into an enum backed by an integer" {
 
     // Use oneAlloc
     {
-        var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+        var stmt: StatementType(.{}, query) = try db.prepare(query);
         defer stmt.deinit();
 
         const b = try stmt.oneAlloc(IntColor, &arena.allocator, .{}, .{
@@ -1792,7 +1806,7 @@ test "sqlite: read a single value into an enum backed by a string" {
 
     const query = "SELECT favorite_color FROM user WHERE id = ?{usize}";
 
-    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    var stmt: StatementType(.{}, query) = try db.prepare(query);
     defer stmt.deinit();
 
     const b = try stmt.oneAlloc(TestUser.Color, &arena.allocator, .{}, .{
@@ -1808,7 +1822,7 @@ test "sqlite: read a single value into void" {
 
     const query = "SELECT age FROM user WHERE id = ?{usize}";
 
-    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    var stmt: StatementType(.{}, query) = try db.prepare(query);
     defer stmt.deinit();
 
     _ = try stmt.one(void, .{}, .{
@@ -1822,7 +1836,7 @@ test "sqlite: read a single value into bool" {
 
     const query = "SELECT id FROM user WHERE id = ?{usize}";
 
-    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    var stmt: StatementType(.{}, query) = try db.prepare(query);
     defer stmt.deinit();
 
     const b = try stmt.one(bool, .{}, .{
@@ -1844,7 +1858,7 @@ test "sqlite: insert bool and bind bool" {
 
     const query = "SELECT id FROM article WHERE is_published = ?{bool}";
 
-    var stmt: Statement(.{}, ParsedQuery.from(query)) = try db.prepare(query);
+    var stmt: StatementType(.{}, query) = try db.prepare(query);
     defer stmt.deinit();
 
     const b = try stmt.one(bool, .{}, .{
