@@ -1935,7 +1935,9 @@ test "sqlite: optional" {
     var db = try getTestDb();
     try addTestData(&db);
 
-    try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 1, null, true });
+    const published: ?bool = true;
+
+    try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 1, null, published });
 
     var stmt = try db.prepare("SELECT data, is_published FROM article");
     defer stmt.deinit();
