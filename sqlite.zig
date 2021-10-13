@@ -1122,7 +1122,7 @@ pub const DynamicStatement = struct {
         if (@TypeOf(value) != void) {
             if (@typeInfo(@TypeOf(value)) == .ErrorUnion and @typeInfo(@TypeOf(value)).ErrorUnion.payload == void) {
                 return value;
-            } else if (@TypeOf(value) == c_int and value == c.SQLITE_OK){
+            } else if (@TypeOf(value) == c_int and value == c.SQLITE_OK) {
                 return;
             } else {
                 return errors.errorFromResultCode(value);
@@ -1153,13 +1153,13 @@ pub const DynamicStatement = struct {
                     else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                 },
                 .Array => |arr| switch (arr.child) {
-                        u8 => u8arr: {
-                            const data: []const u8 = field[0..field.len];
+                    u8 => u8arr: {
+                        const data: []const u8 = field[0..field.len];
 
-                            break :u8arr c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
-                        },
-                        else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
+                        break :u8arr c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
                     },
+                    else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
+                },
                 .Optional => |opt| if (field) |non_null_field| {
                     return try self.bindField(opt.child, options, field_name, i, non_null_field);
                 } else optional_null: {
@@ -1196,10 +1196,10 @@ pub const DynamicStatement = struct {
     }
 
     fn sqlite3BindParameterIndex(stmt: *c.sqlite3_stmt, comptime name: []const u8) c_int {
-        inline for (.{":", "@", "$"}) |prefix| {
-            const id = std.fmt.comptimePrint(prefix++"{s}", .{name});
+        inline for (.{ ":", "@", "$" }) |prefix| {
+            const id = std.fmt.comptimePrint(prefix ++ "{s}", .{name});
             const i = c.sqlite3_bind_parameter_index(stmt, id);
-            if (i > 0) return i-1; // .bindField uses 0-based while sqlite3 uses 1-based index.
+            if (i > 0) return i - 1; // .bindField uses 0-based while sqlite3 uses 1-based index.
         }
         return -1;
     }
@@ -1212,12 +1212,7 @@ pub const DynamicStatement = struct {
         inline for (StructTypeInfo.fields) |struct_field| {
             const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
             if (i >= 0) {
-                try self.bindField(
-                    struct_field.field_type,
-                    options,
-                    struct_field.name,
-                    i,
-                    @field(values, struct_field.name));
+                try self.bindField(struct_field.field_type, options, struct_field.name, i, @field(values, struct_field.name));
             } else if (i == -1) {
                 return errors.SQLiteError.SQLiteNotFound;
                 // bug: do not put into a else block. reproduced in 0.8.1 and 0.9.0+dev.1193
@@ -1228,9 +1223,9 @@ pub const DynamicStatement = struct {
     }
 
     fn smartBind(self: *Self, options: anytype, values: anytype) !void {
-        if (std.meta.fieldNames(@TypeOf(values)).len == 0){
+        if (std.meta.fieldNames(@TypeOf(values)).len == 0) {
             return;
-        }else if (std.meta.trait.isTuple(@TypeOf(values))){
+        } else if (std.meta.trait.isTuple(@TypeOf(values))) {
             try self.bind(options, values);
         } else {
             try self.bindNamedStruct(options, values);
@@ -1417,7 +1412,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         dynamicStmt: DynamicStatement,
 
         fn prepare(db: *Db, options: QueryOptions, flags: c_uint) !Self {
-            return Self {
+            return Self{
                 .dynamicStmt = try DynamicStatement.prepare(db, query.getQuery(), options, flags),
             };
         }
@@ -1518,7 +1513,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         ///
         pub fn exec(self: *Self, options: QueryOptions, values: anytype) !void {
             try self.bind(.{}, values);
-            
+
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
 
