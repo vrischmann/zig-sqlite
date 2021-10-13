@@ -1161,7 +1161,7 @@ pub const DynamicStatement = struct {
                         else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
                     },
                 .Optional => |opt| if (field) |non_null_field| {
-                    try self.bindField(opt.child, options, field_name, i, non_null_field);
+                    return try self.bindField(opt.child, options, field_name, i, non_null_field);
                 } else optional_null: {
                     break :optional_null c.sqlite3_bind_null(self.stmt, column);
                 },
