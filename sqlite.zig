@@ -1118,7 +1118,7 @@ pub const DynamicStatement = struct {
         }
     }
 
-    fn tanslateError(value: anytype) !void {
+    fn translateError(value: anytype) !void {
         if (@TypeOf(value) != void) {
             if (@typeInfo(@TypeOf(value)) == .ErrorUnion and @typeInfo(@TypeOf(value)).ErrorUnion.payload == void) {
                 return value;
@@ -1182,7 +1182,7 @@ pub const DynamicStatement = struct {
             },
         };
 
-        return tanslateError(val);
+        return translateError(val);
     }
 
     fn bind(self: *Self, options: anytype, values: anytype) !void {
