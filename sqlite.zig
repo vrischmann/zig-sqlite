@@ -1209,7 +1209,7 @@ pub const DynamicStatement = struct {
 
     fn sqlite3BindParameterIndex(stmt: *c.sqlite3_stmt, comptime name: []const u8) c_int {
         inline for (.{ ":", "@", "$" }) |prefix| {
-            const id = std.fmt.comptimePrint(prefix ++ "{s}", .{name});
+            const id = prefix ++ name;
             const i = c.sqlite3_bind_parameter_index(stmt, id);
             if (i > 0) return i - 1; // .bindField uses 0-based while sqlite3 uses 1-based index.
         }
