@@ -1042,38 +1042,38 @@ pub fn StatementType(comptime opts: StatementOptions, comptime query: []const u8
 
 pub const StatementOptions = struct {};
 
-/// DynamicStatement represents a statement in sqlite3. It almost works like sqlite3_stmt.
-/// The difference to `Statement` is that this structure comes without addtional comptime type-checking.
-/// 
-/// The structure supports "host parameter names", which used in query to identify bind marker:
-/// ````
-///   SELECT email FROM users WHERE name = @name AND password = $password;
-/// ````
-/// 
-/// To use these names, pass a normal structure instead of a tuple. Set `stmt` is the related `DynamicStatement`:
-/// ````
-///   try stmt.one(.{
-///     .name = "Tankman", .password = "Passw0rd",
-///   })
-/// ````
+/// DynamicStatement is a wrapper around a SQLite statement, providing high-level functions to execute
+/// a statement and retrieve rows for SELECT queries.
 ///
-/// It doesn't matter "@", "$" or ":" is being used, the one will be automatically chosen,
-/// but it's not recommended to mix them up, because: sqlite3 thinks @A, $A and :A are
-/// different, but `DynamicStatement` will try :A, @A, $A in order when you passing a 'A' field.
-/// The ":A" will be binded while "@A", "$A" are left behind.
-/// TL;DR: don't use same name with different prefix ("@", "$", ":").
+/// The difference to `Statement` is that this type isn't bound to a single parsed query and can execute any query.
 ///
-/// You can use unnamed markers with tuple:
-/// ````
-///   SELECT email FROM users WHERE name = ? AND password = ?;
-/// ````
-/// 
-/// ````
-///   try stmt.one(.{"Tankman", "Passw0rd"});
-/// ````
+/// `DynamicStatement` supports "host parameter names", which can be used in a query to identify a bind marker:
 ///
+///     SELECT email FROM users WHERE name = @name AND password = $password;
+///
+/// You can read more about these parameters in the sqlite documentation: https://sqlite.org/c3ref/bind_blob.html
+///
+/// To use these names use an anonymous struct with corresponding names like this:
+///
+///     const stmt = "SELECT * FROM users WHERE name = @name AND password = @pasdword";
+///     const row = try stmt.one(Row, .{
+///         .name = "Tankman",
+///         .password = "Passw0rd",
+///     });
+///
+/// This works regardless of the prefix you used in the query.
+/// While using the same name with a different prefix is supported by sqlite, `DynamicStatement` doesn't support
+/// it because we can't have multiple fields in a struct with the same name.
+///
+/// You can also use unnamed markers with a tuple:
+///
+///     const stmt = "SELECT email FROM users WHERE name = ? AND password = ?";
+///     const row = try stmt.one(Row, .{"Tankman", "Passw0rd"});
+///
+/// TODO(vincent): clarify the following
 /// Named and unnamed markers could not be mixed, functions might be failed in slient.
 /// (Just like sqlite3's sqlite3_stmt, the unbinded values will be treated as NULL.)
+///
 pub const DynamicStatement = struct {
     db: *c.sqlite3,
     stmt: *c.sqlite3_stmt,
