@@ -1439,16 +1439,16 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
     return struct {
         const Self = @This();
 
-        dynamicStmt: DynamicStatement,
+        dynamic_stmt: DynamicStatement,
 
         fn prepare(db: *Db, options: QueryOptions, flags: c_uint) !Self {
             return Self{
-                .dynamicStmt = try DynamicStatement.prepare(db, query.getQuery(), options, flags),
+                .dynamic_stmt = try DynamicStatement.prepare(db, query.getQuery(), options, flags),
             };
         }
 
         pub fn dynamic(self: *Self) *DynamicStatement {
-            return &self.dynamicStmt;
+            return &self.dynamic_stmt;
         }
 
         /// deinit releases the prepared statement.
