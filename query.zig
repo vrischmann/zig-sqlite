@@ -64,7 +64,7 @@ pub const ParsedQuery = struct {
                         state = .BindMarkerType;
                     },
                     else => {
-                        if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)){
+                        if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)) {
                             state = .BindMarkerIdentifier;
                             current_bind_marker_id[current_bind_marker_id_pos] = c;
                             current_bind_marker_id_pos += 1;
@@ -86,12 +86,12 @@ pub const ParsedQuery = struct {
                         current_bind_marker_type_pos = 0;
 
                         // A bind marker with id and type: ?AAA{[]const u8}, we don't need move the pointer.
-                        if (current_bind_marker_id_pos > 0){
+                        if (current_bind_marker_id_pos > 0) {
                             parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = std.fmt.comptimePrint("{s}", .{current_bind_marker_id[0..current_bind_marker_id_pos]});
                         }
                     },
                     else => {
-                        if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)){
+                        if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)) {
                             current_bind_marker_id[current_bind_marker_id_pos] = c;
                             current_bind_marker_id_pos += 1;
                         } else {
@@ -313,28 +313,22 @@ test "parsed query: bind markers identifier type" {
         expected_marker: BindMarker,
     };
 
-    const testCases = &[_]testCase{
-        .{
-            .query = "foobar @ABC{usize}",
-            .expected_marker = .{ .id_type = .String },
-        },
-        .{
-            .query = "foobar ?123{text}",
-            .expected_marker = .{ .id_type = .Integer },
-        },
-        .{
-            .query = "foobar $abc{blob}",
-            .expected_marker = .{ .id_type = .String },
-        },
-        .{
-            .query = "foobar ?123",
-            .expected_marker = .{ .id_type = .Integer },
-        },
-        .{
-            .query = "foobar :abc",
-            .expected_marker = .{ .id_type = .String },
-        }
-    };
+    const testCases = &[_]testCase{ .{
+        .query = "foobar @ABC{usize}",
+        .expected_marker = .{ .id_type = .String },
+    }, .{
+        .query = "foobar ?123{text}",
+        .expected_marker = .{ .id_type = .Integer },
+    }, .{
+        .query = "foobar $abc{blob}",
+        .expected_marker = .{ .id_type = .String },
+    }, .{
+        .query = "foobar ?123",
+        .expected_marker = .{ .id_type = .Integer },
+    }, .{
+        .query = "foobar :abc",
+        .expected_marker = .{ .id_type = .String },
+    } };
 
     inline for (testCases) |tc| {
         comptime var parsed_query = ParsedQuery.from(tc.query);
