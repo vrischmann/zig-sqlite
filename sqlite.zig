@@ -577,6 +577,127 @@ pub const Db = struct {
     pub fn openBlob(self: *Self, db_name: Blob.DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: Blob.OpenFlags) Blob.OpenError!Blob {
         return Blob.open(self.db, db_name, table, column, row, flags);
     }
+
+    /// savepoint starts a new named transaction.
+    ///
+    /// The returned type is a helper useful for managing commits and rollbacks, for example:
+    ///
+    ///     var savepoint = try db.savepoint("foobar");
+    ///     defer savepoint.rollback();
+    ///
+    ///     try db.exec("INSERT INTO foo(id, name) VALUES(?, ?)", .{ 1, "foo" });
+    ///
+    ///     savepoint.commit();
+    ///
+    pub fn savepoint(self: *Self, name: []const u8) Savepoint.InitError!Savepoint {
+        return Savepoint.init(self, name);
+    }
+};
+
+/// Savepoint is a helper type for managing savepoints.
+///
+/// A savepoint creates a transaction like BEGIN/COMMIT but they're named and can be nested.
+/// See https://sqlite.org/lang_savepoint.html.
+///
+/// You can create a savepoint like this:
+///
+///     var savepoint = try db.savepoint("foobar");
+///     defer savepoint.rollback();
+///
+///     ...
+///
+///     Savepoint.commit();
+///
+/// This is equivalent to BEGIN/COMMIT/ROLLBACK.
+///
+/// Savepoints are more useful for _nesting_ transactions, for example:
+///
+///     var savepoint = try db.savepoint("outer");
+///     defer savepoint.rollback();
+///
+///     try db.exec("INSERT INTO foo(id, name) VALUES(?, ?)", .{ 1, "foo" });
+///
+///     {
+///         var savepoint2 = try db.savepoint("inner");
+///         defer savepoint2.rollback();
+///
+///         var i: usize = 0;
+///         while (i < 30) : (i += 1) {
+///             try db.exec("INSERT INTO foo(id, name) VALUES(?, ?)", .{ 2, "bar" });
+///         }
+///
+///         savepoint2.commit();
+///     }
+///
+///     try db.exec("UPDATE bar SET processed = ? WHERE id = ?", .{ true, 20 });
+///
+///     savepoint.commit();
+///
+/// In this example if any query in the inner transaction fail, all previously executed queries are discarded but the outer transaction is untouched.
+///
+pub const Savepoint = struct {
+    const Self = @This();
+
+    db: *Db,
+    committed: bool,
+
+    commit_stmt: DynamicStatement,
+    rollback_stmt: DynamicStatement,
+
+    pub const InitError = error{
+        SavepointNameTooShort,
+        SavepointNameTooLong,
+        SavepointNameInvalid,
+    } || std.fmt.AllocPrintError || Error;
+
+    fn init(db: *Db, name: []const u8) InitError!Self {
+        if (name.len < 1) return error.SavepointNameTooShort;
+        if (name.len > 20) return error.SavepointNameTooLong;
+        if (!std.ascii.isAlpha(name[0])) return error.SavepointNameInvalid;
+        for (name) |b| {
+            if (b != '_' and !std.ascii.isAlNum(b)) {
+                return error.SavepointNameInvalid;
+            }
+        }
+
+        var buffer: [256]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+
+        const commit_query = try std.fmt.allocPrint(&fba.allocator, "RELEASE SAVEPOINT {s}", .{name});
+        const rollback_query = try std.fmt.allocPrint(&fba.allocator, "ROLLBACK TRANSACTION TO SAVEPOINT {s}", .{name});
+
+        var res = Self{
+            .db = db,
+            .committed = false,
+            .commit_stmt = try db.prepareDynamic(commit_query),
+            .rollback_stmt = try db.prepareDynamic(rollback_query),
+        };
+
+        try res.db.execDynamic(
+            try std.fmt.allocPrint(&fba.allocator, "SAVEPOINT {s}", .{name}),
+            .{},
+            .{},
+        );
+
+        return res;
+    }
+
+    pub fn commit(self: *Self) void {
+        self.commit_stmt.exec(.{}, .{}) catch |err| {
+            const detailed_error = self.db.getDetailedError();
+            logger.err("unable to release savepoint, error: {}, message: {s}", .{ err, detailed_error });
+        };
+        self.committed = true;
+    }
+
+    pub fn rollback(self: *Self) void {
+        if (self.committed) return;
+
+        self.rollback_stmt.exec(.{}, .{}) catch |err| {
+            const detailed_error = self.db.getDetailedError();
+            std.debug.panic("unable to rollback transaction, error: {}, message: {s}\n", .{ err, detailed_error });
+        };
+    }
 };
 
 pub const QueryOptions = struct {
@@ -2570,6 +2691,135 @@ test "sqlite: exec with diags, failing statement" {
     const detailed_err = db.getDetailedError();
     try testing.expectEqual(@as(usize, 1), detailed_err.code);
     try testing.expectEqualStrings("cannot rollback - no transaction is active", detailed_err.message);
+}
+
+test "sqlite: savepoint with no failures" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try addTestData(&db);
+
+    {
+        var savepoint = try db.savepoint("outer1");
+        defer savepoint.rollback();
+
+        try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 1, null, true });
+
+        {
+            var savepoint2 = try db.savepoint("inner1");
+            defer savepoint2.rollback();
+
+            try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 2, "foobar", true });
+
+            savepoint2.commit();
+        }
+
+        savepoint.commit();
+    }
+
+    // No failures, expect to have two rows.
+
+    var stmt = try db.prepare("SELECT data, author_id FROM article ORDER BY id ASC");
+    defer stmt.deinit();
+
+    var rows = try stmt.all(
+        struct {
+            data: []const u8,
+            author_id: usize,
+        },
+        &arena.allocator,
+        .{},
+        .{},
+    );
+
+    try testing.expectEqual(@as(usize, 2), rows.len);
+    try testing.expectEqual(@as(usize, 1), rows[0].author_id);
+    try testing.expectEqualStrings("", rows[0].data);
+    try testing.expectEqual(@as(usize, 2), rows[1].author_id);
+    try testing.expectEqualStrings("foobar", rows[1].data);
+}
+
+test "sqlite: two nested savepoints with inner failure" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try addTestData(&db);
+
+    {
+        var savepoint = try db.savepoint("outer2");
+        defer savepoint.rollback();
+
+        try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 10, "barbaz", true });
+
+        inner: {
+            var savepoint2 = try db.savepoint("inner2");
+            defer savepoint2.rollback();
+
+            try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 20, null, true });
+
+            // Explicitly fail
+            db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?)", .{}, .{ 22, null }) catch {
+                break :inner;
+            };
+
+            savepoint2.commit();
+        }
+
+        savepoint.commit();
+    }
+
+    // The inner transaction failed, expect to have only one row.
+
+    var stmt = try db.prepare("SELECT data, author_id FROM article");
+    defer stmt.deinit();
+
+    var rows = try stmt.all(
+        struct {
+            data: []const u8,
+            author_id: usize,
+        },
+        &arena.allocator,
+        .{},
+        .{},
+    );
+    try testing.expectEqual(@as(usize, 1), rows.len);
+    try testing.expectEqual(@as(usize, 10), rows[0].author_id);
+    try testing.expectEqualStrings("barbaz", rows[0].data);
+}
+
+test "sqlite: two nested savepoints with outer failure" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try addTestData(&db);
+
+    blk: {
+        var savepoint = try db.savepoint("outer3");
+        defer savepoint.rollback();
+
+        var i: usize = 100;
+        while (i < 120) : (i += 1) {
+            try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ i, null, true });
+        }
+
+        // Explicitly fail
+        db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?)", .{}, .{ 2, null }) catch {
+            break :blk;
+        };
+
+        savepoint.commit();
+    }
+
+    // The outer transaction failed, expect to have no rows.
+
+    var stmt = try db.prepare("SELECT 1 FROM article");
+    defer stmt.deinit();
+
+    var rows = try stmt.all(usize, &arena.allocator, .{}, .{});
+    try testing.expectEqual(@as(usize, 0), rows.len);
 }
 
 fn getTestDb() !Db {
