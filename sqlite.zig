@@ -72,7 +72,7 @@ pub const Blob = struct {
     size: c_int = 0,
 
     /// close closes the blob.
-    pub fn close(self: *Self) !void {
+    pub fn close(self: *Self) Error!void {
         const result = c.sqlite3_blob_close(self.handle);
         if (result != c.SQLITE_OK) {
             return errors.errorFromResultCode(result);
@@ -139,10 +139,14 @@ pub const Blob = struct {
         self.offset = 0;
     }
 
+    pub const ReopenError = error{
+        CannotReopenBlob,
+    };
+
     /// reopen moves this blob to another row of the same table.
     ///
     /// See https://sqlite.org/c3ref/blob_reopen.html.
-    pub fn reopen(self: *Self, row: i64) !void {
+    pub fn reopen(self: *Self, row: i64) ReopenError!void {
         const result = c.sqlite3_blob_reopen(self.handle, row);
         if (result != c.SQLITE_OK) {
             return error.CannotReopenBlob;
@@ -152,8 +156,12 @@ pub const Blob = struct {
         self.offset = 0;
     }
 
+    pub const OpenError = error{
+        CannotOpenBlob,
+    };
+
     /// open opens a blob for incremental i/o.
-    fn open(db: *c.sqlite3, db_name: DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: OpenFlags) !Blob {
+    fn open(db: *c.sqlite3, db_name: DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: OpenFlags) OpenError!Blob {
         comptime if (!flags.read and !flags.write) {
             @compileError("must open a blob for either read, write or both");
         };
@@ -318,8 +326,12 @@ pub const Db = struct {
         create: bool = false,
     };
 
+    pub const InitError = error{
+        SQLiteBuildNotThreadSafe,
+    } || Error;
+
     /// init creates a database with the provided options.
-    pub fn init(options: InitOptions) !Self {
+    pub fn init(options: InitOptions) InitError!Self {
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
 
@@ -484,7 +496,7 @@ pub const Db = struct {
     }
 
     /// prepareWithDiags is like `prepare` but takes an additional options argument.
-    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) !blk: {
+    pub fn prepareWithDiags(self: *Self, comptime query: []const u8, options: QueryOptions) DynamicStatement.PrepareError!blk: {
         @setEvalBranchQuota(100000);
         break :blk StatementType(.{}, query);
     } {
@@ -494,7 +506,7 @@ pub const Db = struct {
     }
 
     /// prepareDynamicWithDiags is like `prepareDynamic` but takes an additional options argument.
-    pub fn prepareDynamicWithDiags(self: *Self, query: []const u8, options: QueryOptions) !DynamicStatement {
+    pub fn prepareDynamicWithDiags(self: *Self, query: []const u8, options: QueryOptions) DynamicStatement.PrepareError!DynamicStatement {
         return try DynamicStatement.prepare(self, query, options, 0);
     }
 
@@ -512,7 +524,7 @@ pub const Db = struct {
     /// This is done because we type check the bind parameters when executing the statement later.
     ///
     /// If you want additional error information in case of failures, use `prepareWithDiags`.
-    pub fn prepare(self: *Self, comptime query: []const u8) !blk: {
+    pub fn prepare(self: *Self, comptime query: []const u8) DynamicStatement.PrepareError!blk: {
         @setEvalBranchQuota(100000);
         break :blk StatementType(.{}, query);
     } {
@@ -527,7 +539,7 @@ pub const Db = struct {
     /// That means such statements does not support comptime type-checking.
     ///
     /// Dynamic statement supports host parameter names. See `DynamicStatement`.
-    pub fn prepareDynamic(self: *Self, query: []const u8) !DynamicStatement {
+    pub fn prepareDynamic(self: *Self, query: []const u8) DynamicStatement.PrepareError!DynamicStatement {
         return try self.prepareDynamicWithDiags(query, .{});
     }
 
@@ -562,7 +574,7 @@ pub const Db = struct {
     ///
     /// See https://sqlite.org/c3ref/blob_open.html for more details on incremental i/o.
     ///
-    pub fn openBlob(self: *Self, db_name: Blob.DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: Blob.OpenFlags) !Blob {
+    pub fn openBlob(self: *Self, db_name: Blob.DatabaseName, table: [:0]const u8, column: [:0]const u8, row: i64, comptime flags: Blob.OpenFlags) Blob.OpenError!Blob {
         return Blob.open(self.db, db_name, table, column, row, flags);
     }
 };
@@ -1080,7 +1092,9 @@ pub const DynamicStatement = struct {
 
     const Self = @This();
 
-    fn prepare(db: *Db, queryStr: []const u8, options: QueryOptions, flags: c_uint) !Self {
+    pub const PrepareError = error{} || Error;
+
+    fn prepare(db: *Db, queryStr: []const u8, options: QueryOptions, flags: c_uint) PrepareError!Self {
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
         var stmt = blk: {
@@ -1441,7 +1455,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
 
         dynamic_stmt: DynamicStatement,
 
-        fn prepare(db: *Db, options: QueryOptions, flags: c_uint) !Self {
+        fn prepare(db: *Db, options: QueryOptions, flags: c_uint) DynamicStatement.PrepareError!Self {
             return Self{
                 .dynamic_stmt = try DynamicStatement.prepare(db, query.getQuery(), options, flags),
             };
