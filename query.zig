@@ -94,7 +94,7 @@ pub const ParsedQuery = struct {
 
                         // A bind marker with id and type: ?AAA{[]const u8}, we don't need move the pointer.
                         if (current_bind_marker_id_pos > 0) {
-                            parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = std.fmt.comptimePrint("{s}", .{current_bind_marker_id[0..current_bind_marker_id_pos]});
+                            parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
                         }
                     },
                     else => {
@@ -104,7 +104,7 @@ pub const ParsedQuery = struct {
                         } else {
                             state = .Start;
                             if (current_bind_marker_id_pos > 0) {
-                                parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = std.fmt.comptimePrint("{s}", .{current_bind_marker_id[0..current_bind_marker_id_pos]});
+                                parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
                             }
                         }
                         buf[pos] = c;
@@ -138,7 +138,7 @@ pub const ParsedQuery = struct {
                 parsed_query.nb_bind_markers += 1;
             },
             .BindMarkerIdentifier => {
-                parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = std.fmt.comptimePrint("{s}", .{current_bind_marker_id[0..current_bind_marker_id_pos]});
+                parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
                 parsed_query.nb_bind_markers += 1;
             },
             .Start => {},
