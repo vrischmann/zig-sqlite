@@ -10,9 +10,9 @@ pub const Text = struct { data: []const u8 };
 const BindMarker = struct {
     typed: ?type = null, // null == untyped
     identifier: ?[]const u8 = null,
-    id_type: IdType = .Integer,
+    identifier_type: IdentifierType = .Integer,
 
-    pub const IdType = enum {
+    pub const IdentifierType = enum {
         Integer,
         String,
     };
@@ -48,7 +48,7 @@ pub const ParsedQuery = struct {
                         parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
                         current_bind_marker_type_pos = 0;
                         current_bind_marker_id_pos = 0;
-                        parsed_query.bind_markers[parsed_query.nb_bind_markers].id_type = if (c == '?') .Integer else .String;
+                        parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier_type = if (c == '?') .Integer else .String;
                         state = .BindMarker;
                         buf[pos] = c;
                         pos += 1;
@@ -315,19 +315,19 @@ test "parsed query: bind markers identifier type" {
 
     const testCases = &[_]testCase{ .{
         .query = "foobar @ABC{usize}",
-        .expected_marker = .{ .id_type = .String },
+        .expected_marker = .{ .identifier_type = .String },
     }, .{
         .query = "foobar ?123{text}",
-        .expected_marker = .{ .id_type = .Integer },
+        .expected_marker = .{ .identifier_type = .Integer },
     }, .{
         .query = "foobar $abc{blob}",
-        .expected_marker = .{ .id_type = .String },
+        .expected_marker = .{ .identifier_type = .String },
     }, .{
         .query = "foobar ?123",
-        .expected_marker = .{ .id_type = .Integer },
+        .expected_marker = .{ .identifier_type = .Integer },
     }, .{
         .query = "foobar :abc",
-        .expected_marker = .{ .id_type = .String },
+        .expected_marker = .{ .identifier_type = .String },
     } };
 
     inline for (testCases) |tc| {
@@ -336,6 +336,6 @@ test "parsed query: bind markers identifier type" {
         try testing.expectEqual(@as(usize, 1), parsed_query.nb_bind_markers);
 
         const bind_marker = parsed_query.bind_markers[0];
-        try testing.expectEqual(tc.expected_marker.id_type, bind_marker.id_type);
+        try testing.expectEqual(tc.expected_marker.identifier_type, bind_marker.identifier_type);
     }
 }
