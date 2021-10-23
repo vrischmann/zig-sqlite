@@ -14,14 +14,17 @@ const BindMarker = struct {
     /// A null means the bind parameter is untyped so there won't be comptime checking.
     typed: ?type = null,
 
+    // TODO(vincent): both identifier and identifier_type are unused outside of parsing them.
+    // Should we remove them ?
+
     /// Contains the bind parameter identifier string.
     identifier: ?[]const u8 = null,
     /// Contains the type of the identifier which is either an integer or a string.
-    identifier_type: IdentifierType = .Integer,
+    identifier_type: IdentifierType = .integer,
 
     pub const IdentifierType = enum {
-        Integer,
-        String,
+        integer,
+        string,
     };
 };
 
@@ -55,7 +58,7 @@ pub const ParsedQuery = struct {
                         parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
                         current_bind_marker_type_pos = 0;
                         current_bind_marker_id_pos = 0;
-                        parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier_type = if (c == '?') .Integer else .String;
+                        parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier_type = if (c == '?') .integer else .string;
                         state = .BindMarker;
                         buf[pos] = c;
                         pos += 1;
@@ -326,19 +329,19 @@ test "parsed query: bind markers identifier type" {
 
     const testCases = &[_]testCase{ .{
         .query = "foobar @ABC{usize}",
-        .expected_marker = .{ .identifier_type = .String },
+        .expected_marker = .{ .identifier_type = .string },
     }, .{
         .query = "foobar ?123{text}",
-        .expected_marker = .{ .identifier_type = .Integer },
+        .expected_marker = .{ .identifier_type = .integer },
     }, .{
         .query = "foobar $abc{blob}",
-        .expected_marker = .{ .identifier_type = .String },
+        .expected_marker = .{ .identifier_type = .string },
     }, .{
         .query = "foobar ?123",
-        .expected_marker = .{ .identifier_type = .Integer },
+        .expected_marker = .{ .identifier_type = .integer },
     }, .{
         .query = "foobar :abc",
-        .expected_marker = .{ .identifier_type = .String },
+        .expected_marker = .{ .identifier_type = .string },
     } };
 
     inline for (testCases) |tc| {
