@@ -8,8 +8,15 @@ const Blob = @import("sqlite.zig").Blob;
 pub const Text = struct { data: []const u8 };
 
 const BindMarker = struct {
-    typed: ?type = null, // null == untyped
+    /// Contains the expected type for a bind parameter which will be checked
+    /// at comptime when calling bind on a statement.
+    ///
+    /// A null means the bind parameter is untyped so there won't be comptime checking.
+    typed: ?type = null,
+
+    /// Contains the bind parameter identifier string.
     identifier: ?[]const u8 = null,
+    /// Contains the type of the identifier which is either an integer or a string.
     identifier_type: IdentifierType = .Integer,
 
     pub const IdentifierType = enum {
@@ -59,7 +66,7 @@ pub const ParsedQuery = struct {
                     },
                 },
                 .BindMarker => switch (c) {
-                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
+                    '?', ':', '@', '$' => @compileError("invalid multiple '?', ':', '$' or '@'."),
                     '{' => {
                         state = .BindMarkerType;
                     },
