@@ -312,6 +312,7 @@ test "parsed query: query bind identifier" {
     };
 
     inline for (testCases) |tc| {
+        @setEvalBranchQuota(100000);
         comptime var parsed_query = ParsedQuery.from(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
     }
