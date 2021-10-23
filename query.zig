@@ -132,14 +132,17 @@ pub const ParsedQuery = struct {
         }
 
         // The last character was ? so this must be an untyped bind marker.
-        if (state == .BindMarker) {
-            parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
-            parsed_query.nb_bind_markers += 1;
-        } else if (state == .BindMarkerIdentifier) {
-            parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = std.fmt.comptimePrint("{s}", .{current_bind_marker_id[0..current_bind_marker_id_pos]});
-            parsed_query.nb_bind_markers += 1;
-        } else if (state == .BindMarkerType) {
-            @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type");
+        switch (state) {
+            .BindMarker => {
+                parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
+                parsed_query.nb_bind_markers += 1;
+            },
+            .BindMarkerIdentifier => {
+                parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = std.fmt.comptimePrint("{s}", .{current_bind_marker_id[0..current_bind_marker_id_pos]});
+                parsed_query.nb_bind_markers += 1;
+            },
+            .Start => {},
+            else => @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type"),
         }
 
         mem.copy(u8, &parsed_query.query, &buf);
