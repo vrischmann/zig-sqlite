@@ -150,7 +150,10 @@ pub fn build(b: *std.build.Builder) void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
+    const enable_wine = b.option(bool, "enable_wine", "Enable wine for running tests (default false)") orelse false;
     const enable_qemu = b.option(bool, "enable_qemu", "Enable qemu for running tests (default false)") orelse false;
+    const enable_wasmtime = b.option(bool, "enable_wasmtime", "Enable wasmtime for running tests (default false)") orelse false;
+    const enable_darling = b.option(bool, "enable_darling", "Enable darling for running tests (default false)") orelse false;
 
     const target = b.standardTargetOptions(.{});
 
@@ -195,7 +198,10 @@ pub fn build(b: *std.build.Builder) void {
         tests.setTarget(cross_target);
         tests.addIncludeDir("c");
         linkSqlite(tests);
+        tests.enable_wine = enable_wine;
         tests.enable_qemu = enable_qemu;
+        tests.enable_wasmtime = enable_wasmtime;
+        tests.enable_darling = enable_darling;
 
         const tests_options = b.addOptions();
         tests.addOptions("build_options", tests_options);
