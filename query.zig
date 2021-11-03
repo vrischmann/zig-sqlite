@@ -182,8 +182,13 @@ pub const ParsedQuery = struct {
         if (mem.eql(u8, "bool", type_info)) return bool;
 
         // Strings
+        // TODO(vincent): this is really terrible stuff. Need to find a better way
+        // to communicate type mappings than this crap.
         if (mem.eql(u8, "[]const u8", type_info) or mem.eql(u8, "[]u8", type_info)) {
             return []const u8;
+        }
+        if (mem.eql(u8, "[:0]const u8", type_info) or mem.eql(u8, "[:0]u8", type_info)) {
+            return [:0]const u8;
         }
         if (mem.eql(u8, "text", type_info)) return Text;
         if (mem.eql(u8, "blob", type_info)) return Blob;
@@ -208,6 +213,10 @@ test "parsed query: query" {
             .expected_query = "INSERT INTO user(id, name, age) VALUES(?, ?, ?)",
         },
         .{
+            .query = "INSERT INTO user(id, name) VALUES(?{usize}, ?{[:0]const u8})",
+            .expected_query = "INSERT INTO user(id, name) VALUES(?, ?)",
+        },
+        .{
             .query = "SELECT id, name, age FROM user WHER age > ?{u32} AND age < ?{u32}",
             .expected_query = "SELECT id, name, age FROM user WHER age > ? AND age < ?",
         },
@@ -218,6 +227,7 @@ test "parsed query: query" {
     };
 
     inline for (testCases) |tc| {
+        @setEvalBranchQuota(10000);
         comptime var parsed_query = ParsedQuery.from(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
     }
