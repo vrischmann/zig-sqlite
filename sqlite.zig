@@ -691,6 +691,11 @@ pub const Savepoint = struct {
     }
 
     pub fn rollback(self: *Self) void {
+        defer {
+            self.commit_stmt.deinit();
+            self.rollback_stmt.deinit();
+        }
+
         if (self.committed) return;
 
         self.rollback_stmt.exec(.{}, .{}) catch |err| {
