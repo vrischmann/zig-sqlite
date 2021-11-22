@@ -2938,3 +2938,101 @@ test "sqlite: bind custom type" {
         try testing.expectEqualSlices(u8, &my_data.data, &row.?.data.data);
     }
 }
+
+test "sqlite: prepareDynamic" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try addTestData(&db);
+
+    var diags = Diagnostics{};
+    var stmt = try db.prepareDynamicWithDiags("SELECT id FROM user WHERE age = ?", .{ .diags = &diags });
+    defer stmt.deinit();
+
+    {
+        var iter = try stmt.iterator(usize, .{ .age = 33 });
+
+        const id = try iter.next(.{});
+        try testing.expect(id != null);
+        try testing.expectEqual(@as(usize, 20), id.?);
+    }
+
+    stmt.reset();
+
+    {
+        var iter = try stmt.iteratorAlloc(usize, &arena.allocator, .{ .age = 33 });
+
+        const id = try iter.next(.{});
+        try testing.expect(id != null);
+        try testing.expectEqual(@as(usize, 20), id.?);
+    }
+
+    stmt.reset();
+
+    {
+        var iter = try stmt.iteratorAlloc(usize, &arena.allocator, .{33});
+
+        const id = try iter.next(.{});
+        try testing.expect(id != null);
+        try testing.expectEqual(@as(usize, 20), id.?);
+    }
+}
+
+test "sqlite: oneDynamic" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    try addTestData(&db);
+
+    var diags = Diagnostics{};
+
+    {
+        const id = try db.oneDynamic(
+            usize,
+            "SELECT id FROM user WHERE age = ?",
+            .{ .diags = &diags },
+            .{ .age = 33 },
+        );
+        try testing.expect(id != null);
+        try testing.expectEqual(@as(usize, 20), id.?);
+    }
+
+    {
+        // Mix bind marker prefix for good measure
+
+        const id = try db.oneDynamic(
+            usize,
+            "SELECT id FROM user WHERE age = $age AND weight < :weight and id < @id",
+            .{ .diags = &diags },
+            .{ .id = 400, .age = 33, .weight = 200 },
+        );
+        try testing.expect(id != null);
+        try testing.expectEqual(@as(usize, 20), id.?);
+    }
+
+    {
+        const id = try db.oneDynamicAlloc(
+            usize,
+            &arena.allocator,
+            "SELECT id FROM user WHERE age = ?",
+            .{ .diags = &diags },
+            .{ .age = 33 },
+        );
+        try testing.expect(id != null);
+        try testing.expectEqual(@as(usize, 20), id.?);
+    }
+
+    {
+        const id = try db.oneDynamicAlloc(
+            usize,
+            &arena.allocator,
+            "SELECT id FROM user WHERE age = ?",
+            .{ .diags = &diags },
+            .{33},
+        );
+        try testing.expect(id != null);
+        try testing.expectEqual(@as(usize, 20), id.?);
+    }
+}
