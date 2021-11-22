@@ -1359,9 +1359,15 @@ pub const DynamicStatement = struct {
         const StructType = @TypeOf(values);
         const StructTypeInfo = @typeInfo(StructType).Struct;
 
-        inline for (StructTypeInfo.fields) |struct_field, i| {
+        inline for (StructTypeInfo.fields) |struct_field, struct_field_i| {
             const field_value = @field(values, struct_field.name);
-            try self.bindField(struct_field.field_type, options, struct_field.name, i, field_value);
+
+            const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
+            if (i >= 0) {
+                try self.bindField(struct_field.field_type, options, struct_field.name, i, field_value);
+            } else {
+                try self.bindField(struct_field.field_type, options, struct_field.name, struct_field_i, field_value);
+            }
         }
     }
 
@@ -1372,34 +1378,6 @@ pub const DynamicStatement = struct {
             if (i > 0) return i - 1; // .bindField uses 0-based while sqlite3 uses 1-based index.
         }
         return -1;
-    }
-
-    /// bind named structure
-    fn bindNamedStruct(self: *Self, options: anytype, values: anytype) !void {
-        const StructType = @TypeOf(values);
-        const StructTypeInfo = @typeInfo(StructType).Struct;
-
-        inline for (StructTypeInfo.fields) |struct_field| {
-            const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
-            if (i >= 0) {
-                try self.bindField(struct_field.field_type, options, struct_field.name, i, @field(values, struct_field.name));
-            } else if (i == -1) {
-                return errors.SQLiteError.SQLiteNotFound;
-                // bug: do not put into a else block. reproduced in 0.8.1 and 0.9.0+dev.1193
-                // title: broken LLVM module found: Operand is null.
-                // TODO: fire an issue to ziglang/zig and place address here
-            }
-        }
-    }
-
-    fn smartBind(self: *Self, options: anytype, values: anytype) !void {
-        if (std.meta.fieldNames(@TypeOf(values)).len == 0) {
-            return;
-        } else if (std.meta.trait.isTuple(@TypeOf(values))) {
-            try self.bind(options, values);
-        } else {
-            try self.bindNamedStruct(options, values);
-        }
     }
 
     /// exec executes a statement which does not return data.
@@ -1414,7 +1392,7 @@ pub const DynamicStatement = struct {
     /// Possible errors:
     /// - SQLiteError.SQLiteNotFound if some fields not found
     pub fn exec(self: *Self, options: QueryOptions, values: anytype) !void {
-        try self.smartBind(.{}, values);
+        try self.bind(.{}, values);
 
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
@@ -1453,7 +1431,7 @@ pub const DynamicStatement = struct {
     /// Possible errors:
     /// - SQLiteError.SQLiteNotFound if some fields not found
     pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
-        try self.smartBind(.{}, values);
+        try self.bind(.{}, values);
 
         var res: Iterator(Type) = undefined;
         res.db = self.db;
@@ -1486,7 +1464,7 @@ pub const DynamicStatement = struct {
     /// Possible errors:
     /// - SQLiteError.SQLiteNotFound if some fields not found
     pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: *std.mem.Allocator, values: anytype) !Iterator(Type) {
-        try self.smartBind(.{ .allocator = allocator }, values);
+        try self.bind(.{ .allocator = allocator }, values);
 
         var res: Iterator(Type) = undefined;
         res.db = self.db;
