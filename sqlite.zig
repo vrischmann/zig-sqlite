@@ -1355,6 +1355,37 @@ pub const DynamicStatement = struct {
         }
     }
 
+    // bind iterates over the fields in `values` and binds them using `bindField`.
+    //
+    // Depending on the query and the type of `values` the binding behaviour differs in regards to the column used.
+    //
+    // If `values` is a tuple (and therefore doesn't have field names) then the field _index_ is used.
+    // This means that if you have a query like this:
+    //
+    //     SELECT id FROM user WHERE age = ? AND name = ?
+    //
+    // You must provide a tuple with the fields in the same order like this:
+    //
+    //     var iter = try stmt.iterator(.{30, "Vincent"});
+    //
+    //
+    // If `values` is a struct (and therefore has field names) then we check sqlite to see if each field name might be a name bind marker.
+    // This uses sqlite3_bind_parameter_index and supports bind markers prefixed with ":", "@" and "$".
+    // For example if you have a query like this:
+    //
+    //     SELECT id FROM user WHERE age = :age AND name = @name
+    //
+    // Then we can provide a struct with fields in any order, like this:
+    //
+    //     var iter = try stmt.iterator(.{ .age = 30, .name = "Vincent" });
+    //
+    // Or
+    //
+    //     var iter = try stmt.iterator(.{ .name = "Vincent", .age = 30 });
+    //
+    // Both will bind correctly.
+    //
+    // If however there are no name bind markers then the behaviour will revert to using the field index in the struct, and the fields order must be correct.
     fn bind(self: *Self, options: anytype, values: anytype) !void {
         const StructType = @TypeOf(values);
         const StructTypeInfo = @typeInfo(StructType).Struct;
@@ -1372,6 +1403,8 @@ pub const DynamicStatement = struct {
     }
 
     fn sqlite3BindParameterIndex(stmt: *c.sqlite3_stmt, comptime name: []const u8) c_int {
+        if (name.len == 0) return -1;
+
         inline for (.{ ":", "@", "$" }) |prefix| {
             const id = prefix ++ name;
             const i = c.sqlite3_bind_parameter_index(stmt, id);
