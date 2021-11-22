@@ -1452,8 +1452,41 @@ pub const DynamicStatement = struct {
     ///
     /// Possible errors:
     /// - SQLiteError.SQLiteNotFound if some fields not found
-    pub fn iterator(self: *Self, comptime Type: type, options: anytype, values: anytype) !Iterator(Type) {
-        try self.smartBind(options, values);
+    pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
+        try self.smartBind(.{}, values);
+
+        var res: Iterator(Type) = undefined;
+        res.db = self.db;
+        res.stmt = self.stmt;
+
+        return res;
+    }
+
+    /// iterator returns an iterator to read data from the result set, one row at a time.
+    ///
+    /// The data in the row is used to populate a value of the type `Type`.
+    /// This means that `Type` must have as many fields as is returned in the query
+    /// executed by this statement.
+    /// This also means that the type of each field must be compatible with the SQLite type.
+    ///
+    /// Here is an example of how to use the iterator:
+    ///
+    ///     var iter = try stmt.iterator(usize, .{});
+    ///     while (try iter.next(.{})) |row| {
+    ///         ...
+    ///     }
+    ///
+    /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
+    /// in the input query string.
+    /// The values will be binded depends on the numberic name when it's a tuple, or the
+    /// string name when it's a normal structure.
+    ///
+    /// The iterator _must not_ outlive the statement.
+    ///
+    /// Possible errors:
+    /// - SQLiteError.SQLiteNotFound if some fields not found
+    pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: *std.mem.Allocator, values: anytype) !Iterator(Type) {
+        try self.smartBind(.{ .allocator = allocator }, values);
 
         var res: Iterator(Type) = undefined;
         res.db = self.db;
@@ -1496,7 +1529,7 @@ pub const DynamicStatement = struct {
 
     /// oneAlloc is like `one` but can allocate memory.
     pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
-        var iter = try self.iterator(Type, .{ .allocator = allocator }, values);
+        var iter = try self.iteratorAlloc(Type, allocator, values);
 
         const row = (try iter.nextAlloc(allocator, options)) orelse return null;
         return row;
