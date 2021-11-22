@@ -1208,9 +1208,11 @@ pub const StatementOptions = struct {};
 ///     const stmt = "SELECT email FROM users WHERE name = ? AND password = ?";
 ///     const row = try stmt.one(Row, .{"Tankman", "Passw0rd"});
 ///
-/// TODO(vincent): clarify the following
-/// Named and unnamed markers could not be mixed, functions might be failed in slient.
-/// (Just like sqlite3's sqlite3_stmt, the unbinded values will be treated as NULL.)
+/// You can only mix named and unnamed bind markers if:
+/// * the bind values data is a tuple (without field names)
+/// * the bind values data is a struct with the same field orders as in the query
+/// This is because with a unnamed bind markers we use the field index in the struct as bind column; if the fields
+/// are in the wrong order the query will not work correctly.
 ///
 pub const DynamicStatement = struct {
     db: *c.sqlite3,
