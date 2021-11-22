@@ -9,8 +9,8 @@ pub const c = @cImport({
     @cInclude("sqlite3.h");
 });
 
-const Text = @import("query.zig").Text;
-const ParsedQuery = @import("query.zig").ParsedQuery;
+pub const Text = @import("query.zig").Text;
+pub const ParsedQuery = @import("query.zig").ParsedQuery;
 
 const errors = @import("errors.zig");
 const Error = errors.Error;
@@ -1452,8 +1452,8 @@ pub const DynamicStatement = struct {
     ///
     /// Possible errors:
     /// - SQLiteError.SQLiteNotFound if some fields not found
-    pub fn iterator(self: *Self, comptime Type: type, values: anytype) !Iterator(Type) {
-        try self.smartBind(values);
+    pub fn iterator(self: *Self, comptime Type: type, options: anytype, values: anytype) !Iterator(Type) {
+        try self.smartBind(options, values);
 
         var res: Iterator(Type) = undefined;
         res.db = self.db;
@@ -1488,7 +1488,7 @@ pub const DynamicStatement = struct {
     ///
     /// This cannot allocate memory. If you need to read TEXT or BLOB columns you need to use arrays or alternatively call `oneAlloc`.
     pub fn one(self: *Self, comptime Type: type, options: QueryOptions, values: anytype) !?Type {
-        var iter = try self.iterator(Type, values);
+        var iter = try self.iterator(Type, .{}, values);
 
         const row = (try iter.next(options)) orelse return null;
         return row;
@@ -1496,7 +1496,7 @@ pub const DynamicStatement = struct {
 
     /// oneAlloc is like `one` but can allocate memory.
     pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
-        var iter = try self.iterator(Type, values);
+        var iter = try self.iterator(Type, .{ .allocator = allocator }, values);
 
         const row = (try iter.nextAlloc(allocator, options)) orelse return null;
         return row;
