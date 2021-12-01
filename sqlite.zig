@@ -276,7 +276,7 @@ fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
         .code = @intCast(usize, code),
         .message = blk: {
             const msg = c.sqlite3_errstr(code);
-            break :blk mem.spanZ(msg);
+            break :blk mem.sliceTo(msg, 0);
         },
     };
 }
@@ -286,7 +286,7 @@ fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
         .code = @intCast(usize, c.sqlite3_extended_errcode(db)),
         .message = blk: {
             const msg = c.sqlite3_errmsg(db);
-            break :blk mem.spanZ(msg);
+            break :blk mem.sliceTo(msg, 0);
         },
     };
 }
@@ -1948,7 +1948,7 @@ test "sqlite: db pragma" {
         {
             const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", "wal");
             try testing.expect(journal_mode != null);
-            try testing.expectEqualStrings("memory", mem.spanZ(&journal_mode.?));
+            try testing.expectEqualStrings("memory", mem.sliceTo(&journal_mode.?, 0));
         }
 
         {
@@ -1960,7 +1960,7 @@ test "sqlite: db pragma" {
         {
             const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", "wal");
             try testing.expect(journal_mode != null);
-            try testing.expectEqualStrings("wal", mem.spanZ(&journal_mode.?));
+            try testing.expectEqualStrings("wal", mem.sliceTo(&journal_mode.?, 0));
         }
 
         {
@@ -2069,7 +2069,7 @@ test "sqlite: read a single user into a struct" {
 
         const exp = test_users[0];
         try testing.expectEqual(exp.id, row.?.id);
-        try testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name));
+        try testing.expectEqualStrings(exp.name, mem.sliceTo(&row.?.name, 0));
         try testing.expectEqual(exp.age, row.?.age);
     }
 
@@ -2146,7 +2146,7 @@ test "sqlite: read in an anonymous struct" {
     const exp = test_users[0];
     try testing.expectEqual(exp.id, row.?.id);
     try testing.expectEqualStrings(exp.name, row.?.name);
-    try testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name_2));
+    try testing.expectEqualStrings(exp.name, mem.sliceTo(&row.?.name_2, 0xAD));
     try testing.expectEqual(exp.age, row.?.age);
     try testing.expect(row.?.is_id);
     try testing.expectEqual(exp.weight, @floatCast(f32, row.?.weight));
@@ -2200,6 +2200,7 @@ test "sqlite: read a single text value" {
         // Array
         [8:0]u8,
         [8:0xAD]u8,
+        [7]u8,
         // Specific text or blob
         Text,
         Blob,
@@ -2224,7 +2225,10 @@ test "sqlite: read a single text value" {
                     const type_info = @typeInfo(typ);
                     break :blk switch (type_info) {
                         .Pointer => name.?,
-                        .Array => mem.spanZ(&(name.?)),
+                        .Array => |arr| if (arr.sentinel) |s|
+                            mem.sliceTo(&name.?, s)
+                        else
+                            mem.span(&name.?),
                         else => @compileError("invalid type " ++ @typeName(typ)),
                     };
                 };
@@ -2570,7 +2574,7 @@ test "sqlite: statement iterator" {
 
         for (rows.items) |row, j| {
             const exp_row = expected_rows.items[j];
-            try testing.expectEqualStrings(exp_row.name, mem.spanZ(&row.name));
+            try testing.expectEqualStrings(exp_row.name, mem.sliceTo(&row.name, 0));
             try testing.expectEqual(exp_row.age, row.age);
         }
     }
