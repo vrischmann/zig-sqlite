@@ -276,7 +276,7 @@ fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
         .code = @intCast(usize, code),
         .message = blk: {
             const msg = c.sqlite3_errstr(code);
-            break :blk mem.spanZ(msg);
+            break :blk mem.sliceTo(msg, 0);
         },
     };
 }
@@ -286,7 +286,7 @@ fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
         .code = @intCast(usize, c.sqlite3_extended_errcode(db)),
         .message = blk: {
             const msg = c.sqlite3_errmsg(db);
-            break :blk mem.spanZ(msg);
+            break :blk mem.sliceTo(msg, 0);
         },
     };
 }
@@ -422,7 +422,7 @@ pub const Db = struct {
     ///
     ///     const journal_mode = try db.pragma([]const u8, allocator, .{}, "journal_mode", null);
     ///
-    pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
+    pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
         comptime var query = getPragmaQuery(name, arg);
 
         var stmt = try self.prepare(query);
@@ -482,14 +482,14 @@ pub const Db = struct {
     }
 
     /// oneAlloc is like `one` but can allocate memory.
-    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, comptime query: []const u8, options: QueryOptions, values: anytype) !?Type {
+    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, comptime query: []const u8, options: QueryOptions, values: anytype) !?Type {
         var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();
         return try stmt.oneAlloc(Type, allocator, options, values);
     }
 
     /// oneDynamicAlloc is like `oneDynamic` but can allocate memory.
-    pub fn oneDynamicAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, query: []const u8, options: QueryOptions, values: anytype) !?Type {
+    pub fn oneDynamicAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, query: []const u8, options: QueryOptions, values: anytype) !?Type {
         var stmt = try self.prepareDynamicWithDiags(query, options);
         defer stmt.deinit();
         return try stmt.oneAlloc(Type, allocator, options, values);
@@ -662,9 +662,10 @@ pub const Savepoint = struct {
 
         var buffer: [256]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
+        var allocator = fba.allocator();
 
-        const commit_query = try std.fmt.allocPrint(&fba.allocator, "RELEASE SAVEPOINT {s}", .{name});
-        const rollback_query = try std.fmt.allocPrint(&fba.allocator, "ROLLBACK TRANSACTION TO SAVEPOINT {s}", .{name});
+        const commit_query = try std.fmt.allocPrint(allocator, "RELEASE SAVEPOINT {s}", .{name});
+        const rollback_query = try std.fmt.allocPrint(allocator, "ROLLBACK TRANSACTION TO SAVEPOINT {s}", .{name});
 
         var res = Self{
             .db = db,
@@ -674,7 +675,7 @@ pub const Savepoint = struct {
         };
 
         try res.db.execDynamic(
-            try std.fmt.allocPrint(&fba.allocator, "SAVEPOINT {s}", .{name}),
+            try std.fmt.allocPrint(allocator, "SAVEPOINT {s}", .{name}),
             .{},
             .{},
         );
@@ -802,7 +803,7 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         // nextAlloc is like `next` but can allocate memory.
-        pub fn nextAlloc(self: *Self, allocator: *mem.Allocator, options: QueryOptions) !?Type {
+        pub fn nextAlloc(self: *Self, allocator: mem.Allocator, options: QueryOptions) !?Type {
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
 
@@ -952,7 +953,7 @@ pub fn Iterator(comptime Type: type) type {
         };
 
         // dupeWithSentinel is like dupe/dupeZ but allows for any sentinel value.
-        fn dupeWithSentinel(comptime SliceType: type, allocator: *mem.Allocator, data: []const u8) !SliceType {
+        fn dupeWithSentinel(comptime SliceType: type, allocator: mem.Allocator, data: []const u8) !SliceType {
             switch (@typeInfo(SliceType)) {
                 .Pointer => |ptr_info| {
                     if (ptr_info.sentinel) |sentinel| {
@@ -979,7 +980,7 @@ pub fn Iterator(comptime Type: type) type {
         // When using .Text you can only read into either []const u8, []u8 or Text.
         //
         // The options must contain an `allocator` field which will be used to create a copy of the data.
-        fn readBytes(self: *Self, comptime BytesType: type, allocator: *mem.Allocator, _i: usize, comptime mode: ReadBytesMode) !BytesType {
+        fn readBytes(self: *Self, comptime BytesType: type, allocator: mem.Allocator, _i: usize, comptime mode: ReadBytesMode) !BytesType {
             const i = @intCast(c_int, _i);
 
             switch (mode) {
@@ -1498,7 +1499,7 @@ pub const DynamicStatement = struct {
     ///
     /// Possible errors:
     /// - SQLiteError.SQLiteNotFound if some fields not found
-    pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: *std.mem.Allocator, values: anytype) !Iterator(Type) {
+    pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, values: anytype) !Iterator(Type) {
         try self.bind(.{ .allocator = allocator }, values);
 
         var res: Iterator(Type) = undefined;
@@ -1541,7 +1542,7 @@ pub const DynamicStatement = struct {
     }
 
     /// oneAlloc is like `one` but can allocate memory.
-    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
+    pub fn oneAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, values: anytype) !?Type {
         var iter = try self.iteratorAlloc(Type, allocator, values);
 
         const row = (try iter.nextAlloc(allocator, options)) orelse return null;
@@ -1574,7 +1575,7 @@ pub const DynamicStatement = struct {
     /// in the input query string.
     ///
     /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
-    pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
+    pub fn all(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
         var iter = try self.iterator(Type, values);
 
         var rows = std.ArrayList(Type).init(allocator);
@@ -1700,7 +1701,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         }
 
         /// execAlloc is like `exec` but can allocate memory.
-        pub fn execAlloc(self: *Self, allocator: *std.mem.Allocator, options: QueryOptions, values: anytype) !void {
+        pub fn execAlloc(self: *Self, allocator: mem.Allocator, options: QueryOptions, values: anytype) !void {
             try self.bind(.{ .allocator = allocator }, values);
 
             var dummy_diags = Diagnostics{};
@@ -1768,7 +1769,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         }
 
         /// iteratorAlloc is like `iterator` but can allocate memory.
-        pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: *std.mem.Allocator, values: anytype) !Iterator(Type) {
+        pub fn iteratorAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, values: anytype) !Iterator(Type) {
             try self.bind(.{ .allocator = allocator }, values);
 
             var res: Iterator(Type) = undefined;
@@ -1811,7 +1812,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         }
 
         /// oneAlloc is like `one` but can allocate memory.
-        pub fn oneAlloc(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) !?Type {
+        pub fn oneAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, values: anytype) !?Type {
             var iter = try self.iteratorAlloc(Type, allocator, values);
 
             const row = (try iter.nextAlloc(allocator, options)) orelse return null;
@@ -1844,7 +1845,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// in the input query string.
         ///
         /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
-        pub fn all(self: *Self, comptime Type: type, allocator: *mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
+        pub fn all(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
             var iter = try self.iteratorAlloc(Type, allocator, values);
 
             var rows = std.ArrayList(Type).init(allocator);
@@ -1935,6 +1936,7 @@ test "sqlite: db init" {
 test "sqlite: db pragma" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
 
@@ -1946,11 +1948,11 @@ test "sqlite: db pragma" {
         {
             const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", "wal");
             try testing.expect(journal_mode != null);
-            try testing.expectEqualStrings("memory", mem.spanZ(&journal_mode.?));
+            try testing.expectEqualStrings("memory", mem.sliceTo(&journal_mode.?, 0));
         }
 
         {
-            const journal_mode = try db.pragmaAlloc([]const u8, &arena.allocator, .{}, "journal_mode", "wal");
+            const journal_mode = try db.pragmaAlloc([]const u8, allocator, .{}, "journal_mode", "wal");
             try testing.expect(journal_mode != null);
             try testing.expectEqualStrings("memory", journal_mode.?);
         }
@@ -1958,11 +1960,11 @@ test "sqlite: db pragma" {
         {
             const journal_mode = try db.pragma([128:0]u8, .{}, "journal_mode", "wal");
             try testing.expect(journal_mode != null);
-            try testing.expectEqualStrings("wal", mem.spanZ(&journal_mode.?));
+            try testing.expectEqualStrings("wal", mem.sliceTo(&journal_mode.?, 0));
         }
 
         {
-            const journal_mode = try db.pragmaAlloc([]const u8, &arena.allocator, .{}, "journal_mode", "wal");
+            const journal_mode = try db.pragmaAlloc([]const u8, allocator, .{}, "journal_mode", "wal");
             try testing.expect(journal_mode != null);
             try testing.expectEqualStrings("wal", journal_mode.?);
         }
@@ -2034,6 +2036,7 @@ test "sqlite: statement execDynamic" {
 test "sqlite: read a single user into a struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2041,7 +2044,7 @@ test "sqlite: read a single user into a struct" {
     var stmt = try db.prepare("SELECT * FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
-    var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{
+    var rows = try stmt.all(TestUser, allocator, .{}, .{
         .id = @as(usize, 20),
     });
     for (rows) |row| {
@@ -2066,7 +2069,7 @@ test "sqlite: read a single user into a struct" {
 
         const exp = test_users[0];
         try testing.expectEqual(exp.id, row.?.id);
-        try testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name));
+        try testing.expectEqualStrings(exp.name, mem.sliceTo(&row.?.name, 0));
         try testing.expectEqual(exp.age, row.?.age);
     }
 
@@ -2078,7 +2081,7 @@ test "sqlite: read a single user into a struct" {
                 id: usize,
                 age: usize,
             },
-            &arena.allocator,
+            allocator,
             "SELECT name, id, age FROM user WHERE id = ?{usize}",
             .{},
             .{@as(usize, 20)},
@@ -2095,6 +2098,7 @@ test "sqlite: read a single user into a struct" {
 test "sqlite: read all users into a struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2102,7 +2106,7 @@ test "sqlite: read all users into a struct" {
     var stmt = try db.prepare("SELECT * FROM user");
     defer stmt.deinit();
 
-    var rows = try stmt.all(TestUser, &arena.allocator, .{}, .{});
+    var rows = try stmt.all(TestUser, allocator, .{}, .{});
     try testing.expectEqual(@as(usize, 3), rows.len);
     for (rows) |row, i| {
         const exp = test_users[i];
@@ -2116,6 +2120,7 @@ test "sqlite: read all users into a struct" {
 test "sqlite: read in an anonymous struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2132,7 +2137,7 @@ test "sqlite: read in an anonymous struct" {
             is_id: bool,
             weight: f64,
         },
-        &arena.allocator,
+        allocator,
         .{},
         .{ .id = @as(usize, 20) },
     );
@@ -2141,7 +2146,7 @@ test "sqlite: read in an anonymous struct" {
     const exp = test_users[0];
     try testing.expectEqual(exp.id, row.?.id);
     try testing.expectEqualStrings(exp.name, row.?.name);
-    try testing.expectEqualStrings(exp.name, mem.spanZ(&row.?.name_2));
+    try testing.expectEqualStrings(exp.name, mem.sliceTo(&row.?.name_2, 0xAD));
     try testing.expectEqual(exp.age, row.?.age);
     try testing.expect(row.?.is_id);
     try testing.expectEqual(exp.weight, @floatCast(f32, row.?.weight));
@@ -2150,6 +2155,7 @@ test "sqlite: read in an anonymous struct" {
 test "sqlite: read in a Text struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2163,7 +2169,7 @@ test "sqlite: read in a Text struct" {
             id: usize,
             age: usize,
         },
-        &arena.allocator,
+        allocator,
         .{},
         .{@as(usize, 20)},
     );
@@ -2178,6 +2184,7 @@ test "sqlite: read in a Text struct" {
 test "sqlite: read a single text value" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2193,6 +2200,7 @@ test "sqlite: read a single text value" {
         // Array
         [8:0]u8,
         [8:0xAD]u8,
+        [7]u8,
         // Specific text or blob
         Text,
         Blob,
@@ -2204,7 +2212,7 @@ test "sqlite: read a single text value" {
         var stmt: StatementType(.{}, query) = try db.prepare(query);
         defer stmt.deinit();
 
-        const name = try stmt.oneAlloc(typ, &arena.allocator, .{}, .{
+        const name = try stmt.oneAlloc(typ, allocator, .{}, .{
             .id = @as(usize, 20),
         });
         try testing.expect(name != null);
@@ -2217,7 +2225,10 @@ test "sqlite: read a single text value" {
                     const type_info = @typeInfo(typ);
                     break :blk switch (type_info) {
                         .Pointer => name.?,
-                        .Array => mem.spanZ(&(name.?)),
+                        .Array => |arr| if (arr.sentinel) |s|
+                            mem.sliceTo(&name.?, s)
+                        else
+                            mem.span(&name.?),
                         else => @compileError("invalid type " ++ @typeName(typ)),
                     };
                 };
@@ -2263,6 +2274,7 @@ test "sqlite: read a single integer value" {
 test "sqlite: read a single value into an enum backed by an integer" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try createTestTables(&db);
@@ -2297,7 +2309,7 @@ test "sqlite: read a single value into an enum backed by an integer" {
         var stmt: StatementType(.{}, query) = try db.prepare(query);
         defer stmt.deinit();
 
-        const b = try stmt.oneAlloc(IntColor, &arena.allocator, .{}, .{
+        const b = try stmt.oneAlloc(IntColor, allocator, .{}, .{
             .id = @as(usize, 10),
         });
         try testing.expect(b != null);
@@ -2308,6 +2320,7 @@ test "sqlite: read a single value into an enum backed by an integer" {
 test "sqlite: read a single value into an enum backed by a string" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try createTestTables(&db);
@@ -2322,7 +2335,7 @@ test "sqlite: read a single value into an enum backed by a string" {
     var stmt: StatementType(.{}, query) = try db.prepare(query);
     defer stmt.deinit();
 
-    const b = try stmt.oneAlloc(TestUser.Color, &arena.allocator, .{}, .{
+    const b = try stmt.oneAlloc(TestUser.Color, allocator, .{}, .{
         .id = @as(usize, 10),
     });
     try testing.expect(b != null);
@@ -2403,6 +2416,7 @@ test "sqlite: bind string literal" {
 test "sqlite: bind pointer" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2415,7 +2429,7 @@ test "sqlite: bind pointer" {
     for (test_users) |test_user, i| {
         stmt.reset();
 
-        const name = try stmt.oneAlloc([]const u8, &arena.allocator, .{}, .{&test_user.id});
+        const name = try stmt.oneAlloc([]const u8, allocator, .{}, .{&test_user.id});
         try testing.expect(name != null);
         try testing.expectEqualStrings(test_users[i].name, name.?);
     }
@@ -2424,6 +2438,7 @@ test "sqlite: bind pointer" {
 test "sqlite: read pointers" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2440,7 +2455,7 @@ test "sqlite: read pointers" {
             age: *u32,
             weight: *f32,
         },
-        &arena.allocator,
+        allocator,
         .{},
         .{},
     );
@@ -2510,7 +2525,7 @@ test "sqlite: statement reset" {
 test "sqlite: statement iterator" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = &arena.allocator;
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2559,7 +2574,7 @@ test "sqlite: statement iterator" {
 
         for (rows.items) |row, j| {
             const exp_row = expected_rows.items[j];
-            try testing.expectEqualStrings(exp_row.name, mem.spanZ(&row.name));
+            try testing.expectEqualStrings(exp_row.name, mem.sliceTo(&row.name, 0));
             try testing.expectEqual(exp_row.age, row.age);
         }
     }
@@ -2595,7 +2610,7 @@ test "sqlite: statement iterator" {
 test "sqlite: blob open, reopen" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = &arena.allocator;
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2747,6 +2762,7 @@ test "sqlite: exec with diags, failing statement" {
 test "sqlite: savepoint with no failures" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2779,7 +2795,7 @@ test "sqlite: savepoint with no failures" {
             data: []const u8,
             author_id: usize,
         },
-        &arena.allocator,
+        allocator,
         .{},
         .{},
     );
@@ -2794,6 +2810,7 @@ test "sqlite: savepoint with no failures" {
 test "sqlite: two nested savepoints with inner failure" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2831,7 +2848,7 @@ test "sqlite: two nested savepoints with inner failure" {
             data: []const u8,
             author_id: usize,
         },
-        &arena.allocator,
+        allocator,
         .{},
         .{},
     );
@@ -2843,6 +2860,7 @@ test "sqlite: two nested savepoints with inner failure" {
 test "sqlite: two nested savepoints with outer failure" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2869,7 +2887,7 @@ test "sqlite: two nested savepoints with outer failure" {
     var stmt = try db.prepare("SELECT 1 FROM article");
     defer stmt.deinit();
 
-    var rows = try stmt.all(usize, &arena.allocator, .{}, .{});
+    var rows = try stmt.all(usize, allocator, .{}, .{});
     try testing.expectEqual(@as(usize, 0), rows.len);
 }
 
@@ -2877,7 +2895,7 @@ fn getTestDb() !Db {
     var buf: [1024]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buf);
 
-    var mode = dbMode(&fba.allocator);
+    var mode = dbMode(fba.allocator());
 
     return try Db.init(.{
         .open_flags = .{
@@ -2888,7 +2906,7 @@ fn getTestDb() !Db {
     });
 }
 
-fn tmpDbPath(allocator: *mem.Allocator) ![:0]const u8 {
+fn tmpDbPath(allocator: mem.Allocator) ![:0]const u8 {
     const tmp_dir = testing.tmpDir(.{});
 
     const path = try std.fs.path.join(allocator, &[_][]const u8{
@@ -2902,7 +2920,7 @@ fn tmpDbPath(allocator: *mem.Allocator) ![:0]const u8 {
     return allocator.dupeZ(u8, path);
 }
 
-fn dbMode(allocator: *mem.Allocator) Db.Mode {
+fn dbMode(allocator: mem.Allocator) Db.Mode {
     return if (build_options.in_memory) blk: {
         break :blk .{ .Memory = {} };
     } else blk: {
@@ -2922,11 +2940,11 @@ const MyData = struct {
 
     const BaseType = []const u8;
 
-    pub fn bindField(self: MyData, allocator: *std.mem.Allocator) !BaseType {
+    pub fn bindField(self: MyData, allocator: mem.Allocator) !BaseType {
         return try std.fmt.allocPrint(allocator, "{}", .{std.fmt.fmtSliceHexLower(&self.data)});
     }
 
-    pub fn readField(alloc: *std.mem.Allocator, value: BaseType) !MyData {
+    pub fn readField(alloc: mem.Allocator, value: BaseType) !MyData {
         _ = alloc;
 
         var result = [_]u8{0} ** 16;
@@ -2942,6 +2960,7 @@ const MyData = struct {
 test "sqlite: bind custom type" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2953,7 +2972,7 @@ test "sqlite: bind custom type" {
     {
         // insertion
         var stmt = try db.prepare("INSERT INTO article(data) VALUES(?)");
-        try stmt.execAlloc(&arena.allocator, .{}, .{my_data});
+        try stmt.execAlloc(allocator, .{}, .{my_data});
     }
     {
         // reading back
@@ -2967,7 +2986,7 @@ test "sqlite: bind custom type" {
             is_published: bool,
         };
 
-        const row = try stmt.oneAlloc(Article, &arena.allocator, .{}, .{});
+        const row = try stmt.oneAlloc(Article, allocator, .{}, .{});
 
         try testing.expect(row != null);
         try testing.expectEqualSlices(u8, &my_data.data, &row.?.data.data);
@@ -2977,6 +2996,7 @@ test "sqlite: bind custom type" {
 test "sqlite: prepareDynamic" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -2996,7 +3016,7 @@ test "sqlite: prepareDynamic" {
     stmt.reset();
 
     {
-        var iter = try stmt.iteratorAlloc(usize, &arena.allocator, .{ .age = 33 });
+        var iter = try stmt.iteratorAlloc(usize, allocator, .{ .age = 33 });
 
         const id = try iter.next(.{});
         try testing.expect(id != null);
@@ -3006,7 +3026,7 @@ test "sqlite: prepareDynamic" {
     stmt.reset();
 
     {
-        var iter = try stmt.iteratorAlloc(usize, &arena.allocator, .{33});
+        var iter = try stmt.iteratorAlloc(usize, allocator, .{33});
 
         const id = try iter.next(.{});
         try testing.expect(id != null);
@@ -3017,6 +3037,7 @@ test "sqlite: prepareDynamic" {
 test "sqlite: oneDynamic" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
+    var allocator = arena.allocator();
 
     var db = try getTestDb();
     try addTestData(&db);
@@ -3050,7 +3071,7 @@ test "sqlite: oneDynamic" {
     {
         const id = try db.oneDynamicAlloc(
             usize,
-            &arena.allocator,
+            allocator,
             "SELECT id FROM user WHERE age = ?",
             .{ .diags = &diags },
             .{ .age = 33 },
@@ -3062,7 +3083,7 @@ test "sqlite: oneDynamic" {
     {
         const id = try db.oneDynamicAlloc(
             usize,
-            &arena.allocator,
+            allocator,
             "SELECT id FROM user WHERE age = ?",
             .{ .diags = &diags },
             .{33},
