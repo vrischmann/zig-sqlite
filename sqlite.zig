@@ -3122,3 +3122,70 @@ test "sqlite: oneDynamic" {
         try testing.expectEqual(@as(usize, 20), id.?);
     }
 }
+
+test "sqlite: empty slice" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    var list = std.ArrayList(u8).init(arena.allocator());
+    const ptr = list.toOwnedSlice();
+
+    try db.exec("INSERT INTO article(author_id, data) VALUES(?, ?)", .{}, .{ 1, ptr });
+
+    // Read into an array
+    {
+        var stmt = try db.prepare("SELECT data FROM article");
+        defer stmt.deinit();
+
+        const row = try stmt.one(
+            struct {
+                data: [128:0]u8,
+            },
+            .{},
+            .{},
+        );
+
+        try testing.expect(row != null);
+        try testing.expectEqualSlices(u8, "", mem.sliceTo(&row.?.data, 0));
+    }
+
+    // Read into an allocated slice
+    {
+        var stmt = try db.prepare("SELECT data FROM article");
+        defer stmt.deinit();
+
+        const row = try stmt.oneAlloc(
+            struct {
+                data: []const u8,
+            },
+            arena.allocator(),
+            .{},
+            .{},
+        );
+
+        try testing.expect(row != null);
+        try testing.expectEqualSlices(u8, "", row.?.data);
+    }
+
+    // Read into a Text
+    {
+        var stmt = try db.prepare("SELECT data FROM article");
+        defer stmt.deinit();
+
+        const row = try stmt.oneAlloc(
+            struct {
+                data: Text,
+            },
+            arena.allocator(),
+            .{},
+            .{},
+        );
+
+        try testing.expect(row != null);
+        try testing.expectEqualSlices(u8, "", row.?.data.data);
+    }
+}
