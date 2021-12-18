@@ -77,6 +77,8 @@ sqlite.addIncludeDir("third_party/zig-sqlite/c");
 sqlite.linkLibC();
 ```
 
+If you need to define custom [compime-time options](https://www.sqlite.org/compile.html#overview) for sqlite, modify the flags (second argument to `addCSourceFile`).
+
 Now it's just a matter of linking your `build.zig` target(s) to this library instead of the system one:
 
 ```zig
