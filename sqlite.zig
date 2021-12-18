@@ -1930,6 +1930,7 @@ fn addTestData(db: *Db) !void {
 
 test "sqlite: db init" {
     var db = try getTestDb();
+    defer db.deinit();
     _ = db;
 }
 
@@ -1939,6 +1940,7 @@ test "sqlite: db pragma" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
 
     const foreign_keys = try db.pragma(usize, .{}, "foreign_keys", null);
     try testing.expect(foreign_keys != null);
@@ -1973,6 +1975,7 @@ test "sqlite: db pragma" {
 
 test "sqlite: last insert row id" {
     var db = try getTestDb();
+    defer db.deinit();
     try createTestTables(&db);
 
     try db.exec("INSERT INTO user(name, age) VALUES(?, ?{u32})", .{}, .{
@@ -1986,6 +1989,7 @@ test "sqlite: last insert row id" {
 
 test "sqlite: statement exec" {
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     // Test with a Blob struct
@@ -2012,6 +2016,7 @@ test "sqlite: statement execDynamic" {
     // , but it's not our task to test. This test is a simple test to check if the .bindNamedStruct working.
     // Because of the dependence of Statment to DynamicStatment, it's not required to test rest functions.
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     // Test with a Blob struct
@@ -2039,6 +2044,7 @@ test "sqlite: read a single user into a struct" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT * FROM user WHERE id = ?{usize}");
@@ -2101,6 +2107,7 @@ test "sqlite: read all users into a struct" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT * FROM user");
@@ -2123,6 +2130,7 @@ test "sqlite: read in an anonymous struct" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT name, id, name, age, id, weight FROM user WHERE id = ?{usize}");
@@ -2158,6 +2166,7 @@ test "sqlite: read in a Text struct" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     var stmt = try db.prepare("SELECT name, id, age FROM user WHERE id = ?{usize}");
@@ -2187,6 +2196,7 @@ test "sqlite: read a single text value" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const types = &[_]type{
@@ -2241,6 +2251,7 @@ test "sqlite: read a single text value" {
 
 test "sqlite: read a single integer value" {
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const types = &[_]type{
@@ -2277,6 +2288,7 @@ test "sqlite: read a single value into an enum backed by an integer" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try createTestTables(&db);
 
     try db.exec("INSERT INTO user(id, age) VALUES(?{usize}, ?{usize})", .{}, .{
@@ -2323,6 +2335,7 @@ test "sqlite: read a single value into an enum backed by a string" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try createTestTables(&db);
 
     try db.exec("INSERT INTO user(id, favorite_color) VALUES(?{usize}, ?{[]const u8})", .{}, .{
@@ -2344,6 +2357,7 @@ test "sqlite: read a single value into an enum backed by a string" {
 
 test "sqlite: read a single value into void" {
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const query = "SELECT age FROM user WHERE id = ?{usize}";
@@ -2358,6 +2372,7 @@ test "sqlite: read a single value into void" {
 
 test "sqlite: read a single value into bool" {
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const query = "SELECT id FROM user WHERE id = ?{usize}";
@@ -2374,6 +2389,7 @@ test "sqlite: read a single value into bool" {
 
 test "sqlite: insert bool and bind bool" {
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     try db.exec("INSERT INTO article(id, author_id, is_published) VALUES(?{usize}, ?{usize}, ?{bool})", .{}, .{
@@ -2396,6 +2412,7 @@ test "sqlite: insert bool and bind bool" {
 
 test "sqlite: bind string literal" {
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     try db.exec("INSERT INTO article(id, data) VALUES(?, ?)", .{}, .{
@@ -2419,6 +2436,7 @@ test "sqlite: bind pointer" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const query = "SELECT name FROM user WHERE id = ?";
@@ -2441,6 +2459,7 @@ test "sqlite: read pointers" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const query = "SELECT id, name, age, weight FROM user";
@@ -2475,6 +2494,7 @@ test "sqlite: optional" {
     defer arena.deinit();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const published: ?bool = true;
@@ -2500,6 +2520,7 @@ test "sqlite: optional" {
 
 test "sqlite: statement reset" {
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     // Add data
@@ -2528,6 +2549,7 @@ test "sqlite: statement iterator" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     // Cleanup first
@@ -2683,6 +2705,7 @@ test "sqlite: failing open" {
 
 test "sqlite: failing prepare statement" {
     var db = try getTestDb();
+    defer db.deinit();
 
     var diags: Diagnostics = undefined;
 
@@ -2742,6 +2765,7 @@ test "sqlite: diagnostics format" {
 
 test "sqlite: exec with diags, failing statement" {
     var db = try getTestDb();
+    defer db.deinit();
 
     var diags = Diagnostics{};
 
@@ -2765,6 +2789,7 @@ test "sqlite: savepoint with no failures" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     {
@@ -2813,6 +2838,7 @@ test "sqlite: two nested savepoints with inner failure" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     {
@@ -2863,6 +2889,7 @@ test "sqlite: two nested savepoints with outer failure" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     blk: {
@@ -2963,6 +2990,7 @@ test "sqlite: bind custom type" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     const my_data = MyData{
@@ -2999,6 +3027,7 @@ test "sqlite: prepareDynamic" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     var diags = Diagnostics{};
@@ -3040,6 +3069,7 @@ test "sqlite: oneDynamic" {
     var allocator = arena.allocator();
 
     var db = try getTestDb();
+    defer db.deinit();
     try addTestData(&db);
 
     var diags = Diagnostics{};
