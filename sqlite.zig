@@ -1223,15 +1223,15 @@ pub const DynamicStatement = struct {
 
     pub const PrepareError = error{} || Error;
 
-    fn prepare(db: *Db, queryStr: []const u8, options: QueryOptions, flags: c_uint) PrepareError!Self {
+    fn prepare(db: *Db, query: []const u8, options: QueryOptions, flags: c_uint) PrepareError!Self {
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
         var stmt = blk: {
             var tmp: ?*c.sqlite3_stmt = undefined;
             const result = c.sqlite3_prepare_v3(
                 db.db,
-                queryStr.ptr,
-                @intCast(c_int, queryStr.len),
+                query.ptr,
+                @intCast(c_int, query.len),
                 flags,
                 &tmp,
                 null,
