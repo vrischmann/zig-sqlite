@@ -95,7 +95,7 @@ pub const ParsedQuery = struct {
                         state = .BindMarkerType;
                         current_bind_marker_type_pos = 0;
 
-                        // A bind marker with id and type: ?AAA{[]const u8}, we don't need move the pointer.
+                        // A bind marker with id and type: ?AAA{[]const u8}, we don't need to move the pointer.
                         if (current_bind_marker_id_pos > 0) {
                             parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
                         }
@@ -218,6 +218,7 @@ test "parsed query: query" {
     };
 
     inline for (testCases) |tc| {
+        @setEvalBranchQuota(100000);
         comptime var parsed_query = ParsedQuery.from(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
     }
@@ -351,5 +352,34 @@ test "parsed query: bind markers identifier type" {
 
         const bind_marker = parsed_query.bind_markers[0];
         try testing.expectEqual(tc.expected_marker.identifier_type, bind_marker.identifier_type);
+    }
+}
+
+test "parsed query: bind marker character inside string" {
+    const testCase = struct {
+        query: []const u8,
+        exp_bind_markers: comptime_int,
+        exp: []const u8,
+    };
+
+    const testCases = &[_]testCase{
+        .{
+            .query = "SELECT json_extract(metadata, '$.name') AS name FROM foobar",
+            .exp_bind_markers = 0,
+            .exp = "SELECT json_extract(metadata, '$.name') AS name FROM foobar",
+        },
+        .{
+            .query = "SELECT json_extract(metadata, '$.name') AS name FROM foobar WHERE name = $name{text}",
+            .exp_bind_markers = 1,
+            .exp = "SELECT json_extract(metadata, '$.name') AS name FROM foobar WHERE name = $name",
+        },
+    };
+
+    inline for (testCases) |tc| {
+        @setEvalBranchQuota(100000);
+        comptime var parsed_query = ParsedQuery.from(tc.query);
+
+        try testing.expectEqual(@as(usize, tc.exp_bind_markers), parsed_query.nb_bind_markers);
+        try testing.expectEqualStrings(tc.exp, parsed_query.getQuery());
     }
 }
