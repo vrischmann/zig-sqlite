@@ -901,18 +901,27 @@ pub fn Iterator(comptime Type: type) type {
                     switch (arr.child) {
                         u8 => {
                             const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-                            if (arr.sentinel == null) {
-                                if (size != arr.len) return error.ArraySizeMismatch;
-                            } else if (size >= @as(usize, arr.len)) {
-                                return error.ArrayTooSmall;
+
+                            if (arr.sentinel) |s| {
+                                // An array with a sentinel need to be as big as the data, + 1 byte for the sentinel.
+                                mem.set(u8, &ret, s);
+                                if (size >= @as(usize, arr.len)) {
+                                    return error.ArrayTooSmall;
+                                }
+                            } else if (size != arr.len) {
+                                // An array without a sentinel must have the exact same size as the data because we can't
+                                // communicate the real size to the caller.
+                                return error.ArraySizeMismatch;
                             }
 
                             const data = c.sqlite3_column_blob(self.stmt, i);
-                            const ptr = @ptrCast([*c]const u8, data)[0..size];
+                            if (data != null) {
+                                const ptr = @ptrCast([*c]const u8, data)[0..size];
 
-                            mem.copy(u8, ret[0..], ptr);
-                            if (arr.sentinel) |s| {
-                                ret[size] = s;
+                                mem.copy(u8, ret[0..], ptr);
+                                if (arr.sentinel) |s| {
+                                    ret[size] = s;
+                                }
                             }
                         },
                         else => @compileError("cannot read into array of " ++ @typeName(arr.child)),
