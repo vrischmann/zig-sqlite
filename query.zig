@@ -63,6 +63,22 @@ pub const ParsedQuery = struct {
                         buf[pos] = c;
                         pos += 1;
                     },
+                    '\'', '"' => {
+                        state = .InsideString;
+                        buf[pos] = c;
+                        pos += 1;
+                    },
+                    else => {
+                        buf[pos] = c;
+                        pos += 1;
+                    },
+                },
+                .InsideString => switch (c) {
+                    '\'', '"' => {
+                        state = .Start;
+                        buf[pos] = c;
+                        pos += 1;
+                    },
                     else => {
                         buf[pos] = c;
                         pos += 1;
