@@ -3,3 +3,4 @@ zig-*
 .zigmod
 deps.zig
 core.*
+/fuzz/outputs
