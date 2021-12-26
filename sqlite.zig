@@ -3198,3 +3198,22 @@ test "sqlite: empty slice" {
         try testing.expectEqualSlices(u8, "", row.?.data.data);
     }
 }
+
+test "sqlite: fuzzer found crashes" {
+    const test_cases = &[_]struct {
+        input: []const u8,
+        exp_error: anyerror,
+    }{
+        .{
+            .input = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00CREATE TABLE \x80\x00\x00\x00ar(Wb)\x01",
+            .exp_error = error.SQLiteError,
+        },
+    };
+
+    inline for (test_cases) |tc| {
+        var db = try getTestDb();
+        defer db.deinit();
+
+        try testing.expectError(tc.exp_error, db.exec(tc.input, .{}, .{}));
+    }
+}
