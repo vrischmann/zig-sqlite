@@ -314,20 +314,29 @@ test "parsed query: query bind identifier" {
     const testCase = struct {
         query: []const u8,
         expected_query: []const u8,
+        expected_nb_bind_markers: usize,
     };
 
     const testCases = &[_]testCase{
         .{
             .query = "INSERT INTO user(id, name, age) VALUES(@id{usize}, :name{[]const u8}, $age{u32})",
             .expected_query = "INSERT INTO user(id, name, age) VALUES(@id, :name, $age)",
+            .expected_nb_bind_markers = 3,
+        },
+        .{
+            .query = "INSERT INTO user(id, name, age) VALUES($id, $name, $age)",
+            .expected_query = "INSERT INTO user(id, name, age) VALUES($id, $name, $age)",
+            .expected_nb_bind_markers = 3,
         },
         .{
             .query = "SELECT id, name, age FROM user WHER age > :ageGT{u32} AND age < @ageLT{u32}",
             .expected_query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < @ageLT",
+            .expected_nb_bind_markers = 2,
         },
         .{
             .query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < $ageLT",
             .expected_query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < $ageLT",
+            .expected_nb_bind_markers = 2,
         },
     };
 
@@ -335,6 +344,7 @@ test "parsed query: query bind identifier" {
         @setEvalBranchQuota(100000);
         comptime var parsed_query = ParsedQuery.from(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
+        try testing.expectEqual(tc.expected_nb_bind_markers, parsed_query.nb_bind_markers);
     }
 }
 
