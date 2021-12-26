@@ -146,7 +146,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
     },
 };
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.build.Builder) !void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
@@ -203,4 +203,52 @@ pub fn build(b: *std.build.Builder) void {
 
         test_step.dependOn(&tests.step);
     }
+
+    // Fuzzing
+
+    const lib = b.addStaticLibrary("sqlite", null);
+    lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
+    lib.linkLibC();
+    lib.setBuildMode(.Debug);
+    lib.setTarget(getTarget(target, true));
+
+    // The library
+    const fuzz_lib = b.addStaticLibrary("fuzz-lib", "fuzz/main.zig");
+    fuzz_lib.addIncludeDir("c");
+    fuzz_lib.setBuildMode(.Debug);
+    fuzz_lib.setTarget(getTarget(target, true));
+    fuzz_lib.linkLibrary(lib);
+    fuzz_lib.want_lto = true;
+    fuzz_lib.bundle_compiler_rt = true;
+    fuzz_lib.addPackagePath("sqlite", "sqlite.zig");
+
+    // Setup the output name
+    const fuzz_executable_name = "fuzz";
+    const fuzz_exe_path = try std.fs.path.join(b.allocator, &.{ b.cache_root, fuzz_executable_name });
+
+    // We want `afl-clang-lto -o path/to/output path/to/library`
+    const fuzz_compile = b.addSystemCommand(&.{ "afl-clang-lto", "-o", fuzz_exe_path });
+    fuzz_compile.addArtifactArg(lib);
+    fuzz_compile.addArtifactArg(fuzz_lib);
+
+    // Install the cached output to the install 'bin' path
+    const fuzz_install = b.addInstallBinFile(.{ .path = fuzz_exe_path }, fuzz_executable_name);
+
+    // Add a top-level step that compiles and installs the fuzz executable
+    const fuzz_compile_run = b.step("fuzz", "Build executable for fuzz testing using afl-clang-lto");
+    // fuzz_compile_run.dependOn(&fuzz_lib.step);
+    fuzz_compile_run.dependOn(&fuzz_compile.step);
+    fuzz_compile_run.dependOn(&fuzz_install.step);
+
+    // Compile a companion exe for debugging crashes
+    const fuzz_debug_exe = b.addExecutable("fuzz-debug", "fuzz/main.zig");
+    fuzz_debug_exe.addIncludeDir("c");
+    fuzz_debug_exe.setBuildMode(.Debug);
+    fuzz_debug_exe.setTarget(getTarget(target, true));
+    fuzz_debug_exe.linkLibrary(lib);
+    fuzz_debug_exe.addPackagePath("sqlite", "sqlite.zig");
+
+    // Only install fuzz-debug when the fuzz step is run
+    const install_fuzz_debug_exe = b.addInstallArtifact(fuzz_debug_exe);
+    fuzz_compile_run.dependOn(&install_fuzz_debug_exe.step);
 }
