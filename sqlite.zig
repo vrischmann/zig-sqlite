@@ -501,8 +501,7 @@ pub const Db = struct {
         break :blk StatementType(.{}, query);
     } {
         @setEvalBranchQuota(100000);
-        const parsed_query = ParsedQuery.from(query);
-        return Statement(.{}, comptime parsed_query).prepare(self, options, 0);
+        return StatementType(.{}, query).prepare(self, options, 0);
     }
 
     /// prepareDynamicWithDiags is like `prepareDynamic` but takes an additional options argument.
@@ -529,8 +528,7 @@ pub const Db = struct {
         break :blk StatementType(.{}, query);
     } {
         @setEvalBranchQuota(100000);
-        const parsed_query = ParsedQuery.from(query);
-        return Statement(.{}, comptime parsed_query).prepare(self, .{}, 0);
+        return StatementType(.{}, query).prepare(self, .{}, 0);
     }
 
     /// prepareDynamic prepares a dynamic statement for the `query` provided.
