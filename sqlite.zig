@@ -1249,6 +1249,13 @@ pub const DynamicStatement = struct {
                 diags.err = getLastDetailedErrorFromDb(db.db);
                 return errors.errorFromResultCode(result);
             }
+            if (tmp == null) {
+                diags.err = .{
+                    .code = 0,
+                    .message = "the input query is not valid SQL (empty string or a comment)",
+                };
+                return error.SQLiteError;
+            }
             break :blk tmp.?;
         };
         return Self{
