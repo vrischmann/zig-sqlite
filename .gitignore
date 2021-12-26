@@ -2,3 +2,4 @@
 zig-*
 .zigmod
 deps.zig
+core.*
