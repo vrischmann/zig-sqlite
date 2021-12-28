@@ -1,4 +1,6 @@
 # Taken from https://github.com/google/oss-fuzz/blob/f64134b0b3c2b27a4283e55581d41d83d3c3a64f/projects/sqlite3/sql.dict
+# This code is licensed under the Apache License 2.0, which you can find in the file LICENSE.apache2
+# This code is Copyright Google.
 #
 # AFL dictionary for SQL
 # ----------------------
