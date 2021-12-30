@@ -124,6 +124,7 @@ pub const ParsedQuery = struct {
                             state = .Start;
                             if (current_bind_marker_id_pos > 0) {
                                 parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
+                                parsed_query.nb_bind_markers += 1;
                             }
                         }
                         buf[pos] = c;
