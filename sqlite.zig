@@ -646,6 +646,9 @@ pub const Savepoint = struct {
         SavepointNameTooShort,
         SavepointNameTooLong,
         SavepointNameInvalid,
+
+        // From execDynamic
+        ExecReturnedData,
     } || std.fmt.AllocPrintError || Error;
 
     fn init(db: *Db, name: []const u8) InitError!Self {
