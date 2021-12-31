@@ -3236,12 +3236,16 @@ test "sqlite: fuzzer found crashes" {
             .input = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00CREATE TABLE \x80\x00\x00\x00ar(Wb)\x01",
             .exp_error = error.SQLiteError,
         },
+        .{
+            .input = "SELECT?",
+            .exp_error = error.ExecReturnedData,
+        },
     };
 
     inline for (test_cases) |tc| {
         var db = try getTestDb();
         defer db.deinit();
 
-        try testing.expectError(tc.exp_error, db.exec(tc.input, .{}, .{}));
+        try testing.expectError(tc.exp_error, db.execDynamic(tc.input, .{}, .{}));
     }
 }
