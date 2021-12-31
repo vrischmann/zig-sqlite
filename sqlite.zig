@@ -1450,6 +1450,7 @@ pub const DynamicStatement = struct {
         const result = c.sqlite3_step(self.stmt);
         switch (result) {
             c.SQLITE_DONE => {},
+            c.SQLITE_ROW => return error.ExecReturnedData,
             else => {
                 diags.err = getLastDetailedErrorFromDb(self.db);
                 return errors.errorFromResultCode(result);
