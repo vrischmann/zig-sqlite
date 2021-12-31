@@ -3137,6 +3137,25 @@ test "sqlite: oneDynamic" {
     }
 }
 
+test "sqlite: one with all named parameters" {
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    var diags = Diagnostics{};
+
+    // Mix bind marker prefix for good measure
+
+    const id = try db.one(
+        usize,
+        "SELECT id FROM user WHERE age = $age AND weight < :weight and id < @id",
+        .{ .diags = &diags },
+        .{ .id = 400, .age = 33, .weight = 200 },
+    );
+    try testing.expect(id != null);
+    try testing.expectEqual(@as(usize, 20), id.?);
+}
+
 test "sqlite: empty slice" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
