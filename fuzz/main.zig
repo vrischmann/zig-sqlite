@@ -28,6 +28,7 @@ pub fn zigMain() !void {
 
     db.execDynamic(data, .{}, .{}) catch |err| switch (err) {
         error.SQLiteError => return,
+        error.ExecReturnedData => return,
         else => return err,
     };
 
