@@ -27,7 +27,7 @@ pub const ParsedQuery = struct {
     pub fn from(comptime query: []const u8) Self {
         comptime var buf: [query.len]u8 = undefined;
         comptime var pos = 0;
-        comptime var state = .Start;
+        comptime var state = .start;
 
         comptime var current_bind_marker_type: [256]u8 = undefined;
         comptime var current_bind_marker_type_pos = 0;
@@ -40,17 +40,17 @@ pub const ParsedQuery = struct {
 
         inline for (query) |c| {
             switch (state) {
-                .Start => switch (c) {
+                .start => switch (c) {
                     '?', ':', '@', '$' => {
                         parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
                         current_bind_marker_type_pos = 0;
                         current_bind_marker_id_pos = 0;
-                        state = .BindMarker;
+                        state = .bind_marker;
                         buf[pos] = c;
                         pos += 1;
                     },
                     '\'', '"' => {
-                        state = .InsideString;
+                        state = .inside_string;
                         buf[pos] = c;
                         pos += 1;
                     },
@@ -59,9 +59,9 @@ pub const ParsedQuery = struct {
                         pos += 1;
                     },
                 },
-                .InsideString => switch (c) {
+                .inside_string => switch (c) {
                     '\'', '"' => {
-                        state = .Start;
+                        state = .start;
                         buf[pos] = c;
                         pos += 1;
                     },
@@ -70,19 +70,19 @@ pub const ParsedQuery = struct {
                         pos += 1;
                     },
                 },
-                .BindMarker => switch (c) {
+                .bind_marker => switch (c) {
                     '?', ':', '@', '$' => @compileError("invalid multiple '?', ':', '$' or '@'."),
                     '{' => {
-                        state = .BindMarkerType;
+                        state = .bind_marker_type;
                     },
                     else => {
                         if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)) {
-                            state = .BindMarkerIdentifier;
+                            state = .bind_marker_identifier;
                             current_bind_marker_id[current_bind_marker_id_pos] = c;
                             current_bind_marker_id_pos += 1;
                         } else {
                             // This is a bind marker without a type.
-                            state = .Start;
+                            state = .start;
 
                             parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
                             parsed_query.nb_bind_markers += 1;
@@ -91,10 +91,10 @@ pub const ParsedQuery = struct {
                         pos += 1;
                     },
                 },
-                .BindMarkerIdentifier => switch (c) {
+                .bind_marker_identifier => switch (c) {
                     '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
                     '{' => {
-                        state = .BindMarkerType;
+                        state = .bind_marker_type;
                         current_bind_marker_type_pos = 0;
                     },
                     else => {
@@ -102,7 +102,7 @@ pub const ParsedQuery = struct {
                             current_bind_marker_id[current_bind_marker_id_pos] = c;
                             current_bind_marker_id_pos += 1;
                         } else {
-                            state = .Start;
+                            state = .start;
                             if (current_bind_marker_id_pos > 0) {
                                 parsed_query.nb_bind_markers += 1;
                             }
@@ -111,9 +111,9 @@ pub const ParsedQuery = struct {
                         pos += 1;
                     },
                 },
-                .BindMarkerType => switch (c) {
+                .bind_marker_type => switch (c) {
                     '}' => {
-                        state = .Start;
+                        state = .start;
 
                         const typ = parseType(current_bind_marker_type[0..current_bind_marker_type_pos]);
 
@@ -133,14 +133,14 @@ pub const ParsedQuery = struct {
 
         // The last character was ? so this must be an untyped bind marker.
         switch (state) {
-            .BindMarker => {
+            .bind_marker => {
                 parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
                 parsed_query.nb_bind_markers += 1;
             },
-            .BindMarkerIdentifier => {
+            .bind_marker_identifier => {
                 parsed_query.nb_bind_markers += 1;
             },
-            .Start => {},
+            .start => {},
             else => @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type"),
         }
 
