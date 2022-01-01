@@ -13,12 +13,6 @@ const BindMarker = struct {
     ///
     /// A null means the bind parameter is untyped so there won't be comptime checking.
     typed: ?type = null,
-
-    // TODO(vincent): both identifier and identifier_type are unused outside of parsing them.
-    // Should we remove them ?
-
-    /// Contains the bind parameter identifier string.
-    identifier: ?[]const u8 = null,
 };
 
 pub const ParsedQuery = struct {
@@ -102,11 +96,6 @@ pub const ParsedQuery = struct {
                     '{' => {
                         state = .BindMarkerType;
                         current_bind_marker_type_pos = 0;
-
-                        // A bind marker with id and type: ?AAA{[]const u8}, we don't need to move the pointer.
-                        if (current_bind_marker_id_pos > 0) {
-                            parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
-                        }
                     },
                     else => {
                         if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)) {
@@ -115,7 +104,6 @@ pub const ParsedQuery = struct {
                         } else {
                             state = .Start;
                             if (current_bind_marker_id_pos > 0) {
-                                parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
                                 parsed_query.nb_bind_markers += 1;
                             }
                         }
@@ -150,7 +138,6 @@ pub const ParsedQuery = struct {
                 parsed_query.nb_bind_markers += 1;
             },
             .BindMarkerIdentifier => {
-                parsed_query.bind_markers[parsed_query.nb_bind_markers].identifier = current_bind_marker_id[0..current_bind_marker_id_pos];
                 parsed_query.nb_bind_markers += 1;
             },
             .Start => {},
@@ -277,19 +264,31 @@ test "parsed query: bind markers identifier" {
     const testCases = &[_]testCase{
         .{
             .query = "foobar @ABC{usize}",
-            .expected_marker = .{ .identifier = "ABC" },
+            .expected_marker = .{ .typed = usize },
         },
         .{
             .query = "foobar ?123{text}",
-            .expected_marker = .{ .identifier = "123" },
+            .expected_marker = .{ .typed = Text },
         },
         .{
             .query = "foobar $abc{blob}",
-            .expected_marker = .{ .identifier = "abc" },
+            .expected_marker = .{ .typed = Blob },
+        },
+        .{
+            .query = "foobar :430{u32}",
+            .expected_marker = .{ .typed = u32 },
         },
         .{
             .query = "foobar ?123",
-            .expected_marker = .{ .identifier = "123" },
+            .expected_marker = .{},
+        },
+        .{
+            .query = "foobar :hola",
+            .expected_marker = .{},
+        },
+        .{
+            .query = "foobar @foo",
+            .expected_marker = .{},
         },
     };
 
@@ -299,7 +298,7 @@ test "parsed query: bind markers identifier" {
         try testing.expectEqual(@as(usize, 1), parsed_query.nb_bind_markers);
 
         const bind_marker = parsed_query.bind_markers[0];
-        try testing.expectEqualStrings(tc.expected_marker.identifier.?, bind_marker.identifier.?);
+        try testing.expectEqual(tc.expected_marker, bind_marker);
     }
 }
 
