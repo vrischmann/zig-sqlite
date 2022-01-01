@@ -15,6 +15,10 @@ const BindMarker = struct {
     typed: ?type = null,
 };
 
+fn isNamedIdentifierChar(c: u8) bool {
+    return std.ascii.isAlpha(c) or std.ascii.isDigit(c);
+}
+
 pub const ParsedQuery = struct {
     const Self = @This();
 
@@ -25,15 +29,14 @@ pub const ParsedQuery = struct {
     query_size: usize,
 
     pub fn from(comptime query: []const u8) Self {
+        // This contains the final SQL query after parsing with our
+        // own typed bind markers removed.
         comptime var buf: [query.len]u8 = undefined;
         comptime var pos = 0;
         comptime var state = .start;
 
         comptime var current_bind_marker_type: [256]u8 = undefined;
         comptime var current_bind_marker_type_pos = 0;
-
-        comptime var current_bind_marker_id: [256]u8 = undefined;
-        comptime var current_bind_marker_id_pos = 0;
 
         comptime var parsed_query: ParsedQuery = undefined;
         parsed_query.nb_bind_markers = 0;
@@ -44,7 +47,6 @@ pub const ParsedQuery = struct {
                     '?', ':', '@', '$' => {
                         parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
                         current_bind_marker_type_pos = 0;
-                        current_bind_marker_id_pos = 0;
                         state = .bind_marker;
                         buf[pos] = c;
                         pos += 1;
@@ -76,12 +78,11 @@ pub const ParsedQuery = struct {
                         state = .bind_marker_type;
                     },
                     else => {
-                        if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)) {
+                        if (isNamedIdentifierChar(c)) {
+                            // This is the start of a named bind marker.
                             state = .bind_marker_identifier;
-                            current_bind_marker_id[current_bind_marker_id_pos] = c;
-                            current_bind_marker_id_pos += 1;
                         } else {
-                            // This is a bind marker without a type.
+                            // This is a unnamed, untyped bind marker.
                             state = .start;
 
                             parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
@@ -98,14 +99,10 @@ pub const ParsedQuery = struct {
                         current_bind_marker_type_pos = 0;
                     },
                     else => {
-                        if (std.ascii.isAlpha(c) or std.ascii.isDigit(c)) {
-                            current_bind_marker_id[current_bind_marker_id_pos] = c;
-                            current_bind_marker_id_pos += 1;
-                        } else {
+                        if (!isNamedIdentifierChar(c)) {
+                            // This marks the end of the named bind marker.
                             state = .start;
-                            if (current_bind_marker_id_pos > 0) {
-                                parsed_query.nb_bind_markers += 1;
-                            }
+                            parsed_query.nb_bind_markers += 1;
                         }
                         buf[pos] = c;
                         pos += 1;
