@@ -128,7 +128,7 @@ pub const ParsedQuery = struct {
             }
         }
 
-        // The last character was ? so this must be an untyped bind marker.
+        // The last character was a bind marker prefix so this must be an untyped bind marker.
         switch (state) {
             .bind_marker => {
                 parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
@@ -223,32 +223,46 @@ test "parsed query: bind markers types" {
         expected_marker: BindMarker,
     };
 
-    const testCases = &[_]testCase{
-        .{
-            .query = "foobar ?{usize}",
-            .expected_marker = .{ .typed = usize },
-        },
-        .{
-            .query = "foobar ?{text}",
-            .expected_marker = .{ .typed = Text },
-        },
-        .{
-            .query = "foobar ?{blob}",
-            .expected_marker = .{ .typed = Blob },
-        },
-        .{
-            .query = "foobar ?",
-            .expected_marker = .{ .typed = null },
-        },
+    const prefixes = &[_][]const u8{
+        "?",
+        "?123",
+        ":",
+        ":hello",
+        "$",
+        "$foobar",
+        "@",
+        "@name",
     };
 
-    inline for (testCases) |tc| {
-        comptime var parsed_query = ParsedQuery.from(tc.query);
+    inline for (prefixes) |prefix| {
+        const testCases = &[_]testCase{
+            .{
+                .query = "foobar " ++ prefix ++ "{usize}",
+                .expected_marker = .{ .typed = usize },
+            },
+            .{
+                .query = "foobar " ++ prefix ++ "{text}",
+                .expected_marker = .{ .typed = Text },
+            },
+            .{
+                .query = "foobar " ++ prefix ++ "{blob}",
+                .expected_marker = .{ .typed = Blob },
+            },
+            .{
+                .query = "foobar " ++ prefix,
+                .expected_marker = .{ .typed = null },
+            },
+        };
 
-        try testing.expectEqual(1, parsed_query.nb_bind_markers);
+        inline for (testCases) |tc| {
+            @setEvalBranchQuota(100000);
+            comptime var parsed_query = ParsedQuery.from(tc.query);
 
-        const bind_marker = parsed_query.bind_markers[0];
-        try testing.expectEqual(tc.expected_marker.typed, bind_marker.typed);
+            try testing.expectEqual(1, parsed_query.nb_bind_markers);
+
+            const bind_marker = parsed_query.bind_markers[0];
+            try testing.expectEqual(tc.expected_marker.typed, bind_marker.typed);
+        }
     }
 }
 
