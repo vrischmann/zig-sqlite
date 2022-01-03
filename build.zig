@@ -48,6 +48,7 @@ const TestTarget = struct {
 const all_test_targets = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
         .linux => [_]TestTarget{
+            // Targets linux but other CPU archs.
             TestTarget{
                 .target = .{},
                 .bundled = false,
@@ -91,6 +92,21 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
                 .target = .{
                     .cpu_arch = .arm,
                     .abi = .musleabihf,
+                },
+                .bundled = true,
+            },
+            // Targets windows
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86_64,
+                    .os_tag = .windows,
+                },
+                .bundled = true,
+            },
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .i386,
+                    .os_tag = .windows,
                 },
                 .bundled = true,
             },
