@@ -110,6 +110,21 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
                 },
                 .bundled = true,
             },
+            // Targets macOS
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86_64,
+                    .os_tag = .macos,
+                },
+                .bundled = true,
+            },
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .aarch64,
+                    .os_tag = .macos,
+                },
+                .bundled = true,
+            },
         },
         .windows => [_]TestTarget{
             TestTarget{
