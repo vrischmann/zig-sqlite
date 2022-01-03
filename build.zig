@@ -153,6 +153,8 @@ pub fn build(b: *std.build.Builder) !void {
 
     const target = b.standardTargetOptions(.{});
 
+    // If the target is native we assume the user didn't change it with -Dtarget and run all test targets.
+    // Otherwise we run a single test target.
     const test_targets = if (target.isNative())
         &all_test_targets
     else
@@ -162,6 +164,12 @@ pub fn build(b: *std.build.Builder) !void {
         }};
 
     const test_step = b.step("test", "Run library tests");
+
+    // By default the tests will only be execute for native test targets, however they will be compiled
+    // for _all_ targets defined in `test_targets`.
+    //
+    // If you want to execute tests for other targets you can pass -fqemu, -fdarling, -fwine, -frosetta.
+
     for (test_targets) |test_target| {
         const bundled = use_bundled orelse test_target.bundled;
         const cross_target = getTarget(test_target.target, bundled);
