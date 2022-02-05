@@ -903,12 +903,15 @@ pub fn Iterator(comptime Type: type) type {
                         u8 => {
                             const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
 
-                            if (arr.sentinel) |s| {
+                            if (arr.sentinel) |sentinel_ptr| {
                                 // An array with a sentinel need to be as big as the data, + 1 byte for the sentinel.
-                                mem.set(u8, &ret, s);
                                 if (size >= @as(usize, arr.len)) {
                                     return error.ArrayTooSmall;
                                 }
+
+                                // Set the sentinel in the result at the correct position.
+                                const sentinel = @ptrCast(*const arr.child, sentinel_ptr).*;
+                                ret[size] = sentinel;
                             } else if (size != arr.len) {
                                 // An array without a sentinel must have the exact same size as the data because we can't
                                 // communicate the real size to the caller.
@@ -920,9 +923,6 @@ pub fn Iterator(comptime Type: type) type {
                                 const ptr = @ptrCast([*c]const u8, data)[0..size];
 
                                 mem.copy(u8, ret[0..], ptr);
-                                if (arr.sentinel) |s| {
-                                    ret[size] = s;
-                                }
                             }
                         },
                         else => @compileError("cannot read into array of " ++ @typeName(arr.child)),
@@ -966,7 +966,9 @@ pub fn Iterator(comptime Type: type) type {
         fn dupeWithSentinel(comptime SliceType: type, allocator: mem.Allocator, data: []const u8) !SliceType {
             switch (@typeInfo(SliceType)) {
                 .Pointer => |ptr_info| {
-                    if (ptr_info.sentinel) |sentinel| {
+                    if (ptr_info.sentinel) |sentinel_ptr| {
+                        const sentinel = @ptrCast(*const ptr_info.child, sentinel_ptr).*;
+
                         const slice = try allocator.alloc(u8, data.len + 1);
                         mem.copy(u8, slice, data);
                         slice[data.len] = sentinel;
@@ -2249,19 +2251,21 @@ test "sqlite: read a single text value" {
                 try testing.expectEqualStrings("Vincent", name.?.data);
             },
             else => {
-                const span = blk: {
-                    const type_info = @typeInfo(typ);
-                    break :blk switch (type_info) {
-                        .Pointer => name.?,
-                        .Array => |arr| if (arr.sentinel) |s|
-                            mem.sliceTo(&name.?, s)
-                        else
-                            mem.span(&name.?),
-                        else => @compileError("invalid type " ++ @typeName(typ)),
-                    };
-                };
-
-                try testing.expectEqualStrings("Vincent", span);
+                const type_info = @typeInfo(typ);
+                switch (type_info) {
+                    .Pointer => {
+                        try testing.expectEqualStrings("Vincent", name.?);
+                    },
+                    .Array => |arr| if (arr.sentinel) |sentinel_ptr| {
+                        const sentinel = @ptrCast(*const arr.child, sentinel_ptr).*;
+                        const res = mem.sliceTo(&name.?, sentinel);
+                        try testing.expectEqualStrings("Vincent", res);
+                    } else {
+                        const res = mem.span(&name.?);
+                        try testing.expectEqualStrings("Vincent", res);
+                    },
+                    else => @compileError("invalid type " ++ @typeName(typ)),
+                }
             },
         }
     }
