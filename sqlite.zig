@@ -882,12 +882,13 @@ pub const Db = struct {
     ///
     /// Exmaple: 'create table a(); create table b();'
     pub fn runMulti(self: *Self, comptime query: []const u8, options: QueryOptions) !void {
-        while (true) {
-            var sql_tail_ptr: ?[*:0]const u8 = null;
-            options.sql_tail_ptr = &sql_tail_ptr;
+        var new_options = options;
+        var sql_tail_ptr: ?[*:0]const u8 = null;
+        new_options.sql_tail_ptr = &sql_tail_ptr;
 
+        while (true) {
             // continuously prepare and execute
-            var stmt = try self.prepareWithDiags(query, options);
+            var stmt = try self.prepareWithDiags(query, new_options);
             defer stmt.deinit();
             if (sql_tail_ptr == null) break;
 
