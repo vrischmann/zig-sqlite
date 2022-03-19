@@ -876,6 +876,24 @@ pub const Db = struct {
             return errors.errorFromResultCode(result);
         }
     }
+
+    /// This is a convenience function to run statements that do not need
+    /// bindings to values, but have multiple commands inside.
+    ///
+    /// Exmaple: 'create table a(); create table b();'
+    pub fn runMulti(self: *Self, comptime query: []const u8, options: QueryOptions) !void {
+        while (true) {
+            var sql_tail_ptr: ?[*:0]const u8 = null;
+            options.sql_tail_ptr = &sql_tail_ptr;
+
+            // continuously prepare and execute
+            var stmt = try self.prepareWithDiags(query, options);
+            defer stmt.deinit();
+            if (sql_tail_ptr == null) break;
+
+            try stmt.exec(options, .{});
+        }
+    }
 };
 
 /// Savepoint is a helper type for managing savepoints.
@@ -996,6 +1014,11 @@ pub const Savepoint = struct {
 pub const QueryOptions = struct {
     /// if provided, diags will be populated in case of failures.
     diags: ?*Diagnostics = null,
+
+    /// if provided, sql_tail_ptr will point to the last uncompiled statement
+    /// in the prepare() call. this is useful for multiple-statements being
+    /// processed.
+    sql_tail_ptr: ?*?[*:0]const u8 = null,
 };
 
 /// Iterator allows iterating over a result set.
@@ -1532,7 +1555,7 @@ pub const DynamicStatement = struct {
                 @intCast(c_int, query.len),
                 flags,
                 &tmp,
-                null,
+                options.sql_tail_ptr,
             );
             if (result != c.SQLITE_OK) {
                 diags.err = getLastDetailedErrorFromDb(db.db);
