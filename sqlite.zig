@@ -2325,7 +2325,7 @@ test "sqlite: db init" {
 test "sqlite: run multi" {
     var db = try getTestDb();
     defer db.deinit();
-    try db.runMulti("create table a(b int); create table b(c int);", .{});
+    try db.runMulti("create table a(b int);\n\n--test comment\ncreate table b(c int);", .{});
     const val = try db.one(i32, "select max(c) from b", .{}, .{});
     try testing.expectEqual(@as(?i32, 0), val);
 }
