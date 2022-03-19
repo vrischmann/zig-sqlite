@@ -887,12 +887,21 @@ pub const Db = struct {
         new_options.sql_tail_ptr = &sql_tail_ptr;
 
         while (true) {
-            // continuously prepare and execute
-            var stmt = try self.prepareWithDiags(query, new_options);
-            defer stmt.deinit();
-            if (sql_tail_ptr == null) break;
+            // continuously prepare and execute (dynamically as there's no
+            // values to bind in this case)
+            var stmt: DynamicStatement = undefined;
+            if (sql_tail_ptr != null) {
+                const new_query = std.mem.span(sql_tail_ptr.?);
+                if (new_query.len == 0) break;
+                stmt = try self.prepareDynamicWithDiags(new_query, new_options);
+            } else {
+                stmt = try self.prepareDynamicWithDiags(query, new_options);
+            }
 
-            try stmt.exec(options, .{});
+            defer stmt.deinit();
+            try stmt.exec(new_options, .{});
+
+            if (sql_tail_ptr == null) break;
         }
     }
 };
@@ -2311,6 +2320,14 @@ test "sqlite: db init" {
     var db = try getTestDb();
     defer db.deinit();
     _ = db;
+}
+
+test "sqlite: run multi" {
+    var db = try getTestDb();
+    defer db.deinit();
+    try db.runMulti("create table a(b int); create table b(c int);", .{});
+    const val = try db.one(i32, "select max(c) from b", .{}, .{});
+    try testing.expectEqual(@as(?i32, 0), val);
 }
 
 test "sqlite: db pragma" {
