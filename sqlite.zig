@@ -257,13 +257,14 @@ pub const InitOptions = struct {
 /// DetailedError contains a SQLite error code and error message.
 pub const DetailedError = struct {
     code: usize,
+    near: i32,
     message: []const u8,
 
     pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
 
-        _ = try writer.print("{{code: {}, message: {s}}}", .{ self.code, self.message });
+        _ = try writer.print("{{code: {}, near: {d}, message: {s}}}", .{ self.code, self.near, self.message });
     }
 };
 
@@ -274,6 +275,7 @@ fn isThreadSafe() bool {
 fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
     return .{
         .code = @intCast(usize, code),
+        .near = -1,
         .message = blk: {
             const msg = c.sqlite3_errstr(code);
             break :blk mem.sliceTo(msg, 0);
@@ -284,6 +286,7 @@ fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
 fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
     return .{
         .code = @intCast(usize, c.sqlite3_extended_errcode(db)),
+        .near = @intCast(i32, c.sqlite3_error_offset(db)),
         .message = blk: {
             const msg = c.sqlite3_errmsg(db);
             break :blk mem.sliceTo(msg, 0);
@@ -1255,6 +1258,7 @@ pub const DynamicStatement = struct {
             if (tmp == null) {
                 diags.err = .{
                     .code = 0,
+                    .near = -1,
                     .message = "the input query is not valid SQL (empty string or a comment)",
                 };
                 return error.SQLiteError;
@@ -2760,20 +2764,22 @@ test "sqlite: diagnostics format" {
             .input = .{
                 .err = .{
                     .code = 20,
+                    .near = -1,
                     .message = "barbaz",
                 },
             },
-            .exp = "my diagnostics: {code: 20, message: barbaz}",
+            .exp = "my diagnostics: {code: 20, near: -1, message: barbaz}",
         },
         .{
             .input = .{
                 .message = "foobar",
                 .err = .{
                     .code = 20,
+                    .near = 10,
                     .message = "barbaz",
                 },
             },
-            .exp = "my diagnostics: {message: foobar, detailed error: {code: 20, message: barbaz}}",
+            .exp = "my diagnostics: {message: foobar, detailed error: {code: 20, near: 10, message: barbaz}}",
         },
     };
 
