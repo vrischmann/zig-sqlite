@@ -1727,17 +1727,30 @@ pub const DynamicStatement = struct {
     // If however there are no name bind markers then the behaviour will revert to using the field index in the struct, and the fields order must be correct.
     fn bind(self: *Self, options: anytype, values: anytype) !void {
         const StructType = @TypeOf(values);
-        const StructTypeInfo = @typeInfo(StructType).Struct;
 
-        inline for (StructTypeInfo.fields) |struct_field, struct_field_i| {
-            const field_value = @field(values, struct_field.name);
+        switch (@typeInfo(StructType)) {
+            .Struct => |StructTypeInfo| {
+                inline for (StructTypeInfo.fields) |struct_field, struct_field_i| {
+                    const field_value = @field(values, struct_field.name);
 
-            const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
-            if (i >= 0) {
-                try self.bindField(struct_field.field_type, options, struct_field.name, i, field_value);
-            } else {
-                try self.bindField(struct_field.field_type, options, struct_field.name, struct_field_i, field_value);
-            }
+                    const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
+                    if (i >= 0) {
+                        try self.bindField(struct_field.field_type, options, struct_field.name, i, field_value);
+                    } else {
+                        try self.bindField(struct_field.field_type, options, struct_field.name, struct_field_i, field_value);
+                    }
+                }
+            },
+            .Pointer => |PointerTypeInfo| {
+                // TODO support other pointer types
+                std.debug.assert(PointerTypeInfo.size == .Slice);
+
+                for (values) |value_to_bind, index| {
+                    std.log.info("awooga {} {}", .{ value_to_bind, index });
+                    try self.bindField(PointerTypeInfo.child, options, "", @intCast(c_int, index), value_to_bind);
+                }
+            },
+            else => @compileError("Unsupported type for values: " ++ @typeName(StructType)),
         }
     }
 
