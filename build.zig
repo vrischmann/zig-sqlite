@@ -217,7 +217,7 @@ pub fn build(b: *std.build.Builder) !void {
         }
 
         const lib = b.addStaticLibrary("zig-sqlite", "sqlite.zig");
-        lib.addIncludeDir("c");
+        if (bundled) lib.addIncludeDir("c");
         linkSqlite(lib);
         lib.setTarget(cross_target);
         lib.setBuildMode(test_target.mode);
@@ -231,7 +231,7 @@ pub fn build(b: *std.build.Builder) !void {
         tests.single_threaded = test_target.single_threaded;
         tests.setBuildMode(test_target.mode);
         tests.setTarget(cross_target);
-        tests.addIncludeDir("c");
+        if (bundled) tests.addIncludeDir("c");
         linkSqlite(tests);
 
         const tests_options = b.addOptions();
