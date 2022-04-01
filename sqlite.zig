@@ -283,10 +283,17 @@ fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
     };
 }
 
+fn getErrorOffset(db: *c.sqlite3) i32 {
+    if (comptime c.SQLITE_VERSION_NUMBER >= 3038000) {
+        return c.sqlite3_error_offset(db);
+    }
+    return -1;
+}
+
 fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
     return .{
         .code = @intCast(usize, c.sqlite3_extended_errcode(db)),
-        .near = @intCast(i32, c.sqlite3_error_offset(db)),
+        .near = getErrorOffset(db),
         .message = blk: {
             const msg = c.sqlite3_errmsg(db);
             break :blk mem.sliceTo(msg, 0);
