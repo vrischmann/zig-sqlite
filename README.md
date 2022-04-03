@@ -503,3 +503,33 @@ const rows = try stmt.all(usize, .{}, .{
 });
 _ = rows;
 ```
+
+## User defined functions
+
+sqlite supports [user-defined functions](https://www.sqlite.org/c3ref/create_function.html) which come in two types:
+* scalar functions
+* aggregate functions
+
+You can define a scalar function using `db.createScalarFunction`:
+```zig
+try db.createScalarFunction(
+    "blake3",
+    struct {
+        fn run(input: []const u8) [std.crypto.hash.Blake3.digest_length]u8 {
+            var hash: [std.crypto.hash.Blake3.digest_length]u8 = undefined;
+            std.crypto.hash.Blake3.hash(input, &hash, .{});
+            return hash;
+        }
+    }.run,
+    .{},
+);
+
+const hash = try db.one([std.crypto.hash.Blake3.digest_length]u8, "SELECT blake3('hello')", .{}, .{});
+```
+
+Each input arguments in the function call in the statement is passed on to the registered `run` function.
+Arguments are [sqlite3\_values](https://www.sqlite.org/c3ref/value_blob.html) and are converted to Zig values using the following rules:
+* TEXT values can be either `sqlite.Text` or `[]const u8`
+* BLOB values can be either `sqlite.Blob` or `[]const u8`
+* INTEGER values can be any Zig integer
+* REAL values can be any Zig float
