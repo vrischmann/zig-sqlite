@@ -1444,6 +1444,11 @@ pub const DynamicStatement = struct {
                     try self.bindField(PointerTypeInfo.child, options, "", @intCast(c_int, index), value_to_bind);
                 }
             },
+            .Array => |ArrayTypeInfo| {
+                for (values) |value_to_bind, index| {
+                    try self.bindField(ArrayTypeInfo.child, options, "", @intCast(c_int, index), value_to_bind);
+                }
+            },
             else => @compileError("Unsupported type for values: " ++ @typeName(StructType)),
         }
     }
