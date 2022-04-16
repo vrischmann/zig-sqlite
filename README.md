@@ -54,6 +54,7 @@ For sqlite, you have options depending on your target:
 
 * Preparing, executing statements
 * comptime checked bind parameters
+* user defined SQL functions
 
 # Installation
 
@@ -536,9 +537,9 @@ const rows = try stmt.all(usize, .{}, .{
 _ = rows;
 ```
 
-# User defined functions
+# User defined SQL functions
 
-sqlite supports [user-defined functions](https://www.sqlite.org/c3ref/create_function.html) which come in two types:
+sqlite supports [user-defined SQL functions](https://www.sqlite.org/c3ref/create_function.html) which come in two types:
 * scalar functions
 * aggregate functions
 
