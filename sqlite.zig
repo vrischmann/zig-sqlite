@@ -617,7 +617,7 @@ pub const Db = struct {
     ///
     /// The return type of the function is converted to a SQLite value according to the same rules but reversed.
     ///
-    pub fn createScalarFunction(self: *Self, func_name: [:0]const u8, comptime func: anytype, comptime create_flags: CreateFunctionFlag) !void {
+    pub fn createScalarFunction(self: *Self, func_name: [:0]const u8, comptime func: anytype, comptime create_flags: CreateFunctionFlag) Error!void {
         const Type = @TypeOf(func);
 
         const fn_info = switch (@typeInfo(Type)) {
