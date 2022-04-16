@@ -696,6 +696,17 @@ pub const Db = struct {
         deterministic: bool = true,
         /// Equivalent to SQLITE_DIRECTONLY
         direct_only: bool = true,
+
+        fn toCFlags(self: *const CreateFunctionFlag) c_int {
+            var flags: c_int = c.SQLITE_UTF8;
+            if (self.deterministic) {
+                flags |= c.SQLITE_DETERMINISTIC;
+            }
+            if (self.direct_only) {
+                flags |= c.SQLITE_DIRECTONLY;
+            }
+            return flags;
+        }
     };
 
     /// Creates an aggregate SQLite function with the given name.
@@ -752,13 +763,7 @@ pub const Db = struct {
 
         //
 
-        var flags: c_int = c.SQLITE_UTF8;
-        if (create_flags.deterministic) {
-            flags |= c.SQLITE_DETERMINISTIC;
-        }
-        if (create_flags.direct_only) {
-            flags |= c.SQLITE_DIRECTONLY;
-        }
+        const flags = create_flags.toCFlags();
 
         const result = c.sqlite3_create_function_v2(
             self.db,
@@ -832,13 +837,9 @@ pub const Db = struct {
 
         const ArgTuple = std.meta.ArgsTuple(Type);
 
-        var flags: c_int = c.SQLITE_UTF8;
-        if (create_flags.deterministic) {
-            flags |= c.SQLITE_DETERMINISTIC;
-        }
-        if (create_flags.direct_only) {
-            flags |= c.SQLITE_DIRECTONLY;
-        }
+        //
+
+        const flags = create_flags.toCFlags();
 
         const result = c.sqlite3_create_function_v2(
             self.db,
