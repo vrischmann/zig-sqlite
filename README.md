@@ -510,6 +510,14 @@ sqlite supports [user-defined functions](https://www.sqlite.org/c3ref/create_fun
 * scalar functions
 * aggregate functions
 
+In both cases the arguments are [sqlite3\_values](https://www.sqlite.org/c3ref/value_blob.html) and are converted to Zig values using the following rules:
+* TEXT values can be either `sqlite.Text` or `[]const u8`
+* BLOB values can be either `sqlite.Blob` or `[]const u8`
+* INTEGER values can be any Zig integer
+* REAL values can be any Zig float
+
+## Scalar functions
+
 You can define a scalar function using `db.createScalarFunction`:
 ```zig
 try db.createScalarFunction(
@@ -528,8 +536,37 @@ const hash = try db.one([std.crypto.hash.Blake3.digest_length]u8, "SELECT blake3
 ```
 
 Each input arguments in the function call in the statement is passed on to the registered `run` function.
-Arguments are [sqlite3\_values](https://www.sqlite.org/c3ref/value_blob.html) and are converted to Zig values using the following rules:
-* TEXT values can be either `sqlite.Text` or `[]const u8`
-* BLOB values can be either `sqlite.Blob` or `[]const u8`
-* INTEGER values can be any Zig integer
-* REAL values can be any Zig float
+
+## Aggregate functions
+
+You can define a scalar function using `db.createAggregateFunction`:
+```zig
+const MyContext = struct {
+    sum: u32,
+};
+var my_ctx = MyContext{ .sum = 0 };
+
+try db.createAggregateFunction(
+    "mySum",
+    &my_ctx,
+    struct {
+        fn step(ctx: *MyContext, input: u32) void {
+            ctx.sum += input;
+        }
+    }.step,
+    struct {
+        fn finalize(ctx: *MyContext) u32 {
+            return ctx.sum;
+        }
+    }.finalize,
+    .{},
+);
+
+const result = try db.one(usize, "SELECT mySum(nb) FROM foobar", .{}, .{});
+```
+
+Each input arguments in the function call in the statement is passed on to the registered `step` function.
+The `finalize` function is called once at the end.
+
+The context (2nd argument of `createAggregateFunction`) can be whatever you want; both `step` and `finalize` function must
+have their first argument of the same type as the context.
