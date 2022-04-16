@@ -8,6 +8,38 @@ While the core functionality works right now, the API is still subject to change
 
 If you use this library, expect to have to make changes when you update the code.
 
+# Table of contents
+
+* [Status](#status)
+* [Requirements](#requirements)
+* [Features](#features)
+* [Installation](#installation)
+   * [zigmod](#zigmod)
+   * [Git submodule](#git-submodule)
+   * [Using the system sqlite library](#using-the-system-sqlite-library)
+   * [Using the bundled sqlite source code file](#using-the-bundled-sqlite-source-code-file)
+* [Usage](#usage)
+   * [Initialization](#initialization)
+   * [Preparing a statement](#preparing-a-statement)
+      * [Common use](#common-use)
+      * [Diagnostics](#diagnostics)
+   * [Executing a statement](#executing-a-statement)
+   * [Reuse a statement](#reuse-a-statement)
+   * [Reading data](#reading-data)
+      * [Type parameter](#type-parameter)
+      * [Non allocating](#non-allocating)
+      * [Allocating](#allocating)
+   * [Iterating](#iterating)
+      * [Non allocating](#non-allocating-1)
+      * [Allocating](#allocating-1)
+   * [Bind parameters and resultset rows](#bind-parameters-and-resultset-rows)
+* [Comptime checks](#comptime-checks)
+   * [Check the number of bind parameters.](#check-the-number-of-bind-parameters)
+   * [Assign types to bind markers and check them.](#assign-types-to-bind-markers-and-check-them)
+* [User defined functions](#user-defined-functions)
+   * [Scalar functions](#scalar-functions)
+   * [Aggregate functions](#aggregate-functions)
+
 # Requirements
 
 [Zig master](https://ziglang.org/download/) is the only required dependency.
@@ -504,7 +536,7 @@ const rows = try stmt.all(usize, .{}, .{
 _ = rows;
 ```
 
-## User defined functions
+# User defined functions
 
 sqlite supports [user-defined functions](https://www.sqlite.org/c3ref/create_function.html) which come in two types:
 * scalar functions
