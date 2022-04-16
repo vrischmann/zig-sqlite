@@ -543,10 +543,10 @@ sqlite supports [user-defined functions](https://www.sqlite.org/c3ref/create_fun
 * aggregate functions
 
 In both cases the arguments are [sqlite3\_values](https://www.sqlite.org/c3ref/value_blob.html) and are converted to Zig values using the following rules:
-* TEXT values can be either `sqlite.Text` or `[]const u8`
-* BLOB values can be either `sqlite.Blob` or `[]const u8`
-* INTEGER values can be any Zig integer
-* REAL values can be any Zig float
+* `TEXT` values can be either `sqlite.Text` or `[]const u8`
+* `BLOB` values can be either `sqlite.Blob` or `[]const u8`
+* `INTEGER` values can be any Zig integer
+* `REAL` values can be any Zig float
 
 ## Scalar functions
 
