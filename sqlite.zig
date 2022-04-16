@@ -601,8 +601,16 @@ pub const Db = struct {
         return Savepoint.init(self, name);
     }
 
+    /// CreateFunctionFlag controls the flags used when creating a custom SQL function.
+    /// See https://sqlite.org/c3ref/c_deterministic.html.
+    ///
+    /// The flags SQLITE_UTF16LE, SQLITE_UTF16BE are not supported yet. SQLITE_UTF8 is the default and always on.
+    ///
+    /// TODO(vincent): allow these flags when we know how to handle UTF16 data.
     pub const CreateFunctionFlag = struct {
+        /// Equivalent to SQLITE_DETERMINISTIC
         deterministic: bool = true,
+        /// Equivalent to SQLITE_DIRECTONLY
         direct_only: bool = true,
     };
 
