@@ -724,14 +724,14 @@ pub const Db = struct {
     ///
     pub fn createAggregateFunction(self: *Self, func_name: [:0]const u8, my_ctx: anytype, comptime step_func: anytype, comptime finalize_func: anytype, comptime create_flags: CreateFunctionFlag) Error!void {
         // Check that the context type is usable
-        const ContextType = @TypeOf(my_ctx);
-        switch (@typeInfo(ContextType)) {
+        const ContextPtrType = @TypeOf(my_ctx);
+        const ContextType = switch (@typeInfo(ContextPtrType)) {
             .Pointer => |ptr_info| switch (ptr_info.size) {
-                .One => {},
-                else => @compileError("cannot use context of type " ++ @typeName(ContextType) ++ ", must be a single-item pointer"),
+                .One => ptr_info.child,
+                else => @compileError("cannot use context of type " ++ @typeName(ContextPtrType) ++ ", must be a single-item pointer"),
             },
-            else => @compileError("cannot use context of type " ++ @typeName(ContextType) ++ ", must be a single-item pointer"),
-        }
+            else => @compileError("cannot use context of type " ++ @typeName(ContextPtrType) ++ ", must be a single-item pointer"),
+        };
 
         // Validate the step function
 
@@ -781,7 +781,7 @@ pub const Db = struct {
                     var fn_args: StepFuncArgTuple = undefined;
 
                     // First argument is always the user-provided context
-                    fn_args[0] = @ptrCast(ContextType, @alignCast(@alignOf(ContextType), c.sqlite3_user_data(ctx)));
+                    fn_args[0] = @ptrCast(ContextPtrType, @alignCast(@alignOf(ContextType), c.sqlite3_user_data(ctx)));
 
                     comptime var i: usize = 0;
                     inline while (i < step_func_args_len) : (i += 1) {
@@ -800,7 +800,7 @@ pub const Db = struct {
                 fn xFinal(ctx: ?*c.sqlite3_context) callconv(.C) void {
                     var fn_args: FinalizeFuncArgTuple = undefined;
                     // Only one argument, the user-provided context
-                    fn_args[0] = @ptrCast(ContextType, @alignCast(@alignOf(ContextType), c.sqlite3_user_data(ctx)));
+                    fn_args[0] = @ptrCast(ContextPtrType, @alignCast(@alignOf(ContextType), c.sqlite3_user_data(ctx)));
 
                     const result = @call(.{}, finalize_func, fn_args);
 
@@ -3598,10 +3598,6 @@ test "sqlite: create scalar function" {
 }
 
 test "sqlite: create aggregate function" {
-    // TODO(vincent): fix this, panics on incorrect pointer alignment when casting the SQLite user data to the context type
-    // in the xStep function.
-    if (builtin.cpu.arch.isAARCH64()) return error.SkipZigTest;
-
     var db = try getTestDb();
     defer db.deinit();
 
