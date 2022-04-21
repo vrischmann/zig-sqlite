@@ -479,6 +479,13 @@ pub const Db = struct {
         try stmt.exec(options, values);
     }
 
+    /// execAlloc is like `exec` but can allocate memory.
+    pub fn execAlloc(self: *Self, allocator: mem.Allocator, comptime query: []const u8, options: QueryOptions, values: anytype) !void {
+        var stmt = try self.prepareWithDiags(query, options);
+        defer stmt.deinit();
+        try stmt.execAlloc(allocator, options, values);
+    }
+
     /// one is a convenience function which prepares a statement and reads a single row from the result set.
     pub fn one(self: *Self, comptime Type: type, comptime query: []const u8, options: QueryOptions, values: anytype) !?Type {
         var stmt = try self.prepareWithDiags(query, options);
@@ -2349,6 +2356,18 @@ test "sqlite: statement execDynamic" {
             .age = @as(u32, 20),
         });
     }
+}
+
+test "sqlite: db execAlloc" {
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    try db.execAlloc(testing.allocator, "INSERT INTO user(id, name, age) VALUES(@id, @name, @age)", .{}, .{
+        .id = @as(usize, 502),
+        .name = Blob{ .data = "hello" },
+        .age = @as(u32, 20),
+    });
 }
 
 test "sqlite: read a single user into a struct" {
