@@ -2328,9 +2328,6 @@ test "sqlite: statement exec" {
 }
 
 test "sqlite: statement execDynamic" {
-    // It's a smoke test for DynamicStatment, because the DynamicStatment is almost a wrapper to sqlite3_stmt
-    // , but it's not our task to test. This test is a simple test to check if the .bindNamedStruct working.
-    // Because of the dependence of Statment to DynamicStatment, it's not required to test rest functions.
     var db = try getTestDb();
     defer db.deinit();
     try addTestData(&db);
