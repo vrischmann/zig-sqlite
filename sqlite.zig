@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const build_options = @import("build_options");
 const debug = std.debug;
+const heap = std.heap;
 const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
@@ -1071,8 +1072,8 @@ pub fn Iterator(comptime Type: type) type {
                     }
 
                     if (@typeInfo(Type.BaseType) == .Int) {
-                        const innervalue = try self.readField(Type.BaseType, options, 0);
-                        return @intToEnum(Type, @intCast(TI.tag_type, innervalue));
+                        const inner_value = try self.readField(Type.BaseType, options, 0);
+                        return @intToEnum(Type, @intCast(TI.tag_type, inner_value));
                     }
 
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
@@ -1146,15 +1147,17 @@ pub fn Iterator(comptime Type: type) type {
                 .Enum => |TI| {
                     debug.assert(columns == 1);
 
-                    const innervalue = try self.readField(Type.BaseType, .{
-                        .allocator = allocator,
-                    }, 0);
+                    const inner_value = try self.readField(Type.BaseType, .{ .allocator = allocator }, 0);
 
                     if (comptime std.meta.trait.isZigString(Type.BaseType)) {
-                        return std.meta.stringToEnum(Type, innervalue) orelse unreachable;
+                        // The inner value is never returned to the user, we must free it ourselves.
+                        defer allocator.free(inner_value);
+
+                        // TODO(vincent): don't use unreachable
+                        return std.meta.stringToEnum(Type, inner_value) orelse unreachable;
                     }
                     if (@typeInfo(Type.BaseType) == .Int) {
-                        return @intToEnum(Type, @intCast(TI.tag_type, innervalue));
+                        return @intToEnum(Type, @intCast(TI.tag_type, inner_value));
                     }
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
@@ -1438,19 +1441,23 @@ pub fn Iterator(comptime Type: type) type {
                     .Pointer => try self.readPointer(FieldType, options, i),
                     .Optional => try self.readOptional(FieldType, options, i),
                     .Enum => |TI| {
-                        const innervalue = try self.readField(FieldType.BaseType, options, i);
+                        const inner_value = try self.readField(FieldType.BaseType, options, i);
 
                         if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
-                            return std.meta.stringToEnum(FieldType, innervalue) orelse unreachable;
+                            // The inner value is never returned to the user, we must free it ourselves.
+                            defer options.allocator.free(inner_value);
+
+                            // TODO(vincent): don't use unreachable
+                            return std.meta.stringToEnum(FieldType, inner_value) orelse unreachable;
                         }
                         if (@typeInfo(FieldType.BaseType) == .Int) {
-                            return @intToEnum(FieldType, @intCast(TI.tag_type, innervalue));
+                            return @intToEnum(FieldType, @intCast(TI.tag_type, inner_value));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
                     .Struct => {
-                        const innervalue = try self.readField(FieldType.BaseType, options, i);
-                        return try FieldType.readField(options.allocator, innervalue);
+                        const inner_value = try self.readField(FieldType.BaseType, options, i);
+                        return try FieldType.readField(options.allocator, inner_value);
                     },
                     else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
@@ -3298,22 +3305,23 @@ const MyData = struct {
 };
 
 test "sqlite: bind custom type" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    var allocator = arena.allocator();
-
     var db = try getTestDb();
     defer db.deinit();
     try addTestData(&db);
 
-    const my_data = MyData{
-        .data = [_]u8{'x'} ** 16,
-    };
-
     {
-        // insertion
-        var stmt = try db.prepare("INSERT INTO article(data) VALUES(?)");
-        try stmt.execAlloc(allocator, .{}, .{my_data});
+        var i: usize = 0;
+        while (i < 20) : (i += 1) {
+            var my_data: MyData = undefined;
+            mem.set(u8, &my_data.data, @intCast(u8, i));
+
+            var arena = heap.ArenaAllocator.init(testing.allocator);
+            defer arena.deinit();
+
+            // insertion
+            var stmt = try db.prepare("INSERT INTO article(data) VALUES(?)");
+            try stmt.execAlloc(arena.allocator(), .{}, .{my_data});
+        }
     }
     {
         // reading back
@@ -3327,10 +3335,18 @@ test "sqlite: bind custom type" {
             is_published: bool,
         };
 
-        const row = try stmt.oneAlloc(Article, allocator, .{}, .{});
+        var arena = heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
 
-        try testing.expect(row != null);
-        try testing.expectEqualSlices(u8, &my_data.data, &row.?.data.data);
+        const rows = try stmt.all(Article, arena.allocator(), .{}, .{});
+        try testing.expectEqual(@as(usize, 20), rows.len);
+
+        for (rows) |row, i| {
+            var exp_data: MyData = undefined;
+            mem.set(u8, &exp_data.data, @intCast(u8, i));
+
+            try testing.expectEqualSlices(u8, &exp_data.data, &row.data.data);
+        }
     }
 }
 
