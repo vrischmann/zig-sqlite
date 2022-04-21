@@ -33,10 +33,11 @@ If you use this library, expect to have to make changes when you update the code
       * [Non allocating](#non-allocating-1)
       * [Allocating](#allocating-1)
    * [Bind parameters and resultset rows](#bind-parameters-and-resultset-rows)
+   * [Custom type binding and reading](#custom-type-binding-and-reading)
 * [Comptime checks](#comptime-checks)
    * [Check the number of bind parameters.](#check-the-number-of-bind-parameters)
    * [Assign types to bind markers and check them.](#assign-types-to-bind-markers-and-check-them)
-* [User defined functions](#user-defined-functions)
+* [User defined SQL functions](#user-defined-sql-functions)
    * [Scalar functions](#scalar-functions)
    * [Aggregate functions](#aggregate-functions)
 
@@ -421,6 +422,34 @@ Here are the rules for resultset rows:
 * `NULL` can be read into any optional.
 
 Note that arrays must have a sentinel because we need a way to communicate where the data actually stops in the array, so for example use `[200:0]u8` for a `TEXT` field.
+
+## Custom type binding and reading
+
+Sometimes the default field binding or reading logic is not what you want, for example if you want to store an enum using its tag name instead of its integer value or
+if you want to store a byte slice as an hex string.
+
+To accomplish this you must first define a wrapper struct for your type. For example if your type is a `[4]u8` and you want to treat it as an integer:
+```zig
+pub const MyArray = struct {
+    data: [4]u8,
+
+    pub const BaseType = u32;
+
+    pub fn bindField(self: MyArray, _: std.mem.Allocator) !BaseType {
+        return std.mem.readIntNative(BaseType, &self.data);
+    }
+
+    pub fn readField(_: std.mem.Allocator, value: BaseType) !MyArray {
+        var arr: MyArray = undefined;
+        std.mem.writeIntNative(BaseType, &arr.data, value);
+        return arr;
+    }
+};
+```
+
+Now when you bind a value of type `MyArray` the value returned by `bindField` will be used for binding instead.
+
+Same for reading, when you select _into_ a `MyArray` row or field the value returned by `readField` will be used instead.
 
 # Comptime checks
 
