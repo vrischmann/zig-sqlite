@@ -34,6 +34,7 @@ If you use this library, expect to have to make changes when you update the code
       * [Allocating](#allocating-1)
    * [Bind parameters and resultset rows](#bind-parameters-and-resultset-rows)
    * [Custom type binding and reading](#custom-type-binding-and-reading)
+   * [Note about complex allocations](#note-about-complex-allocations)
 * [Comptime checks](#comptime-checks)
    * [Check the number of bind parameters.](#check-the-number-of-bind-parameters)
    * [Assign types to bind markers and check them.](#assign-types-to-bind-markers-and-check-them)
@@ -455,6 +456,40 @@ _NOTE_: when you _do_ allocate in `bindField` or `readField` make sure to pass a
 
 The binding or reading code does not keep tracking of allocations made in custom types so it can't free the allocated data itself; it's therefore required
 to use an arena to prevent memory leaks.
+
+## Note about complex allocations
+
+Depending on your queries and types there can be a lot of allocations required. Take the following example:
+```zig
+const User = struct {
+    id: usize,
+    first_name: []const u8,
+    last_name: []const u8,
+    data: []const u8,
+};
+
+fn fetchUsers(allocator: std.mem.Allocator, db: *sqlite.Db) ![]User {
+    var stmt = try db.prepare("SELECT id FROM user WHERE id > $id");
+    defer stmt.deinit();
+
+    return stmt.all(User, allocator, .{}, .{ .id = 20 });
+}
+```
+
+This will do multiple allocations:
+* one for each id field in the `User` type
+* one for the resulting slice
+
+To facilitate memory handling, consider using an arena allocator like this:
+```zig
+var arena = std.heap.ArenaAllocator.init(allocator);
+defer arena.deinit();
+
+const users = try fetchUsers(arena.allocator(), db);
+_ = users;
+```
+
+This is especially recommended if you use custom types that allocate memory since, as noted above, it's necessary to prevent memory leaks.
 
 # Comptime checks
 
