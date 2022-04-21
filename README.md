@@ -451,6 +451,11 @@ Now when you bind a value of type `MyArray` the value returned by `bindField` wi
 
 Same for reading, when you select _into_ a `MyArray` row or field the value returned by `readField` will be used instead.
 
+_NOTE_: when you _do_ allocate in `bindField` or `readField` make sure to pass a `std.heap.ArenaAllocator`-based allocator.
+
+The binding or reading code does not keep tracking of allocations made in custom types so it can't free the allocated data itself; it's therefore required
+to use an arena to prevent memory leaks.
+
 # Comptime checks
 
 Prepared statements contain _comptime_ metadata which is used to validate every call to `exec`, `one` and `all` _at compile time_.
