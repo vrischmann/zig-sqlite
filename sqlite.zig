@@ -1653,7 +1653,13 @@ pub const DynamicStatement = struct {
                     }
                 },
                 .Struct => {
-                    try self.bindField(FieldType.BaseType, options, field_name, i, try field.bindField(options.allocator));
+                    if (!comptime std.meta.trait.hasFn("bindField")(FieldType)) {
+                        @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType) ++ ", consider implementing the bindField() method");
+                    }
+
+                    const field_value = try field.bindField(options.allocator);
+
+                    try self.bindField(FieldType.BaseType, options, field_name, i, field_value);
                 },
                 else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
             },
