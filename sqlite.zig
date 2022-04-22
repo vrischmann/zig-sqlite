@@ -1675,6 +1675,24 @@ pub const DynamicStatement = struct {
 
                     try self.bindField(FieldType.BaseType, options, field_name, i, field_value);
                 },
+                .Union => |info| {
+                    if (info.tag_type) |UnionTagType| {
+                        inline for (info.fields) |u_field| {
+                            // This wasn't entirely obvious when I saw code like this elsewhere, it works because of type coercion.
+                            // See https://ziglang.org/documentation/master/#Type-Coercion-unions-and-enums
+                            const field_tag: std.meta.Tag(FieldType) = field;
+                            const this_tag: std.meta.Tag(FieldType) = @field(UnionTagType, u_field.name);
+
+                            if (field_tag == this_tag) {
+                                const field_value = @field(field, u_field.name);
+
+                                try self.bindField(u_field.field_type, options, u_field.name, i, field_value);
+                            }
+                        }
+                    } else {
+                        @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType));
+                    }
+                },
                 else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
             },
         }
@@ -3780,5 +3798,74 @@ test "sqlite: fuzzer found crashes" {
         defer db.deinit();
 
         try testing.expectError(tc.exp_error, db.execDynamic(tc.input, .{}, .{}));
+    }
+}
+
+test "tagged union" {
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    const Foobar = union(enum) {
+        name: []const u8,
+        age: usize,
+    };
+
+    try db.exec("CREATE TABLE foobar(key TEXT, value ANY)", .{}, .{});
+
+    var foobar = Foobar{ .name = "hello" };
+
+    {
+        try db.exec("INSERT INTO foobar(key, value) VALUES($key, $value)", .{}, .{
+            .key = std.meta.tagName(std.meta.activeTag(foobar)),
+            .value = foobar,
+        });
+
+        var arena = heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+
+        const result = try db.oneAlloc(
+            struct {
+                key: []const u8,
+                value: []const u8,
+            },
+            arena.allocator(),
+            "SELECT key, value FROM foobar WHERE key = $key",
+            .{},
+            .{
+                std.meta.tagName(std.meta.activeTag(foobar)),
+            },
+        );
+        try testing.expect(result != null);
+        try testing.expectEqualStrings("name", result.?.key);
+        try testing.expectEqualStrings(foobar.name, result.?.value);
+    }
+
+    {
+        foobar = Foobar{ .age = 204 };
+
+        try db.exec("INSERT INTO foobar(key, value) VALUES($key, $value)", .{}, .{
+            .key = std.meta.tagName(std.meta.activeTag(foobar)),
+            .value = foobar,
+        });
+
+        var arena = heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+
+        const result = try db.oneAlloc(
+            struct {
+                key: []const u8,
+                value: usize,
+            },
+            arena.allocator(),
+            "SELECT key, value FROM foobar WHERE key = $key",
+            .{},
+            .{
+                std.meta.tagName(std.meta.activeTag(foobar)),
+            },
+        );
+        try testing.expect(result != null);
+        try testing.expectEqualStrings("age", result.?.key);
+        try testing.expectEqual(foobar.age, result.?.value);
     }
 }
