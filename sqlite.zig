@@ -369,8 +369,6 @@ pub const Db = struct {
 
         switch (options.mode) {
             .File => |path| {
-                logger.info("opening {s}", .{path});
-
                 var db: ?*c.sqlite3 = undefined;
                 const result = c.sqlite3_open_v2(path, &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
@@ -385,8 +383,6 @@ pub const Db = struct {
                 return Self{ .db = db.? };
             },
             .Memory => {
-                logger.info("opening in memory", .{});
-
                 flags |= c.SQLITE_OPEN_MEMORY;
 
                 var db: ?*c.sqlite3 = undefined;
