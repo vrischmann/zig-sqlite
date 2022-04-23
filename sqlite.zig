@@ -3402,6 +3402,28 @@ test "sqlite: bind custom type" {
     }
 }
 
+test "sqlite: bind runtime slice" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var allocator = arena.allocator();
+
+    // creating array list on heap so that it's deemed runtime size
+    var list = std.ArrayList([]const u8).init(allocator);
+    defer list.deinit();
+    try list.append("this is some data");
+    const args = list.toOwnedSlice();
+
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    {
+        // insertion
+        var stmt = try db.prepareDynamic("INSERT INTO article(data) VALUES(?)");
+        defer stmt.deinit();
+        try stmt.exec(.{}, args);
+    }
+}
 test "sqlite: prepareDynamic" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
