@@ -1745,14 +1745,18 @@ pub const DynamicStatement = struct {
                 // TODO support other pointer types
                 std.debug.assert(PointerTypeInfo.size == .Slice);
 
-                for (values) |value_to_bind, index| {
-                    std.log.info("awooga {} {}", .{ value_to_bind, index });
-                    try self.bindField(PointerTypeInfo.child, options, "", @intCast(c_int, index), value_to_bind);
+                switch (PointerTypeInfo.size) {
+                    .Slice => {
+                        for (values) |value_to_bind, index| {
+                            try self.bindField(PointerTypeInfo.child, options, "unknown", @intCast(c_int, index), value_to_bind);
+                        }
+                    },
+                    else => @compileError("TODO support pointer size " ++ @tagName(PointerTypeInfo.size)),
                 }
             },
             .Array => |ArrayTypeInfo| {
                 for (values) |value_to_bind, index| {
-                    try self.bindField(ArrayTypeInfo.child, options, "", @intCast(c_int, index), value_to_bind);
+                    try self.bindField(ArrayTypeInfo.child, options, "unknown", @intCast(c_int, index), value_to_bind);
                 }
             },
             else => @compileError("Unsupported type for values: " ++ @typeName(StructType)),
