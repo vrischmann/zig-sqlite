@@ -2024,6 +2024,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
         /// The types are checked at comptime.
         fn bind(self: *Self, options: anytype, values: anytype) !void {
             const StructType = @TypeOf(values);
+            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(values))) {
+                @compileError("options passed to Statement.bind must be a struct (DynamicStatement supports runtime slices)");
+            }
+
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
             if (comptime query.nb_bind_markers != StructTypeInfo.fields.len) {
@@ -3424,6 +3428,7 @@ test "sqlite: bind runtime slice" {
         try stmt.exec(.{}, args);
     }
 }
+
 test "sqlite: prepareDynamic" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
