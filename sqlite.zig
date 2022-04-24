@@ -1726,9 +1726,9 @@ pub const DynamicStatement = struct {
     //
     // If however there are no name bind markers then the behaviour will revert to using the field index in the struct, and the fields order must be correct.
     fn bind(self: *Self, options: anytype, values: anytype) !void {
-        const StructType = @TypeOf(values);
+        const Type = @TypeOf(values);
 
-        switch (@typeInfo(StructType)) {
+        switch (@typeInfo(Type)) {
             .Struct => |StructTypeInfo| {
                 inline for (StructTypeInfo.fields) |struct_field, struct_field_i| {
                     const field_value = @field(values, struct_field.name);
@@ -1759,7 +1759,7 @@ pub const DynamicStatement = struct {
                     try self.bindField(ArrayTypeInfo.child, options, "unknown", @intCast(c_int, index), value_to_bind);
                 }
             },
-            else => @compileError("Unsupported type for values: " ++ @typeName(StructType)),
+            else => @compileError("Unsupported type for values: " ++ @typeName(Type)),
         }
     }
 
