@@ -1742,9 +1742,6 @@ pub const DynamicStatement = struct {
                 }
             },
             .Pointer => |PointerTypeInfo| {
-                // TODO support other pointer types
-                std.debug.assert(PointerTypeInfo.size == .Slice);
-
                 switch (PointerTypeInfo.size) {
                     .Slice => {
                         for (values) |value_to_bind, index| {
