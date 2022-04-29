@@ -15,7 +15,7 @@ pub const Text = @import("query.zig").Text;
 pub const ParsedQuery = @import("query.zig").ParsedQuery;
 
 const errors = @import("errors.zig");
-const Error = errors.Error;
+pub const Error = errors.Error;
 
 const logger = std.log.scoped(.sqlite);
 
@@ -2168,6 +2168,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) t
             var iter = try self.iterator(Type, values);
 
             const row = (try iter.next(options)) orelse return null;
+
             return row;
         }
 
