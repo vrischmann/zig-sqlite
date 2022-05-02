@@ -2865,23 +2865,43 @@ test "sqlite: optional" {
 
     const published: ?bool = true;
 
-    try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 1, null, published });
+    {
+        try db.exec("INSERT INTO article(author_id, data, is_published) VALUES(?, ?, ?)", .{}, .{ 1, null, published });
 
-    var stmt = try db.prepare("SELECT data, is_published FROM article");
-    defer stmt.deinit();
+        var stmt = try db.prepare("SELECT data, is_published FROM article");
+        defer stmt.deinit();
 
-    const row = try stmt.one(
-        struct {
-            data: ?[128:0]u8,
-            is_published: ?bool,
-        },
-        .{},
-        .{},
-    );
+        const row = try stmt.one(
+            struct {
+                data: ?[128:0]u8,
+                is_published: ?bool,
+            },
+            .{},
+            .{},
+        );
 
-    try testing.expect(row != null);
-    try testing.expect(row.?.data == null);
-    try testing.expectEqual(true, row.?.is_published.?);
+        try testing.expect(row != null);
+        try testing.expect(row.?.data == null);
+        try testing.expectEqual(true, row.?.is_published.?);
+    }
+
+    {
+        const data: ?[]const u8 = "hello";
+        try db.exec("INSERT INTO article(author_id, data) VALUES(?, :data{?[]const u8})", .{}, .{
+            .author_id = 20,
+            .dhe = data,
+        });
+
+        const row = try db.oneAlloc(
+            []const u8,
+            arena.allocator(),
+            "SELECT data FROM article WHERE author_id = ?",
+            .{},
+            .{ .author_id = 20 },
+        );
+        try testing.expect(row != null);
+        try testing.expectEqualStrings(data.?, row.?);
+    }
 }
 
 test "sqlite: statement reset" {
