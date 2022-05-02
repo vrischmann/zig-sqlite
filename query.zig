@@ -16,7 +16,7 @@ const BindMarker = struct {
 };
 
 fn isNamedIdentifierChar(c: u8) bool {
-    return std.ascii.isAlpha(c) or std.ascii.isDigit(c);
+    return std.ascii.isAlpha(c) or std.ascii.isDigit(c) or c == '_';
 }
 
 pub const ParsedQuery = struct {
@@ -339,6 +339,11 @@ test "parsed query: query bind identifier" {
         .{
             .query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < $ageLT",
             .expected_query = "SELECT id, name, age FROM user WHER age > :ageGT AND age < $ageLT",
+            .expected_nb_bind_markers = 2,
+        },
+        .{
+            .query = "SELECT id, name, age FROM user WHER age > $my_age{i32} AND age < :your_age{i32}",
+            .expected_query = "SELECT id, name, age FROM user WHER age > $my_age AND age < :your_age",
             .expected_nb_bind_markers = 2,
         },
     };
