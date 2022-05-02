@@ -112,7 +112,18 @@ pub const ParsedQuery = struct {
                     '}' => {
                         state = .start;
 
-                        const typ = parseType(current_bind_marker_type[0..current_bind_marker_type_pos]);
+                        const type_info_string = current_bind_marker_type[0..current_bind_marker_type_pos];
+                        // Handles optional types
+                        const typ = if (type_info_string[0] == '?') blk: {
+                            const child_type = parseType(type_info_string[1..]);
+                            break :blk @Type(std.builtin.TypeInfo{
+                                .Optional = .{
+                                    .child = child_type,
+                                },
+                            });
+                        } else blk: {
+                            break :blk parseType(type_info_string);
+                        };
 
                         parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = typ;
                         parsed_query.nb_bind_markers += 1;
@@ -251,6 +262,10 @@ test "parsed query: bind markers types" {
             .{
                 .query = "foobar " ++ prefix,
                 .expected_marker = .{ .typed = null },
+            },
+            .{
+                .query = "foobar " ++ prefix ++ "{?[]const u8}",
+                .expected_marker = .{ .typed = ?[]const u8 },
             },
         };
 
