@@ -3534,9 +3534,9 @@ test "sqlite: one with all named parameters" {
 
     const id = try db.one(
         usize,
-        "SELECT id FROM user WHERE age = $age AND weight < :weight and id < @id",
+        "SELECT id FROM user WHERE age = $age AND weight < :weight and id < @my_id",
         .{ .diags = &diags },
-        .{ .id = 400, .age = 33, .weight = 200 },
+        .{ .my_id = 400, .age = 33, .weight = 200 },
     );
     try testing.expect(id != null);
     try testing.expectEqual(@as(usize, 20), id.?);
