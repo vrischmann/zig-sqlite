@@ -2322,11 +2322,19 @@ test "sqlite: db init" {
     _ = db;
 }
 
-test "sqlite: run multi" {
+test "sqlite: exec multi" {
     var db = try getTestDb();
     defer db.deinit();
     try db.execMulti("create table a(b int);\n\n--test comment\ncreate table b(c int);", .{});
     const val = try db.one(i32, "select max(c) from b", .{}, .{});
+    try testing.expectEqual(@as(?i32, 0), val);
+}
+
+test "sqlite: exec multi with single statement" {
+    var db = try getTestDb();
+    defer db.deinit();
+    try db.execMulti("create table a(b int);", .{});
+    const val = try db.one(i32, "select max(b) from a", .{}, .{});
     try testing.expectEqual(@as(?i32, 0), val);
 }
 
