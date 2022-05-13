@@ -900,8 +900,6 @@ pub const Db = struct {
 
             defer stmt.deinit();
             try stmt.exec(new_options, .{});
-
-            if (sql_tail_ptr == null) break;
         }
     }
 };
