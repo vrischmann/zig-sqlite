@@ -881,7 +881,7 @@ pub const Db = struct {
     /// bindings to values, but have multiple commands inside.
     ///
     /// Exmaple: 'create table a(); create table b();'
-    pub fn runMulti(self: *Self, comptime query: []const u8, options: QueryOptions) !void {
+    pub fn execMulti(self: *Self, comptime query: []const u8, options: QueryOptions) !void {
         var new_options = options;
         var sql_tail_ptr: ?[*:0]const u8 = null;
         new_options.sql_tail_ptr = &sql_tail_ptr;
@@ -2325,7 +2325,7 @@ test "sqlite: db init" {
 test "sqlite: run multi" {
     var db = try getTestDb();
     defer db.deinit();
-    try db.runMulti("create table a(b int);\n\n--test comment\ncreate table b(c int);", .{});
+    try db.execMulti("create table a(b int);\n\n--test comment\ncreate table b(c int);", .{});
     const val = try db.one(i32, "select max(c) from b", .{}, .{});
     try testing.expectEqual(@as(?i32, 0), val);
 }
