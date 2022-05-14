@@ -15,6 +15,7 @@ pub const Text = @import("query.zig").Text;
 pub const ParsedQuery = @import("query.zig").ParsedQuery;
 
 const errors = @import("errors.zig");
+pub const errorFromResultCode = errors.errorFromResultCode;
 pub const Error = errors.Error;
 
 const logger = std.log.scoped(.sqlite);
