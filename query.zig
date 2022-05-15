@@ -19,186 +19,193 @@ fn isNamedIdentifierChar(c: u8) bool {
     return std.ascii.isAlpha(c) or std.ascii.isDigit(c) or c == '_';
 }
 
-pub const ParsedQuery = struct {
-    const Self = @This();
+pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
+    // This contains the final SQL query after parsing with our
+    // own typed bind markers removed.
+    comptime var buf: [query.len]u8 = undefined;
+    comptime var pos = 0;
+    comptime var state = .start;
 
-    bind_markers: [128]BindMarker,
-    nb_bind_markers: usize,
+    comptime var current_bind_marker_type: [256]u8 = undefined;
+    comptime var current_bind_marker_type_pos = 0;
 
-    query: [1024]u8,
-    query_size: usize,
+    // becomes part of our result
+    comptime var bind_markers: [128]BindMarker = undefined;
+    comptime var nb_bind_markers: usize = 0;
 
-    pub fn from(comptime query: []const u8) Self {
-        // This contains the final SQL query after parsing with our
-        // own typed bind markers removed.
-        comptime var buf: [query.len]u8 = undefined;
-        comptime var pos = 0;
-        comptime var state = .start;
-
-        comptime var current_bind_marker_type: [256]u8 = undefined;
-        comptime var current_bind_marker_type_pos = 0;
-
-        comptime var parsed_query: ParsedQuery = undefined;
-        parsed_query.nb_bind_markers = 0;
-
-        inline for (query) |c| {
-            switch (state) {
-                .start => switch (c) {
-                    '?', ':', '@', '$' => {
-                        parsed_query.bind_markers[parsed_query.nb_bind_markers] = BindMarker{};
-                        current_bind_marker_type_pos = 0;
-                        state = .bind_marker;
-                        buf[pos] = c;
-                        pos += 1;
-                    },
-                    '\'', '"' => {
-                        state = .inside_string;
-                        buf[pos] = c;
-                        pos += 1;
-                    },
-                    else => {
-                        buf[pos] = c;
-                        pos += 1;
-                    },
+    inline for (query) |c| {
+        switch (state) {
+            .start => switch (c) {
+                '?', ':', '@', '$' => {
+                    bind_markers[nb_bind_markers] = BindMarker{};
+                    current_bind_marker_type_pos = 0;
+                    state = .bind_marker;
+                    buf[pos] = c;
+                    pos += 1;
                 },
-                .inside_string => switch (c) {
-                    '\'', '"' => {
-                        state = .start;
-                        buf[pos] = c;
-                        pos += 1;
-                    },
-                    else => {
-                        buf[pos] = c;
-                        pos += 1;
-                    },
-                },
-                .bind_marker => switch (c) {
-                    '?', ':', '@', '$' => @compileError("invalid multiple '?', ':', '$' or '@'."),
-                    '{' => {
-                        state = .bind_marker_type;
-                    },
-                    else => {
-                        if (isNamedIdentifierChar(c)) {
-                            // This is the start of a named bind marker.
-                            state = .bind_marker_identifier;
-                        } else {
-                            // This is a unnamed, untyped bind marker.
-                            state = .start;
-
-                            parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
-                            parsed_query.nb_bind_markers += 1;
-                        }
-                        buf[pos] = c;
-                        pos += 1;
-                    },
-                },
-                .bind_marker_identifier => switch (c) {
-                    '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
-                    '{' => {
-                        state = .bind_marker_type;
-                        current_bind_marker_type_pos = 0;
-                    },
-                    else => {
-                        if (!isNamedIdentifierChar(c)) {
-                            // This marks the end of the named bind marker.
-                            state = .start;
-                            parsed_query.nb_bind_markers += 1;
-                        }
-                        buf[pos] = c;
-                        pos += 1;
-                    },
-                },
-                .bind_marker_type => switch (c) {
-                    '}' => {
-                        state = .start;
-
-                        const type_info_string = current_bind_marker_type[0..current_bind_marker_type_pos];
-                        // Handles optional types
-                        const typ = if (type_info_string[0] == '?') blk: {
-                            const child_type = parseType(type_info_string[1..]);
-                            break :blk @Type(std.builtin.TypeInfo{
-                                .Optional = .{
-                                    .child = child_type,
-                                },
-                            });
-                        } else blk: {
-                            break :blk parseType(type_info_string);
-                        };
-
-                        parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = typ;
-                        parsed_query.nb_bind_markers += 1;
-                    },
-                    else => {
-                        current_bind_marker_type[current_bind_marker_type_pos] = c;
-                        current_bind_marker_type_pos += 1;
-                    },
+                '\'', '"' => {
+                    state = .inside_string;
+                    buf[pos] = c;
+                    pos += 1;
                 },
                 else => {
-                    @compileError("invalid state " ++ @tagName(state));
+                    buf[pos] = c;
+                    pos += 1;
                 },
-            }
-        }
-
-        // The last character was a bind marker prefix so this must be an untyped bind marker.
-        switch (state) {
-            .bind_marker => {
-                parsed_query.bind_markers[parsed_query.nb_bind_markers].typed = null;
-                parsed_query.nb_bind_markers += 1;
             },
-            .bind_marker_identifier => {
-                parsed_query.nb_bind_markers += 1;
-            },
-            .start => {},
-            else => @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type"),
-        }
-
-        mem.copy(u8, &parsed_query.query, &buf);
-        parsed_query.query_size = pos;
-
-        return parsed_query;
-    }
-
-    fn parseType(type_info: []const u8) type {
-        if (type_info.len <= 0) @compileError("invalid type info " ++ type_info);
-
-        // Integer
-        if (mem.eql(u8, "usize", type_info)) return usize;
-        if (mem.eql(u8, "isize", type_info)) return isize;
-
-        if (type_info[0] == 'u' or type_info[0] == 'i') {
-            return @Type(std.builtin.TypeInfo{
-                .Int = std.builtin.TypeInfo.Int{
-                    .signedness = if (type_info[0] == 'i') .signed else .unsigned,
-                    .bits = std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
-                        @compileError("invalid type info " ++ type_info);
-                    },
+            .inside_string => switch (c) {
+                '\'', '"' => {
+                    state = .start;
+                    buf[pos] = c;
+                    pos += 1;
                 },
-            });
+                else => {
+                    buf[pos] = c;
+                    pos += 1;
+                },
+            },
+            .bind_marker => switch (c) {
+                '?', ':', '@', '$' => @compileError("invalid multiple '?', ':', '$' or '@'."),
+                '{' => {
+                    state = .bind_marker_type;
+                },
+                else => {
+                    if (isNamedIdentifierChar(c)) {
+                        // This is the start of a named bind marker.
+                        state = .bind_marker_identifier;
+                    } else {
+                        // This is a unnamed, untyped bind marker.
+                        state = .start;
+
+                        bind_markers[nb_bind_markers].typed = null;
+                        nb_bind_markers += 1;
+                    }
+                    buf[pos] = c;
+                    pos += 1;
+                },
+            },
+            .bind_marker_identifier => switch (c) {
+                '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
+                '{' => {
+                    state = .bind_marker_type;
+                    current_bind_marker_type_pos = 0;
+                },
+                else => {
+                    if (!isNamedIdentifierChar(c)) {
+                        // This marks the end of the named bind marker.
+                        state = .start;
+                        nb_bind_markers += 1;
+                    }
+                    buf[pos] = c;
+                    pos += 1;
+                },
+            },
+            .bind_marker_type => switch (c) {
+                '}' => {
+                    state = .start;
+
+                    const type_info_string = current_bind_marker_type[0..current_bind_marker_type_pos];
+                    // Handles optional types
+                    const typ = if (type_info_string[0] == '?') blk: {
+                        const child_type = ParseType(type_info_string[1..]);
+                        break :blk @Type(std.builtin.TypeInfo{
+                            .Optional = .{
+                                .child = child_type,
+                            },
+                        });
+                    } else blk: {
+                        break :blk ParseType(type_info_string);
+                    };
+
+                    bind_markers[nb_bind_markers].typed = typ;
+                    nb_bind_markers += 1;
+                },
+                else => {
+                    current_bind_marker_type[current_bind_marker_type_pos] = c;
+                    current_bind_marker_type_pos += 1;
+                },
+            },
+            else => {
+                @compileError("invalid state " ++ @tagName(state));
+            },
         }
-
-        // Float
-        if (mem.eql(u8, "f16", type_info)) return f16;
-        if (mem.eql(u8, "f32", type_info)) return f32;
-        if (mem.eql(u8, "f64", type_info)) return f64;
-        if (mem.eql(u8, "f128", type_info)) return f128;
-
-        // Bool
-        if (mem.eql(u8, "bool", type_info)) return bool;
-
-        // Strings
-        if (mem.eql(u8, "[]const u8", type_info) or mem.eql(u8, "[]u8", type_info)) {
-            return []const u8;
-        }
-        if (mem.eql(u8, "text", type_info)) return Text;
-        if (mem.eql(u8, "blob", type_info)) return Blob;
-
-        @compileError("invalid type info " ++ type_info);
     }
 
-    pub fn getQuery(comptime self: *const Self) []const u8 {
-        return self.query[0..self.query_size];
+    // The last character was a bind marker prefix so this must be an untyped bind marker.
+    switch (state) {
+        .bind_marker => {
+            bind_markers[nb_bind_markers].typed = null;
+            nb_bind_markers += 1;
+        },
+        .bind_marker_identifier => {
+            nb_bind_markers += 1;
+        },
+        .start => {},
+        else => @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type"),
     }
-};
+
+    var parsed_state = ParsedQueryState(query.len){
+        .bind_markers = bind_markers,
+        .nb_bind_markers = nb_bind_markers,
+        .query = undefined,
+        .query_len = pos,
+    };
+
+    std.mem.copy(u8, &parsed_state.query, &buf);
+
+    return parsed_state;
+}
+
+pub fn ParsedQueryState(comptime max_query_len: usize) type {
+    return struct {
+        const Self = @This();
+        bind_markers: [128]BindMarker,
+        nb_bind_markers: usize,
+        query: [max_query_len]u8,
+        query_len: usize,
+
+        pub fn getQuery(comptime self: *const Self) []const u8 {
+            return self.query[0..self.query_len];
+        }
+    };
+}
+
+fn ParseType(type_info: []const u8) type {
+    if (type_info.len <= 0) @compileError("invalid type info " ++ type_info);
+
+    // Integer
+    if (mem.eql(u8, "usize", type_info)) return usize;
+    if (mem.eql(u8, "isize", type_info)) return isize;
+
+    if (type_info[0] == 'u' or type_info[0] == 'i') {
+        return @Type(std.builtin.TypeInfo{
+            .Int = std.builtin.TypeInfo.Int{
+                .signedness = if (type_info[0] == 'i') .signed else .unsigned,
+                .bits = std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
+                    @compileError("invalid type info " ++ type_info);
+                },
+            },
+        });
+    }
+
+    // Float
+    if (mem.eql(u8, "f16", type_info)) return f16;
+    if (mem.eql(u8, "f32", type_info)) return f32;
+    if (mem.eql(u8, "f64", type_info)) return f64;
+    if (mem.eql(u8, "f128", type_info)) return f128;
+
+    // Bool
+    if (mem.eql(u8, "bool", type_info)) return bool;
+
+    // Strings
+    if (mem.eql(u8, "[]const u8", type_info) or mem.eql(u8, "[]u8", type_info)) {
+        return []const u8;
+    }
+    if (mem.eql(u8, "text", type_info)) return Text;
+    if (mem.eql(u8, "blob", type_info)) return Blob;
+
+    @compileError("invalid type info " ++ type_info);
+}
 
 test "parsed query: query" {
     const testCase = struct {
@@ -223,7 +230,7 @@ test "parsed query: query" {
 
     inline for (testCases) |tc| {
         @setEvalBranchQuota(100000);
-        comptime var parsed_query = ParsedQuery.from(tc.query);
+        comptime var parsed_query = ParsedQuery(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
     }
 }
@@ -271,7 +278,7 @@ test "parsed query: bind markers types" {
 
         inline for (testCases) |tc| {
             @setEvalBranchQuota(100000);
-            comptime var parsed_query = ParsedQuery.from(tc.query);
+            comptime var parsed_query = ParsedQuery(tc.query);
 
             try testing.expectEqual(1, parsed_query.nb_bind_markers);
 
@@ -319,7 +326,7 @@ test "parsed query: bind markers identifier" {
     };
 
     inline for (testCases) |tc| {
-        comptime var parsed_query = ParsedQuery.from(tc.query);
+        comptime var parsed_query = ParsedQuery(tc.query);
 
         try testing.expectEqual(@as(usize, 1), parsed_query.nb_bind_markers);
 
@@ -365,7 +372,7 @@ test "parsed query: query bind identifier" {
 
     inline for (testCases) |tc| {
         @setEvalBranchQuota(100000);
-        comptime var parsed_query = ParsedQuery.from(tc.query);
+        comptime var parsed_query = ParsedQuery(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
         try testing.expectEqual(tc.expected_nb_bind_markers, parsed_query.nb_bind_markers);
     }
@@ -393,7 +400,7 @@ test "parsed query: bind marker character inside string" {
 
     inline for (testCases) |tc| {
         @setEvalBranchQuota(100000);
-        comptime var parsed_query = ParsedQuery.from(tc.query);
+        comptime var parsed_query = ParsedQuery(tc.query);
 
         try testing.expectEqual(@as(usize, tc.exp_bind_markers), parsed_query.nb_bind_markers);
         try testing.expectEqualStrings(tc.exp, parsed_query.getQuery());

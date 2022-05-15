@@ -1506,7 +1506,7 @@ pub fn Iterator(comptime Type: type) type {
 ///
 pub fn StatementType(comptime opts: StatementOptions, comptime query: []const u8) type {
     @setEvalBranchQuota(100000);
-    return Statement(opts, ParsedQuery.from(query));
+    return Statement(opts, ParsedQuery(query));
 }
 
 pub const StatementOptions = struct {};
@@ -2002,7 +2002,7 @@ pub const DynamicStatement = struct {
 ///
 /// Look at each function for more complete documentation.
 ///
-pub fn Statement(comptime opts: StatementOptions, comptime query: ParsedQuery) type {
+pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type {
     _ = opts;
 
     return struct {
