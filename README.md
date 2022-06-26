@@ -396,7 +396,7 @@ while (true) {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
 
-    const name = (try iter.nextAlloc(&arena.allocator, .{})) orelse break;
+    const name = (try iter.nextAlloc(arena.allocator(), .{})) orelse break;
     std.debug.print("name: {}\n", .{name});
 }
 ```
