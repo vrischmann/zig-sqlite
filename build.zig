@@ -40,7 +40,6 @@ fn getTarget(original_target: std.zig.CrossTarget, bundled: bool) std.zig.CrossT
 
 const TestTarget = struct {
     target: std.zig.CrossTarget = @as(std.zig.CrossTarget, .{}),
-    mode: std.builtin.Mode = .Debug,
     single_threaded: bool = false,
     bundled: bool,
 };
@@ -183,6 +182,7 @@ pub fn build(b: *std.build.Builder) !void {
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
 
     const target = b.standardTargetOptions(.{});
+    const mode = b.standardReleaseOptions();
 
     // If the target is native we assume the user didn't change it with -Dtarget and run all test targets.
     // Otherwise we run a single test target.
@@ -212,7 +212,7 @@ pub fn build(b: *std.build.Builder) !void {
             lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
             lib.linkLibC();
             lib.setTarget(cross_target);
-            lib.setBuildMode(test_target.mode);
+            lib.setBuildMode(mode);
             sqlite3 = lib;
         }
 
@@ -220,16 +220,16 @@ pub fn build(b: *std.build.Builder) !void {
         if (bundled) lib.addIncludeDir("c");
         linkSqlite(lib);
         lib.setTarget(cross_target);
-        lib.setBuildMode(test_target.mode);
+        lib.setBuildMode(mode);
 
         const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
         tests.setNamePrefix(b.fmt("{s}-{s}-{s} ", .{
             cross_target.zigTriple(b.allocator),
-            @tagName(test_target.mode),
+            @tagName(mode),
             single_threaded_txt,
         }));
         tests.single_threaded = test_target.single_threaded;
-        tests.setBuildMode(test_target.mode);
+        tests.setBuildMode(mode);
         tests.setTarget(cross_target);
         if (bundled) tests.addIncludeDir("c");
         linkSqlite(tests);
@@ -248,13 +248,13 @@ pub fn build(b: *std.build.Builder) !void {
     const lib = b.addStaticLibrary("sqlite", null);
     lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
     lib.linkLibC();
-    lib.setBuildMode(.Debug);
+    lib.setBuildMode(mode);
     lib.setTarget(getTarget(target, true));
 
     // The library
     const fuzz_lib = b.addStaticLibrary("fuzz-lib", "fuzz/main.zig");
     fuzz_lib.addIncludeDir("c");
-    fuzz_lib.setBuildMode(.Debug);
+    fuzz_lib.setBuildMode(mode);
     fuzz_lib.setTarget(getTarget(target, true));
     fuzz_lib.linkLibrary(lib);
     fuzz_lib.want_lto = true;
@@ -282,7 +282,7 @@ pub fn build(b: *std.build.Builder) !void {
     // Compile a companion exe for debugging crashes
     const fuzz_debug_exe = b.addExecutable("fuzz-debug", "fuzz/main.zig");
     fuzz_debug_exe.addIncludeDir("c");
-    fuzz_debug_exe.setBuildMode(.Debug);
+    fuzz_debug_exe.setBuildMode(mode);
     fuzz_debug_exe.setTarget(getTarget(target, true));
     fuzz_debug_exe.linkLibrary(lib);
     fuzz_debug_exe.addPackagePath("sqlite", "sqlite.zig");
