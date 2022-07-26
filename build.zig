@@ -224,7 +224,7 @@ pub fn build(b: *std.build.Builder) !void {
 
         const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
         tests.setNamePrefix(b.fmt("{s}-{s}-{s} ", .{
-            cross_target.zigTriple(b.allocator),
+            try cross_target.zigTriple(b.allocator),
             @tagName(mode),
             single_threaded_txt,
         }));
