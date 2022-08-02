@@ -132,6 +132,17 @@ pub fn errorFromResultCode(code: c_int) Error {
     // TODO(vincent): can we do something with comptime here ?
     // The version number is always static and defined by sqlite.
 
+    // These errors are only available since 3.22.0.
+    if (c.SQLITE_VERSION_NUMBER >= 3022000) {
+        switch (code) {
+            c.SQLITE_ERROR_MISSING_COLLSEQ => return error.SQLiteErrorMissingCollSeq,
+            c.SQLITE_ERROR_RETRY => return error.SQLiteErrorRetry,
+            c.SQLITE_READONLY_CANTINIT => return error.SQLiteReadOnlyCantInit,
+            c.SQLITE_READONLY_DIRECTORY => return error.SQLiteReadOnlyDirectory,
+            else => {},
+        }
+    }
+
     // These errors are only available since 3.25.0.
     if (c.SQLITE_VERSION_NUMBER >= 3025000) {
         switch (code) {
@@ -196,9 +207,6 @@ pub fn errorFromResultCode(code: c_int) Error {
         c.SQLITE_NOTICE => return error.SQLiteNotice,
         c.SQLITE_WARNING => return error.SQLiteWarning,
 
-        c.SQLITE_ERROR_MISSING_COLLSEQ => return error.SQLiteErrorMissingCollSeq,
-        c.SQLITE_ERROR_RETRY => return error.SQLiteErrorRetry,
-
         c.SQLITE_IOERR_READ => return error.SQLiteIOErrRead,
         c.SQLITE_IOERR_SHORT_READ => return error.SQLiteIOErrShortRead,
         c.SQLITE_IOERR_WRITE => return error.SQLiteIOErrWrite,
@@ -247,8 +255,6 @@ pub fn errorFromResultCode(code: c_int) Error {
         c.SQLITE_READONLY_CANTLOCK => return error.SQLiteReadOnlyCantLock,
         c.SQLITE_READONLY_ROLLBACK => return error.SQLiteReadOnlyRollback,
         c.SQLITE_READONLY_DBMOVED => return error.SQLiteReadOnlyDBMoved,
-        c.SQLITE_READONLY_CANTINIT => return error.SQLiteReadOnlyCantInit,
-        c.SQLITE_READONLY_DIRECTORY => return error.SQLiteReadOnlyDirectory,
 
         c.SQLITE_ABORT_ROLLBACK => return error.SQLiteAbortRollback,
 
