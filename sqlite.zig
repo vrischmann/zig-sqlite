@@ -695,20 +695,34 @@ pub const Db = struct {
     ///
     /// The flags SQLITE_UTF16LE, SQLITE_UTF16BE are not supported yet. SQLITE_UTF8 is the default and always on.
     ///
+    /// SQLITE_DIRECTONLY is only available on SQLite >= 3.30.0 so we create a different type based on the SQLite version.
+    ///
     /// TODO(vincent): allow these flags when we know how to handle UTF16 data.
-    pub const CreateFunctionFlag = struct {
+    /// TODO(vincent): can we refactor this somehow to share the common stuff ?
+    pub const CreateFunctionFlag = if (c.SQLITE_VERSION_NUMBER >= 3030000) struct {
         /// Equivalent to SQLITE_DETERMINISTIC
         deterministic: bool = true,
         /// Equivalent to SQLITE_DIRECTONLY
         direct_only: bool = true,
 
-        fn toCFlags(self: *const CreateFunctionFlag) c_int {
+        fn toCFlags(self: *const @This()) c_int {
             var flags: c_int = c.SQLITE_UTF8;
             if (self.deterministic) {
                 flags |= c.SQLITE_DETERMINISTIC;
             }
             if (self.direct_only) {
                 flags |= c.SQLITE_DIRECTONLY;
+            }
+            return flags;
+        }
+    } else struct {
+        /// Equivalent to SQLITE_DETERMINISTIC
+        deterministic: bool = true,
+
+        fn toCFlags(self: *const @This()) c_int {
+            var flags: c_int = c.SQLITE_UTF8;
+            if (self.deterministic) {
+                flags |= c.SQLITE_DETERMINISTIC;
             }
             return flags;
         }
