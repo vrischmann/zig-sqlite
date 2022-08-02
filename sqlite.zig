@@ -287,7 +287,7 @@ fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
 }
 
 fn getErrorOffset(db: *c.sqlite3) i32 {
-    if (comptime c.SQLITE_VERSION_NUMBER >= 3038000) {
+    if (c.SQLITE_VERSION_NUMBER >= 3038000) {
         return c.sqlite3_error_offset(db);
     }
     return -1;
