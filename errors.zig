@@ -129,9 +129,6 @@ pub const Error = SQLiteError ||
     SQLiteExtendedConstraintError;
 
 pub fn errorFromResultCode(code: c_int) Error {
-    // TODO(vincent): can we do something with comptime here ?
-    // The version number is always static and defined by sqlite.
-
     // These errors are only available since 3.22.0.
     if (c.SQLITE_VERSION_NUMBER >= 3022000) {
         switch (code) {
