@@ -128,9 +128,13 @@ pub const Error = SQLiteError ||
     SQLiteExtendedReadOnlyError ||
     SQLiteExtendedConstraintError;
 
+fn greaterThanOrEqualsTo(major: u8, minor: u8, patch: u8) bool {
+    return c.SQLITE_VERSION_NUMBER >= @as(u32, major) * 1000000 + @as(u32, minor) * 1000 + @as(u32, patch);
+}
+
 pub fn errorFromResultCode(code: c_int) Error {
     // These errors are only available since 3.22.0.
-    if (c.SQLITE_VERSION_NUMBER >= 3022000) {
+    if (comptime greaterThanOrEqualsTo(3, 22, 0)) {
         switch (code) {
             c.SQLITE_ERROR_MISSING_COLLSEQ => return error.SQLiteErrorMissingCollSeq,
             c.SQLITE_ERROR_RETRY => return error.SQLiteErrorRetry,
@@ -141,7 +145,7 @@ pub fn errorFromResultCode(code: c_int) Error {
     }
 
     // These errors are only available since 3.25.0.
-    if (c.SQLITE_VERSION_NUMBER >= 3025000) {
+    if (comptime greaterThanOrEqualsTo(3, 25, 0)) {
         switch (code) {
             c.SQLITE_ERROR_SNAPSHOT => return error.SQLiteErrorSnapshot,
             c.SQLITE_LOCKED_VTAB => return error.SQLiteLockedVTab,
@@ -151,7 +155,7 @@ pub fn errorFromResultCode(code: c_int) Error {
         }
     }
     // These errors are only available since 3.31.0.
-    if (c.SQLITE_VERSION_NUMBER >= 3031000) {
+    if (comptime greaterThanOrEqualsTo(3, 31, 0)) {
         switch (code) {
             c.SQLITE_CANTOPEN_SYMLINK => return error.SQLiteCantOpenSymlink,
             c.SQLITE_CONSTRAINT_PINNED => return error.SQLiteConstraintPinned,
@@ -159,7 +163,7 @@ pub fn errorFromResultCode(code: c_int) Error {
         }
     }
     // These errors are only available since 3.32.0.
-    if (c.SQLITE_VERSION_NUMBER >= 3032000) {
+    if (comptime greaterThanOrEqualsTo(3, 32, 0)) {
         switch (code) {
             c.SQLITE_IOERR_DATA => return error.SQLiteIOErrData, // See https://sqlite.org/cksumvfs.html
             c.SQLITE_BUSY_TIMEOUT => return error.SQLiteBusyTimeout,
@@ -168,7 +172,7 @@ pub fn errorFromResultCode(code: c_int) Error {
         }
     }
     // These errors are only available since 3.34.0.
-    if (c.SQLITE_VERSION_NUMBER >= 3034000) {
+    if (comptime greaterThanOrEqualsTo(3, 34, 0)) {
         switch (code) {
             c.SQLITE_IOERR_CORRUPTFS => return error.SQLiteIOErrCorruptFS,
             else => {},
