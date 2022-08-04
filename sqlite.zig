@@ -15,6 +15,9 @@ pub const ParsedQuery = @import("query.zig").ParsedQuery;
 const errors = @import("errors.zig");
 pub const errorFromResultCode = errors.errorFromResultCode;
 pub const Error = errors.Error;
+pub const DetailedError = errors.DetailedError;
+const getLastDetailedErrorFromDb = errors.getLastDetailedErrorFromDb;
+const getDetailedErrorFromResultCode = errors.getDetailedErrorFromResultCode;
 
 const logger = std.log.scoped(.sqlite);
 
@@ -255,51 +258,8 @@ pub const InitOptions = struct {
     diags: ?*Diagnostics = null,
 };
 
-/// DetailedError contains a SQLite error code and error message.
-pub const DetailedError = struct {
-    code: usize,
-    near: i32,
-    message: []const u8,
-
-    pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-
-        _ = try writer.print("{{code: {}, near: {d}, message: {s}}}", .{ self.code, self.near, self.message });
-    }
-};
-
 fn isThreadSafe() bool {
     return c.sqlite3_threadsafe() > 0;
-}
-
-fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
-    return .{
-        .code = @intCast(usize, code),
-        .near = -1,
-        .message = blk: {
-            const msg = c.sqlite3_errstr(code);
-            break :blk mem.sliceTo(msg, 0);
-        },
-    };
-}
-
-fn getErrorOffset(db: *c.sqlite3) i32 {
-    if (c.SQLITE_VERSION_NUMBER >= 3038000) {
-        return c.sqlite3_error_offset(db);
-    }
-    return -1;
-}
-
-fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
-    return .{
-        .code = @intCast(usize, c.sqlite3_extended_errcode(db)),
-        .near = getErrorOffset(db),
-        .message = blk: {
-            const msg = c.sqlite3_errmsg(db);
-            break :blk mem.sliceTo(msg, 0);
-        },
-    };
 }
 
 /// Db is a wrapper around a SQLite database, providing high-level functions for executing queries.
