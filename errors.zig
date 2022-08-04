@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+const c = @import("c.zig").c;
 
 pub const SQLiteExtendedIOError = error{
     SQLiteIOErrRead,
