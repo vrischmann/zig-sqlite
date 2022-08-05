@@ -3,6 +3,8 @@ const mem = std.mem;
 
 const c = @import("c.zig").c;
 
+const versionGreaterThanOrEqualTo = @import("sqlite.zig").versionGreaterThanOrEqualTo;
+
 pub const SQLiteExtendedIOError = error{
     SQLiteIOErrRead,
     SQLiteIOErrShortRead,
@@ -126,10 +128,6 @@ pub const Error = SQLiteError ||
     SQLiteExtendedCantOpenError ||
     SQLiteExtendedReadOnlyError ||
     SQLiteExtendedConstraintError;
-
-fn versionGreaterThanOrEqualTo(major: u8, minor: u8, patch: u8) bool {
-    return c.SQLITE_VERSION_NUMBER >= @as(u32, major) * 1000000 + @as(u32, minor) * 1000 + @as(u32, patch);
-}
 
 pub fn errorFromResultCode(code: c_int) Error {
     // These errors are only available since 3.22.0.
