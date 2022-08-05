@@ -3,9 +3,7 @@ const mem = std.mem;
 const testing = std.testing;
 
 const Blob = @import("sqlite.zig").Blob;
-
-/// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
-pub const Text = struct { data: []const u8 };
+const Text = @import("sqlite.zig").Text;
 
 const BindMarker = struct {
     /// Contains the expected type for a bind parameter which will be checked

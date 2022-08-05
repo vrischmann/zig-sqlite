@@ -9,7 +9,6 @@ const testing = std.testing;
 
 const c = @import("c.zig").c;
 
-pub const Text = @import("query.zig").Text;
 pub const ParsedQuery = @import("query.zig").ParsedQuery;
 
 const errors = @import("errors.zig");
@@ -20,6 +19,9 @@ const getLastDetailedErrorFromDb = errors.getLastDetailedErrorFromDb;
 const getDetailedErrorFromResultCode = errors.getDetailedErrorFromResultCode;
 
 const logger = std.log.scoped(.sqlite);
+
+/// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
+pub const Text = struct { data: []const u8 };
 
 /// ZeroBlob is a blob with a fixed length containing only zeroes.
 ///
