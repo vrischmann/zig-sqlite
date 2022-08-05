@@ -3,15 +3,7 @@ name: CI
 on:
   create:
   push:
-    paths:
-    - '**.zig'
-    - '**.c'
-    - '**.h'
   pull_request:
-    paths:
-    - '**.zig'
-    - '**.c'
-    - '**.h'
   schedule:
     - cron: "0 13 * * *"
   workflow_dispatch:
