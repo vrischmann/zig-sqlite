@@ -36,5 +36,13 @@ jobs:
         with:
           version: master
 
+      - uses: actions/cache@v3
+        with:
+          path: |
+            zig-cache
+            ~/.cache/zig
+          key: ${{ runner.os }}-${{ matrix.os }}-zig-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-${{ matrix.os }}-zig-
+
       - name: Run Tests in memory
         run: zig build test -Din_memory=true
