@@ -9,7 +9,7 @@ const testing = std.testing;
 
 const c = @import("c.zig").c;
 
-pub const ParsedQuery = @import("query.zig").ParsedQuery;
+const ParsedQuery = @import("query.zig").ParsedQuery;
 
 const errors = @import("errors.zig");
 pub const errorFromResultCode = errors.errorFromResultCode;
@@ -2026,7 +2026,7 @@ pub const DynamicStatement = struct {
 ///
 /// Look at each function for more complete documentation.
 ///
-pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type {
+fn Statement(comptime opts: StatementOptions, comptime query: anytype) type {
     _ = opts;
 
     return struct {
