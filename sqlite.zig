@@ -8,6 +8,7 @@ const mem = std.mem;
 const testing = std.testing;
 
 const c = @import("c.zig").c;
+const versionGreaterThanOrEqualTo = @import("c.zig").versionGreaterThanOrEqualTo;
 
 pub const ParsedQuery = @import("query.zig").ParsedQuery;
 
@@ -19,11 +20,6 @@ const getLastDetailedErrorFromDb = errors.getLastDetailedErrorFromDb;
 const getDetailedErrorFromResultCode = errors.getDetailedErrorFromResultCode;
 
 const logger = std.log.scoped(.sqlite);
-
-// versionGreaterThanOrEqualTo returns true if the SQLite version is >= to the major.minor.patch provided.
-pub fn versionGreaterThanOrEqualTo(major: u8, minor: u8, patch: u8) bool {
-    return c.SQLITE_VERSION_NUMBER >= @as(u32, major) * 1000000 + @as(u32, minor) * 1000 + @as(u32, patch);
-}
 
 /// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
 pub const Text = struct { data: []const u8 };
