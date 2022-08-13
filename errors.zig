@@ -2,8 +2,7 @@ const std = @import("std");
 const mem = std.mem;
 
 const c = @import("c.zig").c;
-
-const versionGreaterThanOrEqualTo = @import("sqlite.zig").versionGreaterThanOrEqualTo;
+const versionGreaterThanOrEqualTo = @import("c.zig").versionGreaterThanOrEqualTo;
 
 pub const SQLiteExtendedIOError = error{
     SQLiteIOErrRead,
