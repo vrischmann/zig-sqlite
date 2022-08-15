@@ -20,7 +20,12 @@ const getLastDetailedErrorFromDb = errors.getLastDetailedErrorFromDb;
 const getDetailedErrorFromResultCode = errors.getDetailedErrorFromResultCode;
 
 const getTestDb = @import("test.zig").getTestDb;
+pub const vtab = @import("vtab.zig");
 const helpers = @import("helpers.zig");
+
+test {
+    _ = @import("vtab.zig");
+}
 
 const logger = std.log.scoped(.sqlite);
 
@@ -785,6 +790,26 @@ pub const Db = struct {
 
             defer stmt.deinit();
             try stmt.exec(new_options, .{});
+        }
+    }
+
+    pub fn createVirtualTable(
+        self: *Self,
+        comptime name: [:0]const u8,
+        module_context: *vtab.ModuleContext,
+        comptime Table: type,
+    ) !void {
+        const VirtualTableType = vtab.VirtualTable(name, Table);
+
+        const result = c.sqlite3_create_module_v2(
+            self.db,
+            name,
+            &VirtualTableType.module,
+            module_context,
+            null,
+        );
+        if (result != c.SQLITE_OK) {
+            return errors.errorFromResultCode(result);
         }
     }
 };
