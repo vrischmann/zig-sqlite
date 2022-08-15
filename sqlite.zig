@@ -570,54 +570,6 @@ pub const Db = struct {
         return Savepoint.init(self, name);
     }
 
-    // Helpers functions to implement SQLite functions.
-
-    fn sliceFromValue(sqlite_value: *c.sqlite3_value) []const u8 {
-        const size = @intCast(usize, c.sqlite3_value_bytes(sqlite_value));
-
-        const value = c.sqlite3_value_text(sqlite_value);
-        debug.assert(value != null); // TODO(vincent): how do we handle this properly ?
-
-        return value.?[0..size];
-    }
-
-    /// Sets a function argument using the provided value.
-    ///
-    /// Determines at compile time which sqlite3_value_XYZ function to use based on the type `ArgType`.
-    fn setFunctionArgument(comptime ArgType: type, arg: *ArgType, sqlite_value: *c.sqlite3_value) void {
-        switch (ArgType) {
-            Text => arg.*.data = sliceFromValue(sqlite_value),
-            Blob => arg.*.data = sliceFromValue(sqlite_value),
-            else => switch (@typeInfo(ArgType)) {
-                .Int => |info| if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 32) {
-                    const value = c.sqlite3_value_int(sqlite_value);
-                    arg.* = @intCast(ArgType, value);
-                } else if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 64) {
-                    const value = c.sqlite3_value_int64(sqlite_value);
-                    arg.* = @intCast(ArgType, value);
-                } else {
-                    @compileError("integer " ++ @typeName(ArgType) ++ " is not representable in sqlite");
-                },
-                .Float => {
-                    const value = c.sqlite3_value_double(sqlite_value);
-                    arg.* = @floatCast(ArgType, value);
-                },
-                .Bool => {
-                    const value = c.sqlite3_value_int(sqlite_value);
-                    arg.* = value > 0;
-                },
-                .Pointer => |ptr| switch (ptr.size) {
-                    .Slice => switch (ptr.child) {
-                        u8 => arg.* = sliceFromValue(sqlite_value),
-                        else => @compileError("cannot use an argument of type " ++ @typeName(ArgType)),
-                    },
-                    else => @compileError("cannot use an argument of type " ++ @typeName(ArgType)),
-                },
-                else => @compileError("cannot use an argument of type " ++ @typeName(ArgType)),
-            },
-        }
-    }
-
     /// CreateFunctionFlag controls the flags used when creating a custom SQL function.
     /// See https://sqlite.org/c3ref/c_deterministic.html.
     ///
@@ -725,7 +677,7 @@ pub const Db = struct {
                         const arg_ptr = &args[i + 1];
 
                         const ArgType = arg.arg_type.?;
-                        setFunctionArgument(ArgType, arg_ptr, sqlite_args[i].?);
+                        helpers.setTypeFromValue(ArgType, arg_ptr, sqlite_args[i].?);
                     }
 
                     @call(.{}, step_func, args);
@@ -792,7 +744,7 @@ pub const Db = struct {
                     var fn_args: ArgTuple = undefined;
                     inline for (fn_info.args) |arg, i| {
                         const ArgType = arg.arg_type.?;
-                        setFunctionArgument(ArgType, &fn_args[i], sqlite_args[i].?);
+                        helpers.setTypeFromValue(ArgType, &fn_args[i], sqlite_args[i].?);
                     }
 
                     const result = @call(.{}, func, fn_args);
