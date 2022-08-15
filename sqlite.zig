@@ -7,7 +7,7 @@ const io = std.io;
 const mem = std.mem;
 const testing = std.testing;
 
-const c = @import("c.zig").c;
+pub const c = @import("c.zig").c;
 const versionGreaterThanOrEqualTo = @import("c.zig").versionGreaterThanOrEqualTo;
 
 pub const ParsedQuery = @import("query.zig").ParsedQuery;
