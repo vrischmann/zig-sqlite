@@ -108,7 +108,6 @@ If you want to use the bundled sqlite source code file, first you need to add it
 ```zig
 const sqlite = b.addStaticLibrary("sqlite", null);
 sqlite.addCSourceFile("third_party/zig-sqlite/c/sqlite3.c", &[_][]const u8{"-std=c99"});
-sqlite.addIncludeDir("third_party/zig-sqlite/c");
 sqlite.linkLibC();
 ```
 
@@ -120,6 +119,7 @@ Now it's just a matter of linking your `build.zig` target(s) to this library ins
 exe.linkLibC();
 exe.linkLibrary(sqlite);
 exe.addPackage(.{ .name = "sqlite", .path = "third_party/zig-sqlite/sqlite.zig" });
+exe.addIncludeDir("third_party/zig-sqlite/c");
 ```
 
 If you're building with glibc you must make sure that the version used is at least 2.28.
