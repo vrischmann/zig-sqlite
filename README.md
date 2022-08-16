@@ -118,7 +118,7 @@ Now it's just a matter of linking your `build.zig` target(s) to this library ins
 ```zig
 exe.linkLibC();
 exe.linkLibrary(sqlite);
-exe.addPackage(.{ .name = "sqlite", .path = "third_party/zig-sqlite/sqlite.zig" });
+exe.addPackage(.{ .name = "sqlite", .path = .{ .path = "third_party/zig-sqlite/sqlite.zig" } });
 exe.addIncludeDir("third_party/zig-sqlite/c");
 ```
 
