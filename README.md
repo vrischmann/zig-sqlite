@@ -8,6 +8,14 @@ While the core functionality works right now, the API is still subject to change
 
 If you use this library, expect to have to make changes when you update the code.
 
+# Zig release support
+
+`zig-sqlite` only supports Zig master (as can be found [here](https://ziglang.org/download/)). The plan is to support releases once Zig 1.0 is released but this can still change.
+
+The Zig self-hosted/stage2 compiler is now [the default](https://github.com/ziglang/zig/pull/12368) however currently it can't be used with `zig-sqlite` due to bugs.
+
+Eventually `zig-sqlite` will only support stage2 but until a point I feel comfortable doing that, the `master` branch will stay compatible with stage1 and all work for stage2 will happen in the `stage2` branch.
+
 # Table of contents
 
 * [Status](#status)
