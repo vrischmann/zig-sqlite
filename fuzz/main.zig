@@ -43,4 +43,33 @@ pub fn zigMain() !void {
         error.SQLiteError => return,
         else => return err,
     };
+
+    var stmt = db.prepareDynamic("SELECT name, data FROM test") catch |err| switch (err) {
+        error.SQLiteError => return,
+        else => return err,
+    };
+    defer stmt.deinit();
+
+    var rows_arena = std.heap.ArenaAllocator.init(allocator);
+    defer rows_arena.deinit();
+
+    const row_opt = stmt.oneAlloc(
+        struct {
+            name: sqlite.Text,
+            data: sqlite.Blob,
+        },
+        rows_arena.allocator(),
+        .{},
+        .{},
+    ) catch |err| switch (err) {
+        error.SQLiteError => return,
+        else => return err,
+    };
+
+    if (row_opt) |row| {
+        if (!std.mem.eql(u8, row.name.data, data)) return error.InvalidNameField;
+        if (!std.mem.eql(u8, row.data.data, data)) return error.InvalidDataField;
+    } else {
+        return error.NoRowsFound;
+    }
 }
