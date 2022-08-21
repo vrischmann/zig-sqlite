@@ -40,3 +40,12 @@ You'll have to do this as root:
 ```
 $ AFL_SKIP_CPUFREQ=1 afl-fuzz -i - -o fuzz/outputs -- ./zig-out/bin/fuzz
 ```
+
+# Debugging a crash
+
+If `afl-fuzz` finds a crash it will be added to `fuzz/outputs/default/crashes.XYZ`.
+
+To debug the crash you can run the fuzz binary and giving it the content of the crash via stdin, for example:
+```
+$ ./zig-out/bin/fuzz < 'fuzz/outputs/default/crashes.2021-12-31-12:43:12/id:000000,sig:06,src:000004,time:210548,execs:1011599,op:havoc,rep:2'
+```
