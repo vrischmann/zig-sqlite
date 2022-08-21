@@ -206,6 +206,7 @@ pub fn build(b: *std.build.Builder) !void {
         const cross_target = getTarget(test_target.target, bundled);
 
         const tests = b.addTest("sqlite.zig");
+        tests.use_stage1 = true;
 
         if (bundled) {
             const lib = b.addStaticLibrary("sqlite", null);
@@ -259,6 +260,7 @@ pub fn build(b: *std.build.Builder) !void {
     fuzz_lib.linkLibrary(lib);
     fuzz_lib.want_lto = true;
     fuzz_lib.bundle_compiler_rt = true;
+    fuzz_lib.use_stage1 = true;
     fuzz_lib.addPackagePath("sqlite", "sqlite.zig");
 
     // Setup the output name
@@ -281,6 +283,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     // Compile a companion exe for debugging crashes
     const fuzz_debug_exe = b.addExecutable("fuzz-debug", "fuzz/main.zig");
+    fuzz_debug_exe.use_stage1 = true;
     fuzz_debug_exe.addIncludeDir("c");
     fuzz_debug_exe.setBuildMode(mode);
     fuzz_debug_exe.setTarget(getTarget(target, true));
