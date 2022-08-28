@@ -856,7 +856,8 @@ pub const Db = struct {
             // values to bind in this case)
             var stmt: DynamicStatement = undefined;
             if (sql_tail_ptr != null) {
-                const new_query = std.mem.span(sql_tail_ptr.?);
+                var new_query = std.mem.span(sql_tail_ptr.?);
+                while (new_query.len > 0 and std.ascii.isSpace(new_query[0])) new_query = new_query[1..];
                 if (new_query.len == 0) break;
                 stmt = try self.prepareDynamicWithDiags(new_query, new_options);
             } else {
