@@ -4,11 +4,10 @@ const builtin = @import("builtin");
 var sqlite3: ?*std.build.LibExeObjStep = null;
 
 fn linkSqlite(b: *std.build.LibExeObjStep) void {
-    b.linkLibC();
-
     if (sqlite3) |lib| {
         b.linkLibrary(lib);
     } else {
+        b.linkLibC();
         b.linkSystemLibrary("sqlite3");
     }
 }
