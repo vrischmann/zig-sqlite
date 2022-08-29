@@ -124,7 +124,6 @@ If you need to define custom [compile-time options](https://www.sqlite.org/compi
 Now it's just a matter of linking your `build.zig` target(s) to this library instead of the system one:
 
 ```zig
-exe.linkLibC();
 exe.linkLibrary(sqlite);
 exe.addPackagePath("sqlite", "third_party/zig-sqlite/sqlite.zig");
 exe.addIncludeDir("third_party/zig-sqlite/c");
