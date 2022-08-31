@@ -2344,16 +2344,22 @@ test "sqlite: db init" {
 test "sqlite: exec multi" {
     var db = try getTestDb();
     defer db.deinit();
-    try db.execMulti("create table a(b int);\n\n--test comment\ncreate table b(c int);", .{});
-    const val = try db.one(i32, "select max(c) from b", .{}, .{});
+
+    try db.execMulti("DROP TABLE IF EXISTS a;\nDROP TABLE IF EXISTS b;", .{});
+    try db.execMulti("CREATE TABLE a(b int);\n\n--test comment\nCREATE TABLE b(c int);", .{});
+
+    const val = try db.one(i32, "SELECT max(c) FROM b", .{}, .{});
     try testing.expectEqual(@as(?i32, 0), val);
 }
 
 test "sqlite: exec multi with single statement" {
     var db = try getTestDb();
     defer db.deinit();
-    try db.execMulti("create table a(b int);", .{});
-    const val = try db.one(i32, "select max(b) from a", .{}, .{});
+
+    try db.exec("DROP TABLE IF EXISTS a", .{}, .{});
+    try db.execMulti("CREATE TABLE a(b int);", .{});
+
+    const val = try db.one(i32, "SELECT max(b) FROM a", .{}, .{});
     try testing.expectEqual(@as(?i32, 0), val);
 }
 
@@ -3095,6 +3101,7 @@ test "sqlite: blob open, reopen" {
     const blob_data2 = "\xCA\xFE\xBA\xBEfoobar";
 
     // Insert two blobs with a set length
+    try db.exec("DROP TABLE IF EXISTS test_blob", .{}, .{});
     try db.exec("CREATE TABLE test_blob(id integer primary key, data blob)", .{}, .{});
 
     try db.exec("INSERT INTO test_blob(data) VALUES(?)", .{}, .{
@@ -3162,6 +3169,8 @@ test "sqlite: failing prepare statement" {
     defer db.deinit();
 
     var diags: Diagnostics = undefined;
+
+    try db.exec("DROP TABLE IF EXISTS foobar", .{}, .{});
 
     const result = db.prepareWithDiags("SELECT id FROM foobar", .{ .diags = &diags });
     try testing.expectError(error.SQLiteError, result);
@@ -3811,6 +3820,7 @@ test "sqlite: create aggregate function with no aggregate context" {
 
     // Initialize some data
 
+    try db.exec("DROP TABLE IF EXISTS view", .{}, .{});
     try db.exec("CREATE TABLE view(id integer PRIMARY KEY, nb integer)", .{}, .{});
     var i: usize = 0;
     var exp: usize = 0;
@@ -3864,6 +3874,7 @@ test "sqlite: create aggregate function with an aggregate context" {
 
     // Initialize some data
 
+    try db.exec("DROP TABLE IF EXISTS view", .{}, .{});
     try db.exec("CREATE TABLE view(id integer PRIMARY KEY, a integer, b integer)", .{}, .{});
     var i: usize = 0;
     var exp_a: usize = 0;
@@ -3999,6 +4010,7 @@ test "tagged union" {
         age: usize,
     };
 
+    try db.exec("DROP TABLE IF EXISTS foobar", .{}, .{});
     try db.exec("CREATE TABLE foobar(key TEXT, value ANY)", .{}, .{});
 
     var foobar = Foobar{ .name = "hello" };
