@@ -243,7 +243,24 @@ pub fn build(b: *std.build.Builder) !void {
         test_step.dependOn(&tests.step);
     }
 
+    // Tool to preprocess the sqlite header files.
+    //
+    // Due to limitations of translate-c the standard header files can't be used for building loadable extensions
+    // so we have this tool which creates usable header files.
+
+    const preprocess_files_tool = b.addExecutable("preprocess-files", "tools/preprocess_files.zig");
+    preprocess_files_tool.setBuildMode(mode);
+    preprocess_files_tool.setTarget(getTarget(target, true));
+
+    // Add a top-level step to run the preprocess-files tool
+    const preprocess_files_run = b.step("preprocess-files", "Run the preprocess-files tool");
+
+    const preprocess_files_tool_run = preprocess_files_tool.run();
+    preprocess_files_run.dependOn(&preprocess_files_tool_run.step);
+
+    //
     // Fuzzing
+    //
 
     const lib = b.addStaticLibrary("sqlite", null);
     lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
