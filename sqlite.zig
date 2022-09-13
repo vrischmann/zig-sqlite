@@ -2338,7 +2338,6 @@ fn addTestData(db: *Db) !void {
 test "sqlite: db init" {
     var db = try getTestDb();
     defer db.deinit();
-    _ = db;
 }
 
 test "sqlite: exec multi" {
