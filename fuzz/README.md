@@ -17,6 +17,11 @@ make PREFIX=$HOME/local install
 ```
 then make sure that `$HOME/local/bin` is in your system path.
 
+If you installed LLVM from source as described in the [Zig wiki](https://github.com/ziglang/zig/wiki/How-to-build-LLVM,-libclang,-and-liblld-from-source#posix), do this instead:
+```
+LLVM_CONFIG=$HOME/local/llvm15-release/bin/llvm-config make PREFIX=$HOME/local install
+```
+
 # Build and run
 
 Once AFL++ is installed, build the fuzz binary:
