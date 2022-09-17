@@ -48,3 +48,8 @@ jobs:
 
       - name: Run Tests in memory
         run: zig build test -Din_memory=true
+
+      - name: Build the example zigcrypto loadable extension
+        run: zig build zigcrypto
+      - name: Test the zigcrypto loadable extension
+        run: ./zig-out/bin/zigcrypto-test
