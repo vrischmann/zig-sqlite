@@ -217,7 +217,7 @@ pub fn build(b: *std.build.Builder) !void {
         }
 
         const lib = b.addStaticLibrary("zig-sqlite", "sqlite.zig");
-        if (bundled) lib.addIncludeDir("c");
+        if (bundled) lib.addIncludePath("c");
         linkSqlite(lib);
         lib.setTarget(cross_target);
         lib.setBuildMode(mode);
@@ -231,7 +231,7 @@ pub fn build(b: *std.build.Builder) !void {
         tests.single_threaded = test_target.single_threaded;
         tests.setBuildMode(mode);
         tests.setTarget(cross_target);
-        if (bundled) tests.addIncludeDir("c");
+        if (bundled) tests.addIncludePath("c");
         linkSqlite(tests);
 
         const tests_options = b.addOptions();
@@ -253,7 +253,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     // The library
     const fuzz_lib = b.addStaticLibrary("fuzz-lib", "fuzz/main.zig");
-    fuzz_lib.addIncludeDir("c");
+    fuzz_lib.addIncludePath("c");
     fuzz_lib.setBuildMode(mode);
     fuzz_lib.setTarget(getTarget(target, true));
     fuzz_lib.linkLibrary(lib);
@@ -283,7 +283,7 @@ pub fn build(b: *std.build.Builder) !void {
     // Compile a companion exe for debugging crashes
     const fuzz_debug_exe = b.addExecutable("fuzz-debug", "fuzz/main.zig");
     fuzz_debug_exe.use_stage1 = true;
-    fuzz_debug_exe.addIncludeDir("c");
+    fuzz_debug_exe.addIncludePath("c");
     fuzz_debug_exe.setBuildMode(mode);
     fuzz_debug_exe.setTarget(getTarget(target, true));
     fuzz_debug_exe.linkLibrary(lib);
