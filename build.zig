@@ -262,6 +262,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     const lib = b.addStaticLibrary("sqlite", null);
     lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
+    lib.addIncludePath("c");
     lib.linkLibC();
     lib.setBuildMode(mode);
     lib.setTarget(getTarget(target, true));
@@ -307,4 +308,37 @@ pub fn build(b: *std.build.Builder) !void {
     // Only install fuzz-debug when the fuzz step is run
     const install_fuzz_debug_exe = b.addInstallArtifact(fuzz_debug_exe);
     fuzz_compile_run.dependOn(&install_fuzz_debug_exe.step);
+
+    //
+    // Examples
+    //
+
+    // Loadable extension
+    //
+    // This builds an example shared library with the extension and a binary that tests it.
+
+    const zigcrypto_loadable_ext = b.addSharedLibrary("zigcrypto", "examples/zigcrypto.zig", .unversioned);
+    zigcrypto_loadable_ext.force_pic = true;
+    zigcrypto_loadable_ext.use_stage1 = true;
+    zigcrypto_loadable_ext.addIncludePath("c");
+    zigcrypto_loadable_ext.setBuildMode(mode);
+    zigcrypto_loadable_ext.setTarget(getTarget(target, true));
+    zigcrypto_loadable_ext.addPackagePath("sqlite", "sqlite.zig");
+    zigcrypto_loadable_ext.linkLibrary(lib);
+
+    const install_zigcrypto_loadable_ext = b.addInstallArtifact(zigcrypto_loadable_ext);
+
+    const zigcrypto_test = b.addExecutable("zigcrypto-test", "examples/zigcrypto_test.zig");
+    zigcrypto_test.use_stage1 = true;
+    zigcrypto_test.addIncludePath("c");
+    zigcrypto_test.setBuildMode(mode);
+    zigcrypto_test.setTarget(getTarget(target, true));
+    zigcrypto_test.addPackagePath("sqlite", "sqlite.zig");
+    zigcrypto_test.linkLibrary(lib);
+
+    const install_zigcrypto_test = b.addInstallArtifact(zigcrypto_test);
+
+    const zigcrypto_compile_run = b.step("zigcrypto", "Build the 'zigcrypto' SQLite loadable extension");
+    zigcrypto_compile_run.dependOn(&install_zigcrypto_loadable_ext.step);
+    zigcrypto_compile_run.dependOn(&install_zigcrypto_test.step);
 }
