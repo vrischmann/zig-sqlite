@@ -106,7 +106,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                     // Handles optional types
                     const typ = if (type_info_string[0] == '?') blk: {
                         const child_type = ParseType(type_info_string[1..]);
-                        break :blk @Type(std.builtin.TypeInfo{
+                        break :blk @Type(std.builtin.Type{
                             .Optional = .{
                                 .child = child_type,
                             },
@@ -176,8 +176,8 @@ fn ParseType(type_info: []const u8) type {
     if (mem.eql(u8, "isize", type_info)) return isize;
 
     if (type_info[0] == 'u' or type_info[0] == 'i') {
-        return @Type(std.builtin.TypeInfo{
-            .Int = std.builtin.TypeInfo.Int{
+        return @Type(std.builtin.Type{
+            .Int = std.builtin.Type.Int{
                 .signedness = if (type_info[0] == 'i') .signed else .unsigned,
                 .bits = std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
                     @compileError("invalid type info " ++ type_info);
