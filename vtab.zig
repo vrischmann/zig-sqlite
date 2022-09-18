@@ -1140,9 +1140,6 @@ const TestVirtualTableCursor = struct {
     pub fn filter(cursor: *TestVirtualTableCursor, diags: *VTabDiagnostics, index: IndexIdentifier, args: []FilterArg) FilterError!void {
         _ = diags;
 
-        debug.print("idx num: {d}\n", .{index.num});
-        debug.print("idx str: {s}\n", .{index.str});
-
         var id = index.str;
 
         // NOTE(vincent): this is an ugly ass parser for the index string, don't judge me.
@@ -1173,8 +1170,6 @@ const TestVirtualTableCursor = struct {
                 return error.InvalidColumn;
             }
         }
-
-        debug.print("expected args: {d}\n", .{i});
     }
 
     pub const NextError = error{};
@@ -1269,8 +1264,6 @@ test "virtual table" {
     try testing.expect(rows.len > 0);
 
     for (rows) |row| {
-        debug.print("result row: id={d} foo={s} bar={s} baz={d}\n", .{ row.id, row.foo, row.bar, row.baz });
-
         try testing.expectEqualStrings("Vincent", row.foo);
         try testing.expectEqualStrings("Michel", row.bar);
         try testing.expect(row.baz > 2);
