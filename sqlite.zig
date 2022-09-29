@@ -771,7 +771,7 @@ pub const Db = struct {
     /// bindings to values, but have multiple commands inside.
     ///
     /// Exmaple: 'create table a(); create table b();'
-    pub fn execMulti(self: *Self, comptime query: []const u8, options: QueryOptions) !void {
+    pub fn execMulti(self: *Self, query: []const u8, options: QueryOptions) !void {
         var new_options = options;
         var sql_tail_ptr: ?[*:0]const u8 = null;
         new_options.sql_tail_ptr = &sql_tail_ptr;
