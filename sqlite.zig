@@ -340,7 +340,7 @@ pub const Db = struct {
         switch (options.mode) {
             .File => |path| {
                 var db: ?*c.sqlite3 = undefined;
-                const result = c.sqlite3_open_v2(path, &db, flags, null);
+                const result = c.sqlite3_open_v2(path.ptr, &db, flags, null);
                 if (result != c.SQLITE_OK or db == null) {
                     if (db) |v| {
                         diags.err = getLastDetailedErrorFromDb(v);
