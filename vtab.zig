@@ -1233,12 +1233,12 @@ test "virtual table" {
     );
 
     var diags = Diagnostics{};
-    try db.exec("CREATE VIRTUAL TABLE foobar USING myvtab(n=200)", .{ .diags = &diags }, .{});
+    try db.exec("CREATE VIRTUAL TABLE IF NOT EXISTS vtab_foobar USING myvtab(n=200)", .{ .diags = &diags }, .{});
 
     // Filter with both `foo` and `bar`
 
     var stmt = try db.prepareWithDiags(
-        "SELECT rowid, foo, bar, baz FROM foobar WHERE foo = ?{[]const u8} AND bar = ?{[]const u8} AND baz > ?{usize}",
+        "SELECT rowid, foo, bar, baz FROM vtab_foobar WHERE foo = ?{[]const u8} AND bar = ?{[]const u8} AND baz > ?{usize}",
         .{ .diags = &diags },
     );
     defer stmt.deinit();
