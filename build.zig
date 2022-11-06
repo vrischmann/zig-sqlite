@@ -60,7 +60,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             },
             TestTarget{
                 .target = .{
-                    .cpu_arch = .i386,
+                    .cpu_arch = .x86,
                     .abi = .musl,
                 },
                 .bundled = true,
@@ -104,7 +104,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             },
             TestTarget{
                 .target = .{
-                    .cpu_arch = .i386,
+                    .cpu_arch = .x86,
                     .os_tag = .windows,
                 },
                 .bundled = true,
@@ -135,7 +135,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             },
             TestTarget{
                 .target = .{
-                    .cpu_arch = .i386,
+                    .cpu_arch = .x86,
                     .abi = .gnu,
                 },
                 .bundled = true,
