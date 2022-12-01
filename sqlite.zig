@@ -3404,7 +3404,7 @@ test "sqlite: bind runtime slice" {
     var list = std.ArrayList([]const u8).init(allocator);
     defer list.deinit();
     try list.append("this is some data");
-    const args = list.toOwnedSlice();
+    const args = try list.toOwnedSlice();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3819,7 +3819,7 @@ test "sqlite: empty slice" {
     try addTestData(&db);
 
     var list = std.ArrayList(u8).init(arena.allocator());
-    const ptr = list.toOwnedSlice();
+    const ptr = try list.toOwnedSlice();
 
     try db.exec("INSERT INTO article(author_id, data) VALUES(?, ?)", .{}, .{ 1, ptr });
 

@@ -1064,7 +1064,7 @@ const TestVirtualTable = struct {
 
         //
 
-        builder.id.str = builder.id_str_buffer.toOwnedSlice();
+        builder.id.str = try builder.id_str_buffer.toOwnedSlice();
         builder.estimated_cost = 200;
         builder.estimated_rows = 200;
 
