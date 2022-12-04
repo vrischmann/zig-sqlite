@@ -1451,7 +1451,11 @@ pub fn Iterator(comptime Type: type) type {
                     },
                     .Struct => {
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
-                        return try FieldType.readField(options.allocator, inner_value);
+                        const ReadFieldTypeInfo = @typeInfo(@TypeOf(FieldType.readField));
+                        return if (ReadFieldTypeInfo.Fn.args.len == 2)
+                            try FieldType.readField(options.allocator, inner_value)
+                        else
+                            try FieldType.readField(inner_value);
                     },
                     else => @compileError("cannot populate field of type " ++ @typeName(FieldType)),
                 },
@@ -1658,7 +1662,12 @@ pub const DynamicStatement = struct {
                         @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType) ++ ", consider implementing the bindField() method");
                     }
 
-                    const field_value = try field.bindField(options.allocator);
+                    const BindFieldFunctionType = @typeInfo(@TypeOf(field.bindField));
+
+                    const field_value = if (BindFieldFunctionType.BoundFn.args.len == 2)
+                        try field.bindField(options.allocator)
+                    else
+                        try field.bindField();
 
                     try self.bindField(FieldType.BaseType, options, field_name, i, field_value);
                 },
@@ -3349,6 +3358,22 @@ const MyData = struct {
     }
 };
 
+const MyDataWithoutAlloc = struct {
+    data: [16]u8,
+
+    const BaseType = []const u8;
+
+    pub fn bindField(self: *const MyDataWithoutAlloc) !BaseType {
+        return &self.data;
+    }
+
+    pub fn readField(value: BaseType) !MyDataWithoutAlloc {
+        var data = MyDataWithoutAlloc{ .data = undefined };
+        mem.copy(u8, &data.data, value[0..16]);
+        return data;
+    }
+};
+
 test "sqlite: bind custom type" {
     var db = try getTestDb();
     defer db.deinit();
@@ -3389,6 +3414,53 @@ test "sqlite: bind custom type" {
         for (rows) |row, i| {
             var exp_data: MyData = undefined;
             mem.set(u8, &exp_data.data, @intCast(u8, i));
+
+            try testing.expectEqualSlices(u8, &exp_data.data, &row.data.data);
+        }
+    }
+}
+
+test "sqlite: bind custom type without allocator interface" {
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    {
+        var i: usize = 0;
+        while (i < 20) : (i += 1) {
+            var my_data: MyDataWithoutAlloc = undefined;
+
+            // data needs to be a printable string from the start
+            // since we can't call allocPrint with fmtSliceHexLower
+            // as MyData{} does
+            mem.set(u8, &my_data.data, @intCast(u8, 60 + i));
+
+            // insertion
+            var stmt = try db.prepare("INSERT INTO article(data) VALUES(?)");
+            try stmt.exec(.{}, .{my_data});
+        }
+    }
+    {
+        // reading back
+        var stmt = try db.prepare("SELECT * FROM article");
+        defer stmt.deinit();
+
+        const Article = struct {
+            id: u32,
+            author_id: u32,
+            data: MyDataWithoutAlloc,
+            is_published: bool,
+        };
+
+        var arena = heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+
+        const rows = try stmt.all(Article, arena.allocator(), .{}, .{});
+        try testing.expectEqual(@as(usize, 20), rows.len);
+
+        for (rows) |row, i| {
+            var exp_data: MyDataWithoutAlloc = undefined;
+            mem.set(u8, &exp_data.data, @intCast(u8, 60 + i));
 
             try testing.expectEqualSlices(u8, &exp_data.data, &row.data.data);
         }
