@@ -1662,9 +1662,9 @@ pub const DynamicStatement = struct {
                         @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType) ++ ", consider implementing the bindField() method");
                     }
 
-                    const BindFieldFunctionType = @typeInfo(@TypeOf(field.bindField));
+                    const BindFieldFunctionType = @typeInfo(@TypeOf(FieldType.bindField));
 
-                    const field_value = if (BindFieldFunctionType.BoundFn.args.len == 2)
+                    const field_value = if (BindFieldFunctionType.Fn.args.len == 2)
                         try field.bindField(options.allocator)
                     else
                         try field.bindField();
