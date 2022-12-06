@@ -2,6 +2,9 @@
 
 This package is a thin wrapper around [sqlite](https://sqlite.org/index.html)'s C API.
 
+_Maintainer note_: I'm currently on a break working with Zig and don't intend to work on new features for zig-sqlite.
+I will keep it updated for the latest Zig versions because that doesn't take too much of my time.
+
 # Status
 
 While the core functionality works right now, the API is still subject to changes.
