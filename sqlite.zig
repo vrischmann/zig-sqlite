@@ -2019,7 +2019,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
             if (comptime query.nb_bind_markers != StructTypeInfo.fields.len) {
-                @compileError(comptime std.fmt.comptimePrint("expected {d} bind parameters but got {d}", .{
+                @compileError(std.fmt.comptimePrint("expected {d} bind parameters but got {d}", .{
                     query.nb_bind_markers,
                     StructTypeInfo.fields.len,
                 }));
