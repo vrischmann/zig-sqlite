@@ -168,7 +168,7 @@ pub fn ParsedQueryState(comptime max_query_len: usize) type {
     };
 }
 
-fn ParseType(type_info: []const u8) type {
+fn ParseType(comptime type_info: []const u8) type {
     if (type_info.len <= 0) @compileError("invalid type info " ++ type_info);
 
     // Integer
