@@ -317,7 +317,6 @@ pub fn build(b: *std.build.Builder) !void {
 
     const zigcrypto_loadable_ext = b.addSharedLibrary("zigcrypto", "examples/zigcrypto.zig", .unversioned);
     zigcrypto_loadable_ext.force_pic = true;
-    zigcrypto_loadable_ext.use_stage1 = true;
     zigcrypto_loadable_ext.addIncludePath("c");
     zigcrypto_loadable_ext.setBuildMode(mode);
     zigcrypto_loadable_ext.setTarget(getTarget(target, true));
@@ -327,7 +326,6 @@ pub fn build(b: *std.build.Builder) !void {
     const install_zigcrypto_loadable_ext = b.addInstallArtifact(zigcrypto_loadable_ext);
 
     const zigcrypto_test = b.addExecutable("zigcrypto-test", "examples/zigcrypto_test.zig");
-    zigcrypto_test.use_stage1 = true;
     zigcrypto_test.addIncludePath("c");
     zigcrypto_test.setBuildMode(mode);
     zigcrypto_test.setTarget(getTarget(target, true));
