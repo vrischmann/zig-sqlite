@@ -14,7 +14,7 @@ const BindMarker = struct {
 };
 
 fn isNamedIdentifierChar(c: u8) bool {
-    return std.ascii.isAlpha(c) or std.ascii.isDigit(c) or c == '_';
+    return std.ascii.isAlphabetic(c) or std.ascii.isDigit(c) or c == '_';
 }
 
 pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
