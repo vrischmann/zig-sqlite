@@ -1398,7 +1398,7 @@ pub fn Iterator(comptime Type: type) type {
             inline for (@typeInfo(Type).Struct.fields) |field, _i| {
                 const i = @as(usize, _i);
 
-                const ret = try self.readField(field.field_type, options, i);
+                const ret = try self.readField(field.type, options, i);
 
                 @field(value, field.name) = ret;
             }
@@ -1673,7 +1673,7 @@ pub const DynamicStatement = struct {
                             if (field_tag == this_tag) {
                                 const field_value = @field(field, u_field.name);
 
-                                try self.bindField(u_field.field_type, options, u_field.name, i, field_value);
+                                try self.bindField(u_field.type, options, u_field.name, i, field_value);
                             }
                         }
                     } else {
@@ -1726,9 +1726,9 @@ pub const DynamicStatement = struct {
 
                     const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
                     if (i >= 0) {
-                        try self.bindField(struct_field.field_type, options, struct_field.name, i, field_value);
+                        try self.bindField(struct_field.type, options, struct_field.name, i, field_value);
                     } else {
-                        try self.bindField(struct_field.field_type, options, struct_field.name, struct_field_i, field_value);
+                        try self.bindField(struct_field.type, options, struct_field.name, struct_field_i, field_value);
                     }
                 }
             },
@@ -2028,13 +2028,13 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
             inline for (StructTypeInfo.fields) |struct_field, _i| {
                 const bind_marker = query.bind_markers[_i];
                 if (bind_marker.typed) |typ| {
-                    const FieldTypeInfo = @typeInfo(struct_field.field_type);
+                    const FieldTypeInfo = @typeInfo(struct_field.type);
                     switch (FieldTypeInfo) {
                         .Struct, .Enum, .Union => comptime assertMarkerType(
-                            if (@hasDecl(struct_field.field_type, "BaseType")) struct_field.field_type.BaseType else struct_field.field_type,
+                            if (@hasDecl(struct_field.type, "BaseType")) struct_field.type.BaseType else struct_field.type,
                             typ,
                         ),
-                        else => comptime assertMarkerType(struct_field.field_type, typ),
+                        else => comptime assertMarkerType(struct_field.type, typ),
                     }
                 }
             }
