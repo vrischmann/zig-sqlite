@@ -315,9 +315,9 @@ fn validateCursorType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Cursor.init)).Fn;
 
-        if (info.args.len != 2) @compileError(error_message);
-        if (info.args[0].arg_type.? != mem.Allocator) @compileError(error_message);
-        if (info.args[1].arg_type.? != *Table) @compileError(error_message);
+        if (info.params.len != 2) @compileError(error_message);
+        if (info.params[0].type.? != mem.Allocator) @compileError(error_message);
+        if (info.params[1].type.? != *Table) @compileError(error_message);
         if (info.return_type.? != Cursor.InitError!*Cursor) @compileError(error_message);
     }
 
@@ -333,8 +333,8 @@ fn validateCursorType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Cursor.deinit)).Fn;
 
-        if (info.args.len != 1) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Cursor) @compileError(error_message);
+        if (info.params.len != 1) @compileError(error_message);
+        if (info.params[0].type.? != *Cursor) @compileError(error_message);
         if (info.return_type.? != void) @compileError(error_message);
     }
 
@@ -354,9 +354,9 @@ fn validateCursorType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Cursor.next)).Fn;
 
-        if (info.args.len != 2) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Cursor) @compileError(error_message);
-        if (info.args[1].arg_type.? != *VTabDiagnostics) @compileError(error_message);
+        if (info.params.len != 2) @compileError(error_message);
+        if (info.params[0].type.? != *Cursor) @compileError(error_message);
+        if (info.params[1].type.? != *VTabDiagnostics) @compileError(error_message);
         if (info.return_type.? != Cursor.NextError!void) @compileError(error_message);
     }
 
@@ -376,9 +376,9 @@ fn validateCursorType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Cursor.hasNext)).Fn;
 
-        if (info.args.len != 2) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Cursor) @compileError(error_message);
-        if (info.args[1].arg_type.? != *VTabDiagnostics) @compileError(error_message);
+        if (info.params.len != 2) @compileError(error_message);
+        if (info.params[0].type.? != *Cursor) @compileError(error_message);
+        if (info.params[1].type.? != *VTabDiagnostics) @compileError(error_message);
         if (info.return_type.? != Cursor.HasNextError!bool) @compileError(error_message);
     }
 
@@ -398,11 +398,11 @@ fn validateCursorType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Cursor.filter)).Fn;
 
-        if (info.args.len != 4) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Cursor) @compileError(error_message);
-        if (info.args[1].arg_type.? != *VTabDiagnostics) @compileError(error_message);
-        if (info.args[2].arg_type.? != IndexIdentifier) @compileError(error_message);
-        if (info.args[3].arg_type.? != []FilterArg) @compileError(error_message);
+        if (info.params.len != 4) @compileError(error_message);
+        if (info.params[0].type.? != *Cursor) @compileError(error_message);
+        if (info.params[1].type.? != *VTabDiagnostics) @compileError(error_message);
+        if (info.params[2].type.? != IndexIdentifier) @compileError(error_message);
+        if (info.params[3].type.? != []FilterArg) @compileError(error_message);
         if (info.return_type.? != Cursor.FilterError!void) @compileError(error_message);
     }
 
@@ -425,10 +425,10 @@ fn validateCursorType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Cursor.column)).Fn;
 
-        if (info.args.len != 3) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Cursor) @compileError(error_message);
-        if (info.args[1].arg_type.? != *VTabDiagnostics) @compileError(error_message);
-        if (info.args[2].arg_type.? != i32) @compileError(error_message);
+        if (info.params.len != 3) @compileError(error_message);
+        if (info.params[0].type.? != *Cursor) @compileError(error_message);
+        if (info.params[1].type.? != *VTabDiagnostics) @compileError(error_message);
+        if (info.params[2].type.? != i32) @compileError(error_message);
         if (info.return_type.? != Cursor.ColumnError!Cursor.Column) @compileError(error_message);
     }
 
@@ -448,9 +448,9 @@ fn validateCursorType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Cursor.rowId)).Fn;
 
-        if (info.args.len != 2) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Cursor) @compileError(error_message);
-        if (info.args[1].arg_type.? != *VTabDiagnostics) @compileError(error_message);
+        if (info.params.len != 2) @compileError(error_message);
+        if (info.params[0].type.? != *Cursor) @compileError(error_message);
+        if (info.params[1].type.? != *VTabDiagnostics) @compileError(error_message);
         if (info.return_type.? != Cursor.RowIDError!i64) @compileError(error_message);
     }
 }
@@ -473,11 +473,11 @@ fn validateTableType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Table.init)).Fn;
 
-        if (info.args.len != 3) @compileError(error_message);
-        if (info.args[0].arg_type.? != mem.Allocator) @compileError(error_message);
-        if (info.args[1].arg_type.? != *VTabDiagnostics) @compileError(error_message);
-        // TODO(vincent): maybe allow a signature without the args since a table can do withoout them
-        if (info.args[2].arg_type.? != []const ModuleArgument) @compileError(error_message);
+        if (info.params.len != 3) @compileError(error_message);
+        if (info.params[0].type.? != mem.Allocator) @compileError(error_message);
+        if (info.params[1].type.? != *VTabDiagnostics) @compileError(error_message);
+        // TODO(vincent): maybe allow a signature without the params since a table can do withoout them
+        if (info.params[2].type.? != []const ModuleArgument) @compileError(error_message);
         if (info.return_type.? != Table.InitError!*Table) @compileError(error_message);
     }
 
@@ -493,9 +493,9 @@ fn validateTableType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Table.deinit)).Fn;
 
-        if (info.args.len != 2) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Table) @compileError(error_message);
-        if (info.args[1].arg_type.? != mem.Allocator) @compileError(error_message);
+        if (info.params.len != 2) @compileError(error_message);
+        if (info.params[0].type.? != *Table) @compileError(error_message);
+        if (info.params[1].type.? != mem.Allocator) @compileError(error_message);
         if (info.return_type.? != void) @compileError(error_message);
     }
 
@@ -515,10 +515,10 @@ fn validateTableType(comptime Table: type) void {
 
         const info = @typeInfo(@TypeOf(Table.buildBestIndex)).Fn;
 
-        if (info.args.len != 3) @compileError(error_message);
-        if (info.args[0].arg_type.? != *Table) @compileError(error_message);
-        if (info.args[1].arg_type.? != *VTabDiagnostics) @compileError(error_message);
-        if (info.args[2].arg_type.? != *BestIndexBuilder) @compileError(error_message);
+        if (info.params.len != 3) @compileError(error_message);
+        if (info.params[0].type.? != *Table) @compileError(error_message);
+        if (info.params[1].type.? != *VTabDiagnostics) @compileError(error_message);
+        if (info.params[2].type.? != *BestIndexBuilder) @compileError(error_message);
         if (info.return_type.? != Table.BuildBestIndexError!void) @compileError(error_message);
     }
 
