@@ -932,9 +932,9 @@ pub const Savepoint = struct {
     fn init(db: *Db, name: []const u8) InitError!Self {
         if (name.len < 1) return error.SavepointNameTooShort;
         if (name.len > 20) return error.SavepointNameTooLong;
-        if (!std.ascii.isAlpha(name[0])) return error.SavepointNameInvalid;
+        if (!std.ascii.isAlphabetic(name[0])) return error.SavepointNameInvalid;
         for (name) |b| {
-            if (b != '_' and !std.ascii.isAlNum(b)) {
+            if (b != '_' and !std.ascii.isAlphanumeric(b)) {
                 return error.SavepointNameInvalid;
             }
         }
