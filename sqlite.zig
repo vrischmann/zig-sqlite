@@ -2623,7 +2623,7 @@ test "sqlite: read a single text value" {
                         const res = mem.sliceTo(&name.?, sentinel);
                         try testing.expectEqualStrings("Vincent", res);
                     } else {
-                        const res = mem.span(&name.?);
+                        const res: []const u8 = &name.?;
                         try testing.expectEqualStrings("Vincent", res);
                     },
                     else => @compileError("invalid type " ++ @typeName(typ)),
