@@ -295,7 +295,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     // Setup the output name
     const fuzz_executable_name = "fuzz";
-    const fuzz_exe_path = try std.fs.path.join(b.allocator, &.{ b.cache_root, fuzz_executable_name });
+    const fuzz_exe_path = try b.cache_root.join(b.allocator, &.{fuzz_executable_name});
 
     // We want `afl-clang-lto -o path/to/output path/to/library`
     const fuzz_compile = b.addSystemCommand(&.{ "afl-clang-lto", "-o", fuzz_exe_path });
