@@ -207,7 +207,7 @@ pub const BestIndexBuilder = struct {
             .id = .{},
         };
 
-        for (res.constraints) |*constraint, i| {
+        for (res.constraints, 0..) |*constraint, i| {
             const raw_constraint = index_info.aConstraint[i];
 
             constraint.column = @intCast(isize, raw_constraint.iColumn);
@@ -233,7 +233,7 @@ pub const BestIndexBuilder = struct {
 
         // Populate the constraint usage
         var constraint_usage: []c.sqlite3_index_constraint_usage = index_info.aConstraintUsage[0..self.constraints.len];
-        for (self.constraints) |constraint, i| {
+        for (self.constraints, 0..) |constraint, i| {
             constraint_usage[i].argvIndex = constraint.usage.argv_index;
             constraint_usage[i].omit = if (constraint.usage.omit) 1 else 0;
         }
@@ -541,7 +541,7 @@ fn parseModuleArguments(allocator: mem.Allocator, argc: c_int, argv: [*c]const [
     var res = try allocator.alloc(ModuleArgument, @intCast(usize, argc));
     errdefer allocator.free(res);
 
-    for (res) |*marg, i| {
+    for (res, 0..) |*marg, i| {
         // The documentation of sqlite says each string in argv is null-terminated
         const arg = mem.sliceTo(argv[i], 0);
 
@@ -840,7 +840,7 @@ pub fn VirtualTable(
             const size = @intCast(usize, argc);
 
             var res = try allocator.alloc(FilterArg, size);
-            for (res) |*item, i| {
+            for (res, 0..) |*item, i| {
                 item.* = .{
                     .value = argv[i],
                 };
@@ -1276,7 +1276,7 @@ test "parse module arguments" {
     const allocator = arena.allocator();
 
     var args = try allocator.alloc([*c]const u8, 20);
-    for (args) |*arg, i| {
+    for (args, 0..) |*arg, i| {
         const tmp = try fmt.allocPrintZ(allocator, "arg={d}", .{i});
         arg.* = @ptrCast([*c]const u8, tmp);
     }
@@ -1288,7 +1288,7 @@ test "parse module arguments" {
     );
     try testing.expectEqual(@as(usize, 20), res.len);
 
-    for (res) |arg, i| {
+    for (res, 0..) |arg, i| {
         try testing.expectEqualStrings("arg", arg.kv.key);
         try testing.expectEqual(i, try fmt.parseInt(usize, arg.kv.value, 10));
     }
