@@ -25,7 +25,7 @@ pub const sqlite3_str_vappendf = @compileError("sqlite3_str_vappendf can't be im
 pub export fn sqlite3_aggregate_context(p: ?*c.sqlite3_context, nBytes: c_int) callconv(.C) ?*anyopaque {
     return sqlite3_api.*.aggregate_context.?(p, nBytes);
 }
-pub export fn sqlite3_bind_blob(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: ?*const anyopaque, nData: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_bind_blob(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: ?*const anyopaque, nData: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.bind_blob.?(pStmt, i, zData, nData, xDel);
 }
 pub export fn sqlite3_bind_double(pStmt: ?*c.sqlite3_stmt, i: c_int, rValue: f64) callconv(.C) c_int {
@@ -49,16 +49,16 @@ pub export fn sqlite3_bind_parameter_index(pStmt: ?*c.sqlite3_stmt, zName: [*c]c
 pub export fn sqlite3_bind_parameter_name(pStmt: ?*c.sqlite3_stmt, i: c_int) [*c]const u8 {
     return sqlite3_api.*.bind_parameter_name.?(pStmt, i);
 }
-pub export fn sqlite3_bind_text(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: [*c]const u8, nData: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_bind_text(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: [*c]const u8, nData: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.bind_text.?(pStmt, i, zData, nData, xDel);
 }
-pub export fn sqlite3_bind_text16(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: ?*const anyopaque, nData: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_bind_text16(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: ?*const anyopaque, nData: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.bind_text16.?(pStmt, i, zData, nData, xDel);
 }
 pub export fn sqlite3_bind_value(pStmt: ?*c.sqlite3_stmt, i: c_int, pValue: ?*const c.sqlite3_value) c_int {
     return sqlite3_api.*.bind_value.?(pStmt, i, pValue);
 }
-pub export fn sqlite3_busy_handler(db: ?*c.sqlite3, xBusy: ?fn (?*anyopaque, c_int) callconv(.C) c_int, pArg: ?*anyopaque) c_int {
+pub export fn sqlite3_busy_handler(db: ?*c.sqlite3, xBusy: ?*const fn (?*anyopaque, c_int) callconv(.C) c_int, pArg: ?*anyopaque) c_int {
     return sqlite3_api.*.busy_handler.?(db, xBusy, pArg);
 }
 pub export fn sqlite3_busy_timeout(db: ?*c.sqlite3, ms: c_int) c_int {
@@ -70,10 +70,10 @@ pub export fn sqlite3_changes(db: ?*c.sqlite3) c_int {
 pub export fn sqlite3_close(db: ?*c.sqlite3) c_int {
     return sqlite3_api.*.close.?(db);
 }
-pub export fn sqlite3_collation_needed(db: ?*c.sqlite3, pCollNeededArg: ?*anyopaque, xCollNeeded: ?fn (?*anyopaque, ?*c.sqlite3, c_int, [*c]const u8) callconv(.C) void) c_int {
+pub export fn sqlite3_collation_needed(db: ?*c.sqlite3, pCollNeededArg: ?*anyopaque, xCollNeeded: ?*const fn (?*anyopaque, ?*c.sqlite3, c_int, [*c]const u8) callconv(.C) void) c_int {
     return sqlite3_api.*.collation_needed.?(db, pCollNeededArg, xCollNeeded);
 }
-pub export fn sqlite3_collation_needed16(db: ?*c.sqlite3, pCollNeededArg: ?*anyopaque, xCollNeeded16: ?fn (?*anyopaque, ?*c.sqlite3, c_int, ?*const anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_collation_needed16(db: ?*c.sqlite3, pCollNeededArg: ?*anyopaque, xCollNeeded16: ?*const fn (?*anyopaque, ?*c.sqlite3, c_int, ?*const anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.collation_needed16.?(db, pCollNeededArg, xCollNeeded16);
 }
 pub export fn sqlite3_column_blob(pStmt: ?*c.sqlite3_stmt, iCol: c_int) ?*const anyopaque {
@@ -139,7 +139,7 @@ pub export fn sqlite3_column_type(pStmt: ?*c.sqlite3_stmt, iCol: c_int) c_int {
 pub export fn sqlite3_column_value(pStmt: ?*c.sqlite3_stmt, iCol: c_int) ?*c.sqlite3_value {
     return sqlite3_api.*.column_value.?(pStmt, iCol);
 }
-pub export fn sqlite3_commit_hook(db: ?*c.sqlite3, xCallback: ?fn (?*anyopaque) callconv(.C) c_int, pArg: ?*anyopaque) ?*anyopaque {
+pub export fn sqlite3_commit_hook(db: ?*c.sqlite3, xCallback: ?*const fn (?*anyopaque) callconv(.C) c_int, pArg: ?*anyopaque) ?*anyopaque {
     return sqlite3_api.*.commit_hook.?(db, xCallback, pArg);
 }
 pub export fn sqlite3_complete(sql: [*c]const u8) c_int {
@@ -148,22 +148,22 @@ pub export fn sqlite3_complete(sql: [*c]const u8) c_int {
 pub export fn sqlite3_complete16(sql: ?*const anyopaque) c_int {
     return sqlite3_api.*.complete16.?(sql);
 }
-pub export fn sqlite3_create_collation(db: ?*c.sqlite3, zName: [*c]const u8, eTextRep: c_int, pArg: ?*anyopaque, xCompare: ?fn (?*anyopaque, c_int, ?*const anyopaque, c_int, ?*const anyopaque) callconv(.C) c_int) c_int {
+pub export fn sqlite3_create_collation(db: ?*c.sqlite3, zName: [*c]const u8, eTextRep: c_int, pArg: ?*anyopaque, xCompare: ?*const fn (?*anyopaque, c_int, ?*const anyopaque, c_int, ?*const anyopaque) callconv(.C) c_int) c_int {
     return sqlite3_api.*.create_collation.?(db, zName, eTextRep, pArg, xCompare);
 }
-pub export fn sqlite3_create_collation16(db: ?*c.sqlite3, zName: ?*const anyopaque, eTextRep: c_int, pArg: ?*anyopaque, xCompare: ?fn (?*anyopaque, c_int, ?*const anyopaque, c_int, ?*const anyopaque) callconv(.C) c_int) c_int {
+pub export fn sqlite3_create_collation16(db: ?*c.sqlite3, zName: ?*const anyopaque, eTextRep: c_int, pArg: ?*anyopaque, xCompare: ?*const fn (?*anyopaque, c_int, ?*const anyopaque, c_int, ?*const anyopaque) callconv(.C) c_int) c_int {
     return sqlite3_api.*.create_collation16.?(db, zName, eTextRep, pArg, xCompare);
 }
-pub export fn sqlite3_create_function(db: ?*c.sqlite3, zFunctionName: [*c]const u8, nArg: c_int, eTextRep: c_int, pApp: ?*anyopaque, xFunc: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xStep: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xFinal: ?fn (?*c.sqlite3_context) callconv(.C) void) c_int {
+pub export fn sqlite3_create_function(db: ?*c.sqlite3, zFunctionName: [*c]const u8, nArg: c_int, eTextRep: c_int, pApp: ?*anyopaque, xFunc: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xStep: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xFinal: ?*const fn (?*c.sqlite3_context) callconv(.C) void) c_int {
     return sqlite3_api.*.create_function.?(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal);
 }
-pub export fn sqlite3_create_function16(db: ?*c.sqlite3, zFunctionName: ?*const anyopaque, nArg: c_int, eTextRep: c_int, pApp: ?*anyopaque, xFunc: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xStep: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xFinal: ?fn (?*c.sqlite3_context) callconv(.C) void) c_int {
+pub export fn sqlite3_create_function16(db: ?*c.sqlite3, zFunctionName: ?*const anyopaque, nArg: c_int, eTextRep: c_int, pApp: ?*anyopaque, xFunc: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xStep: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void, xFinal: ?*const fn (?*c.sqlite3_context) callconv(.C) void) c_int {
     return sqlite3_api.*.create_function16.?(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal);
 }
 pub export fn sqlite3_create_module(db: ?*c.sqlite3, zName: [*c]const u8, pModule: [*c]const c.sqlite3_module, pAux: ?*anyopaque) c_int {
     return sqlite3_api.*.create_module.?(db, zName, pModule, pAux);
 }
-pub export fn sqlite3_create_module_v2(db: ?*c.sqlite3, zName: [*c]const u8, pModule: [*c]const c.sqlite3_module, pAux: ?*anyopaque, xDestroy: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_create_module_v2(db: ?*c.sqlite3, zName: [*c]const u8, pModule: [*c]const c.sqlite3_module, pAux: ?*anyopaque, xDestroy: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.create_module_v2.?(db, zName, pModule, pAux, xDestroy);
 }
 pub export fn sqlite3_data_count(pStmt: ?*c.sqlite3_stmt) c_int {
@@ -188,7 +188,7 @@ pub export fn sqlite3_errmsg(db: ?*c.sqlite3) [*c]const u8 {
 pub export fn sqlite3_errmsg16(db: ?*c.sqlite3) ?*const anyopaque {
     return sqlite3_api.*.errmsg16.?(db);
 }
-pub export fn sqlite3_exec(db: ?*c.sqlite3, zSql: [*c]const u8, xCallback: ?fn (?*anyopaque, c_int, [*c][*c]u8, [*c][*c]u8) callconv(.C) c_int, pArg: ?*anyopaque, pzErrMsg: [*c][*c]u8) c_int {
+pub export fn sqlite3_exec(db: ?*c.sqlite3, zSql: [*c]const u8, xCallback: ?*const fn (?*anyopaque, c_int, [*c][*c]u8, [*c][*c]u8) callconv(.C) c_int, pArg: ?*anyopaque, pzErrMsg: [*c][*c]u8) c_int {
     return sqlite3_api.*.exec.?(db, zSql, xCallback, pArg, pzErrMsg);
 }
 pub export fn sqlite3_finalize(pStmt: ?*c.sqlite3_stmt) c_int {
@@ -242,10 +242,10 @@ pub export fn sqlite3_prepare_v2(db: ?*c.sqlite3, zSql: [*c]const u8, nByte: c_i
 pub export fn sqlite3_prepare16_v2(db: ?*c.sqlite3, zSql: ?*const anyopaque, nByte: c_int, ppStmt: [*c]?*c.sqlite3_stmt, pzTail: [*c]?*const anyopaque) c_int {
     return sqlite3_api.*.prepare16_v2.?(db, zSql, nByte, ppStmt, pzTail);
 }
-pub export fn sqlite3_profile(db: ?*c.sqlite3, xProfile: ?fn (?*anyopaque, [*c]const u8, c.sqlite3_uint64) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
+pub export fn sqlite3_profile(db: ?*c.sqlite3, xProfile: ?*const fn (?*anyopaque, [*c]const u8, c.sqlite3_uint64) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
     return sqlite3_api.*.profile.?(db, xProfile, pArg);
 }
-pub export fn sqlite3_progress_handler(db: ?*c.sqlite3, nOps: c_int, xProgress: ?fn (?*anyopaque) callconv(.C) c_int, pArg: ?*anyopaque) void {
+pub export fn sqlite3_progress_handler(db: ?*c.sqlite3, nOps: c_int, xProgress: ?*const fn (?*anyopaque) callconv(.C) c_int, pArg: ?*anyopaque) void {
     return sqlite3_api.*.progress_handler.?(db, nOps, xProgress, pArg);
 }
 pub export fn sqlite3_realloc(pOld: ?*anyopaque, n: c_int) ?*anyopaque {
@@ -254,7 +254,7 @@ pub export fn sqlite3_realloc(pOld: ?*anyopaque, n: c_int) ?*anyopaque {
 pub export fn sqlite3_reset(pStmt: ?*c.sqlite3_stmt) c_int {
     return sqlite3_api.*.reset.?(pStmt);
 }
-pub export fn sqlite3_result_blob(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_result_blob(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.result_blob.?(pCtx, z, n, xDel);
 }
 
@@ -277,28 +277,28 @@ pub export fn sqlite3_result_int64(pCtx: ?*c.sqlite3_context, iVal: c.sqlite3_in
 pub export fn sqlite3_result_null(pCtx: ?*c.sqlite3_context) void {
     return sqlite3_api.*.result_null.?(pCtx);
 }
-pub export fn sqlite3_result_text(pCtx: ?*c.sqlite3_context, z: [*c]const u8, n: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_result_text(pCtx: ?*c.sqlite3_context, z: [*c]const u8, n: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.result_text.?(pCtx, z, n, xDel);
 }
-pub export fn sqlite3_result_text16(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_result_text16(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.result_text16.?(pCtx, z, n, xDel);
 }
-pub export fn sqlite3_result_text16be(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_result_text16be(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.result_text16be.?(pCtx, z, n, xDel);
 }
-pub export fn sqlite3_result_text16le(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_result_text16le(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.result_text16le.?(pCtx, z, n, xDel);
 }
 pub export fn sqlite3_result_value(pCtx: ?*c.sqlite3_context, pValue: ?*c.sqlite3_value) void {
     return sqlite3_api.*.result_value.?(pCtx, pValue);
 }
-pub export fn sqlite3_rollback_hook(db: ?*c.sqlite3, xCallback: ?fn (?*anyopaque) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
+pub export fn sqlite3_rollback_hook(db: ?*c.sqlite3, xCallback: ?*const fn (?*anyopaque) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
     return sqlite3_api.*.rollback_hook.?(db, xCallback, pArg);
 }
-pub export fn sqlite3_set_authorizer(db: ?*c.sqlite3, xAuth: ?fn (?*anyopaque, c_int, [*c]const u8, [*c]const u8, [*c]const u8, [*c]const u8) callconv(.C) c_int, pArg: ?*anyopaque) c_int {
+pub export fn sqlite3_set_authorizer(db: ?*c.sqlite3, xAuth: ?*const fn (?*anyopaque, c_int, [*c]const u8, [*c]const u8, [*c]const u8, [*c]const u8) callconv(.C) c_int, pArg: ?*anyopaque) c_int {
     return sqlite3_api.*.set_authorizer.?(db, xAuth, pArg);
 }
-pub export fn sqlite3_set_auxdata(pCtx: ?*c.sqlite3_context, iArg: c_int, pAux: ?*anyopaque, xDelete: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_set_auxdata(pCtx: ?*c.sqlite3_context, iArg: c_int, pAux: ?*anyopaque, xDelete: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.set_auxdata.?(pCtx, iArg, pAux, xDelete);
 }
 pub export fn sqlite3_step(pStmt: ?*c.sqlite3_stmt) c_int {
@@ -313,10 +313,10 @@ pub export fn sqlite3_thread_cleanup() void {
 pub export fn sqlite3_total_changes(db: ?*c.sqlite3) c_int {
     return sqlite3_api.*.total_changes.?(db);
 }
-pub export fn sqlite3_trace(db: ?*c.sqlite3, xTrace: ?fn (?*anyopaque, [*c]const u8) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
+pub export fn sqlite3_trace(db: ?*c.sqlite3, xTrace: ?*const fn (?*anyopaque, [*c]const u8) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
     return sqlite3_api.*.trace.?(db, xTrace, pArg);
 }
-pub export fn sqlite3_update_hook(db: ?*c.sqlite3, xCallback: ?fn (?*anyopaque, c_int, [*c]const u8, [*c]const u8, c.sqlite3_int64) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
+pub export fn sqlite3_update_hook(db: ?*c.sqlite3, xCallback: ?*const fn (?*anyopaque, c_int, [*c]const u8, [*c]const u8, c.sqlite3_int64) callconv(.C) void, pArg: ?*anyopaque) ?*anyopaque {
     return sqlite3_api.*.update_hook.?(db, xCallback, pArg);
 }
 pub export fn sqlite3_user_data(pCtx: ?*c.sqlite3_context) ?*anyopaque {
@@ -382,7 +382,7 @@ pub export fn sqlite3_blob_read(pBlob: ?*c.sqlite3_blob, z: ?*anyopaque, n: c_in
 pub export fn sqlite3_blob_write(pBlob: ?*c.sqlite3_blob, z: ?*const anyopaque, n: c_int, iOffset: c_int) c_int {
     return sqlite3_api.*.blob_write.?(pBlob, z, n, iOffset);
 }
-pub export fn sqlite3_create_collation_v2(db: ?*c.sqlite3, zName: [*c]const u8, eTextRep: c_int, pCtx: ?*anyopaque, xCompare: ?fn (?*anyopaque, c_int, ?*const anyopaque, c_int, ?*const anyopaque) callconv(.C) c_int, xDel: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_create_collation_v2(db: ?*c.sqlite3, zName: [*c]const u8, eTextRep: c_int, pCtx: ?*anyopaque, xCompare: ?*const fn (?*anyopaque, c_int, ?*const anyopaque, c_int, ?*const anyopaque) callconv(.C) c_int, xDel: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.create_collation_v2.?(db, zName, eTextRep, pCtx, xCompare, xDel);
 }
 pub export fn sqlite3_file_control(db: ?*c.sqlite3, zDbName: [*c]const u8, op: c_int, pArg: ?*anyopaque) c_int {
@@ -493,10 +493,10 @@ pub export fn sqlite3_create_function_v2(
     nArg: c_int,
     eTextRep: c_int,
     pApp: ?*anyopaque,
-    xFunc: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
-    xStep: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
-    xFinal: ?fn (?*c.sqlite3_context) callconv(.C) void,
-    xDestroy: ?fn (?*anyopaque) callconv(.C) void,
+    xFunc: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
+    xStep: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
+    xFinal: ?*const fn (?*c.sqlite3_context) callconv(.C) void,
+    xDestroy: ?*const fn (?*anyopaque) callconv(.C) void,
 ) c_int {
     return sqlite3_api.*.create_function_v2.?(db, zFunctionName, nArg, eTextRep, pApp, xFunc, xStep, xFinal, xDestroy);
 }
@@ -521,7 +521,7 @@ pub export fn sqlite3_stmt_status(pStmt: ?*c.sqlite3_stmt, op: c_int, resetFlag:
 pub export fn sqlite3_strnicmp(zLeft: [*c]const u8, zRight: [*c]const u8, N: c_int) c_int {
     return sqlite3_api.*.strnicmp.?(zLeft, zRight, N);
 }
-pub export fn sqlite3_unlock_notify(pBlocked: ?*c.sqlite3, xNotify: ?fn ([*c]?*anyopaque, c_int) callconv(.C) void, pNotifyArg: ?*anyopaque) c_int {
+pub export fn sqlite3_unlock_notify(pBlocked: ?*c.sqlite3, xNotify: ?*const fn ([*c]?*anyopaque, c_int) callconv(.C) void, pNotifyArg: ?*anyopaque) c_int {
     return sqlite3_api.*.unlock_notify.?(pBlocked, xNotify, pNotifyArg);
 }
 pub export fn sqlite3_wal_autocheckpoint(db: ?*c.sqlite3, N: c_int) c_int {
@@ -530,7 +530,7 @@ pub export fn sqlite3_wal_autocheckpoint(db: ?*c.sqlite3, N: c_int) c_int {
 pub export fn sqlite3_wal_checkpoint(db: ?*c.sqlite3, zDb: [*c]const u8) c_int {
     return sqlite3_api.*.wal_checkpoint.?(db, zDb);
 }
-pub export fn sqlite3_wal_hook(db: ?*c.sqlite3, xCallback: ?fn (?*anyopaque, ?*c.sqlite3, [*c]const u8, c_int) callconv(.C) c_int, pArg: ?*anyopaque) ?*anyopaque {
+pub export fn sqlite3_wal_hook(db: ?*c.sqlite3, xCallback: ?*const fn (?*anyopaque, ?*c.sqlite3, [*c]const u8, c_int) callconv(.C) c_int, pArg: ?*anyopaque) ?*anyopaque {
     return sqlite3_api.*.wal_hook.?(db, xCallback, pArg);
 }
 pub export fn sqlite3_blob_reopen(pBlob: ?*c.sqlite3_blob, iRow: c.sqlite3_int64) c_int {
@@ -575,16 +575,16 @@ pub export fn sqlite3_uri_parameter(zFilename: [*c]const u8, zParam: [*c]const u
 pub export fn sqlite3_wal_checkpoint_v2(db: ?*c.sqlite3, zDb: [*c]const u8, eMode: c_int, pnLog: [*c]c_int, pnCkpt: [*c]c_int) c_int {
     return sqlite3_api.*.wal_checkpoint_v2.?(db, zDb, eMode, pnLog, pnCkpt);
 }
-pub export fn sqlite3_auto_extension(xEntryPoint: ?fn () callconv(.C) void) c_int {
+pub export fn sqlite3_auto_extension(xEntryPoint: ?*const fn () callconv(.C) void) c_int {
     return sqlite3_api.*.auto_extension.?(xEntryPoint);
 }
-pub export fn sqlite3_bind_blob64(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: ?*const anyopaque, nData: c.sqlite3_uint64, xDel: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_bind_blob64(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: ?*const anyopaque, nData: c.sqlite3_uint64, xDel: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.bind_blob64.?(pStmt, i, zData, nData, xDel);
 }
-pub export fn sqlite3_bind_text64(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: [*c]const u8, nData: c.sqlite3_uint64, xDel: ?fn (?*anyopaque) callconv(.C) void, encoding: u8) c_int {
+pub export fn sqlite3_bind_text64(pStmt: ?*c.sqlite3_stmt, i: c_int, zData: [*c]const u8, nData: c.sqlite3_uint64, xDel: ?*const fn (?*anyopaque) callconv(.C) void, encoding: u8) c_int {
     return sqlite3_api.*.bind_text64.?(pStmt, i, zData, nData, xDel, encoding);
 }
-pub export fn sqlite3_cancel_auto_extension(xEntryPoint: ?fn () callconv(.C) void) c_int {
+pub export fn sqlite3_cancel_auto_extension(xEntryPoint: ?*const fn () callconv(.C) void) c_int {
     return sqlite3_api.*.cancel_auto_extension.?(xEntryPoint);
 }
 pub export fn sqlite3_load_extension(db: ?*c.sqlite3, zFile: [*c]const u8, zProc: [*c]const u8, pzErrMsg: [*c][*c]u8) c_int {
@@ -602,10 +602,10 @@ pub export fn sqlite3_realloc64(pOld: ?*anyopaque, n: c.sqlite3_uint64) ?*anyopa
 pub export fn sqlite3_reset_auto_extension() void {
     return sqlite3_api.*.reset_auto_extension.?();
 }
-pub export fn sqlite3_result_blob64(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c.sqlite3_uint64, xDel: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_result_blob64(pCtx: ?*c.sqlite3_context, z: ?*const anyopaque, n: c.sqlite3_uint64, xDel: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.result_blob64.?(pCtx, z, n, xDel);
 }
-pub export fn sqlite3_result_text64(pCtx: ?*c.sqlite3_context, z: [*c]const u8, n: c.sqlite3_uint64, xDel: ?fn (?*anyopaque) callconv(.C) void, encoding: u8) void {
+pub export fn sqlite3_result_text64(pCtx: ?*c.sqlite3_context, z: [*c]const u8, n: c.sqlite3_uint64, xDel: ?*const fn (?*anyopaque) callconv(.C) void, encoding: u8) void {
     return sqlite3_api.*.result_text64.?(pCtx, z, n, xDel, encoding);
 }
 pub export fn sqlite3_strglob(zGlob: [*c]const u8, zStr: [*c]const u8) c_int {
@@ -641,7 +641,7 @@ pub export fn sqlite3_db_cacheflush(db: ?*c.sqlite3) c_int {
 pub export fn sqlite3_system_errno(db: ?*c.sqlite3) c_int {
     return sqlite3_api.*.system_errno.?(db);
 }
-pub export fn sqlite3_trace_v2(db: ?*c.sqlite3, uMask: c_uint, xCallback: ?fn (c_uint, ?*anyopaque, ?*anyopaque, ?*anyopaque) callconv(.C) c_int, pCtx: ?*anyopaque) c_int {
+pub export fn sqlite3_trace_v2(db: ?*c.sqlite3, uMask: c_uint, xCallback: ?*const fn (c_uint, ?*anyopaque, ?*anyopaque, ?*anyopaque) callconv(.C) c_int, pCtx: ?*anyopaque) c_int {
     return sqlite3_api.*.trace_v2.?(db, uMask, xCallback, pCtx);
 }
 pub export fn sqlite3_expanded_sql(pStmt: ?*c.sqlite3_stmt) [*c]u8 {
@@ -656,10 +656,10 @@ pub export fn sqlite3_prepare_v3(db: ?*c.sqlite3, zSql: [*c]const u8, nByte: c_i
 pub export fn sqlite3_prepare16_v3(db: ?*c.sqlite3, zSql: ?*const anyopaque, nByte: c_int, prepFlags: c_uint, ppStmt: [*c]?*c.sqlite3_stmt, pzTail: [*c]?*const anyopaque) c_int {
     return sqlite3_api.*.prepare16_v3.?(db, zSql, nByte, prepFlags, ppStmt, pzTail);
 }
-pub export fn sqlite3_bind_pointer(pStmt: ?*c.sqlite3_stmt, i: c_int, pPtr: ?*anyopaque, zPTtype: [*c]const u8, xDestructor: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_bind_pointer(pStmt: ?*c.sqlite3_stmt, i: c_int, pPtr: ?*anyopaque, zPTtype: [*c]const u8, xDestructor: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.bind_pointer.?(pStmt, i, pPtr, zPTtype, xDestructor);
 }
-pub export fn sqlite3_result_pointer(pCtx: ?*c.sqlite3_context, pPtr: ?*anyopaque, zPType: [*c]const u8, xDestructor: ?fn (?*anyopaque) callconv(.C) void) void {
+pub export fn sqlite3_result_pointer(pCtx: ?*c.sqlite3_context, pPtr: ?*anyopaque, zPType: [*c]const u8, xDestructor: ?*const fn (?*anyopaque) callconv(.C) void) void {
     return sqlite3_api.*.result_pointer.?(pCtx, pPtr, zPType, xDestructor);
 }
 pub export fn sqlite3_value_pointer(pVal: ?*c.sqlite3_value, zPType: [*c]const u8) ?*anyopaque {
@@ -716,11 +716,11 @@ pub export fn sqlite3_create_window_function(
     nArg: c_int,
     eTextRep: c_int,
     pArg: ?*anyopaque,
-    xStep: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
-    xFinal: ?fn (?*c.sqlite3_context) callconv(.C) void,
-    xValue: ?fn (?*c.sqlite3_context) callconv(.C) void,
-    xInverse: ?fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
-    xDestroy: ?fn (?*anyopaque) callconv(.C) void,
+    xStep: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
+    xFinal: ?*const fn (?*c.sqlite3_context) callconv(.C) void,
+    xValue: ?*const fn (?*c.sqlite3_context) callconv(.C) void,
+    xInverse: ?*const fn (?*c.sqlite3_context, c_int, [*c]?*c.sqlite3_value) callconv(.C) void,
+    xDestroy: ?*const fn (?*anyopaque) callconv(.C) void,
 ) c_int {
     return sqlite3_api.*.create_window_function.?(
         db,
@@ -777,7 +777,7 @@ pub export fn sqlite3_changes64(db: ?*c.sqlite3) c.sqlite3_int64 {
 pub export fn sqlite3_total_changes64(db: ?*c.sqlite3) c.sqlite3_int64 {
     return sqlite3_api.*.total_changes64.?(db);
 }
-pub export fn sqlite3_autovacuum_pages(db: ?*c.sqlite3, xCallback: ?fn (?*anyopaque, [*c]const u8, c_uint, c_uint, c_uint) callconv(.C) c_uint, pArg: ?*anyopaque, xDestructor: ?fn (?*anyopaque) callconv(.C) void) c_int {
+pub export fn sqlite3_autovacuum_pages(db: ?*c.sqlite3, xCallback: ?*const fn (?*anyopaque, [*c]const u8, c_uint, c_uint, c_uint) callconv(.C) c_uint, pArg: ?*anyopaque, xDestructor: ?*const fn (?*anyopaque) callconv(.C) void) c_int {
     return sqlite3_api.*.autovacuum_pages.?(db, xCallback, pArg, xDestructor);
 }
 pub export fn sqlite3_error_offset(db: ?*c.sqlite3) c_int {

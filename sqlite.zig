@@ -640,19 +640,19 @@ pub const Db = struct {
             .Fn => |fn_info| fn_info,
             else => @compileError("cannot use func, expecting a function"),
         };
-        if (finalize_fn_info.args.len != 1) @compileError("finalize function must take exactly one argument");
+        if (finalize_fn_info.params.len != 1) @compileError("finalize function must take exactly one argument");
         if (finalize_fn_info.is_generic) @compileError("finalize function can't be generic");
         if (finalize_fn_info.is_var_args) @compileError("finalize function can't be variadic");
 
-        if (step_fn_info.args[0].arg_type.? != finalize_fn_info.args[0].arg_type.?) {
+        if (step_fn_info.params[0].type.? != finalize_fn_info.params[0].type.?) {
             @compileError("both step and finalize functions must have the same first argument and it must be a FunctionContext");
         }
-        if (step_fn_info.args[0].arg_type.? != FunctionContext) {
+        if (step_fn_info.params[0].type.? != FunctionContext) {
             @compileError("both step and finalize functions must have a first argument of type FunctionContext");
         }
 
         // subtract the context argument
-        const real_args_len = step_fn_info.args.len - 1;
+        const real_args_len = step_fn_info.params.len - 1;
 
         //
 
@@ -669,7 +669,7 @@ pub const Db = struct {
                 fn xStep(ctx: ?*c.sqlite3_context, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.C) void {
                     debug.assert(argc == real_args_len);
 
-                    const sqlite_args = argv.?[0..real_args_len];
+                    const sqlite_args = argv[0..real_args_len];
 
                     var args: std.meta.ArgsTuple(@TypeOf(step_func)) = undefined;
 
@@ -679,14 +679,14 @@ pub const Db = struct {
                     comptime var i: usize = 0;
                     inline while (i < real_args_len) : (i += 1) {
                         // Remember the firt argument is always the function context
-                        const arg = step_fn_info.args[i + 1];
+                        const arg = step_fn_info.params[i + 1];
                         const arg_ptr = &args[i + 1];
 
-                        const ArgType = arg.arg_type.?;
+                        const ArgType = arg.type.?;
                         helpers.setTypeFromValue(ArgType, arg_ptr, sqlite_args[i].?);
                     }
 
-                    @call(.{}, step_func, args);
+                    @call(.auto, step_func, args);
                 }
             }.xStep,
             struct {
@@ -696,7 +696,7 @@ pub const Db = struct {
                     // Pass the function context
                     args[0] = FunctionContext{ .ctx = ctx };
 
-                    const result = @call(.{}, finalize_func, args);
+                    const result = @call(.auto, finalize_func, args);
 
                     helpers.setResult(ctx, result);
                 }
@@ -738,22 +738,22 @@ pub const Db = struct {
         const result = c.sqlite3_create_function_v2(
             self.db,
             func_name,
-            fn_info.args.len,
+            fn_info.params.len,
             flags,
             null,
             struct {
                 fn xFunc(ctx: ?*c.sqlite3_context, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.C) void {
-                    debug.assert(argc == fn_info.args.len);
+                    debug.assert(argc == fn_info.params.len);
 
-                    const sqlite_args = argv.?[0..fn_info.args.len];
+                    const sqlite_args = argv[0..fn_info.params.len];
 
                     var fn_args: ArgTuple = undefined;
-                    inline for (fn_info.args) |arg, i| {
-                        const ArgType = arg.arg_type.?;
+                    inline for (fn_info.params, 0..) |arg, i| {
+                        const ArgType = arg.type.?;
                         helpers.setTypeFromValue(ArgType, &fn_args[i], sqlite_args[i].?);
                     }
 
-                    const result = @call(.{}, func, fn_args);
+                    const result = @call(.auto, func, fn_args);
 
                     helpers.setResult(ctx, result);
                 }
@@ -1395,7 +1395,7 @@ pub fn Iterator(comptime Type: type) type {
 
             var value: Type = undefined;
 
-            inline for (@typeInfo(Type).Struct.fields) |field, _i| {
+            inline for (@typeInfo(Type).Struct.fields, 0..) |field, _i| {
                 const i = @as(usize, _i);
 
                 const ret = try self.readField(field.type, options, i);
@@ -1721,7 +1721,7 @@ pub const DynamicStatement = struct {
 
         switch (@typeInfo(Type)) {
             .Struct => |StructTypeInfo| {
-                inline for (StructTypeInfo.fields) |struct_field, struct_field_i| {
+                inline for (StructTypeInfo.fields, 0..) |struct_field, struct_field_i| {
                     const field_value = @field(values, struct_field.name);
 
                     const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
@@ -1735,7 +1735,7 @@ pub const DynamicStatement = struct {
             .Pointer => |PointerTypeInfo| {
                 switch (PointerTypeInfo.size) {
                     .Slice => {
-                        for (values) |value_to_bind, index| {
+                        for (values, 0..) |value_to_bind, index| {
                             try self.bindField(PointerTypeInfo.child, options, "unknown", @intCast(c_int, index), value_to_bind);
                         }
                     },
@@ -1743,7 +1743,7 @@ pub const DynamicStatement = struct {
                 }
             },
             .Array => |ArrayTypeInfo| {
-                for (values) |value_to_bind, index| {
+                for (values, 0..) |value_to_bind, index| {
                     try self.bindField(ArrayTypeInfo.child, options, "unknown", @intCast(c_int, index), value_to_bind);
                 }
             },
@@ -2025,7 +2025,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
                 }));
             }
 
-            inline for (StructTypeInfo.fields) |struct_field, _i| {
+            inline for (StructTypeInfo.fields, 0..) |struct_field, _i| {
                 const bind_marker = query.bind_markers[_i];
                 if (bind_marker.typed) |typ| {
                     const FieldTypeInfo = @typeInfo(struct_field.type);
@@ -2497,7 +2497,7 @@ test "sqlite: read all users into a struct" {
 
     var rows = try stmt.all(TestUser, allocator, .{}, .{});
     try testing.expectEqual(@as(usize, 3), rows.len);
-    for (rows) |row, i| {
+    for (rows, 0..) |row, i| {
         const exp = test_users[i];
         try testing.expectEqual(exp.id, row.id);
         try testing.expectEqualStrings(exp.name, row.name);
@@ -2623,7 +2623,7 @@ test "sqlite: read a single text value" {
                         const res = mem.sliceTo(&name.?, sentinel);
                         try testing.expectEqualStrings("Vincent", res);
                     } else {
-                        const res = mem.span(&name.?);
+                        const res: []const u8 = &name.?;
                         try testing.expectEqualStrings("Vincent", res);
                     },
                     else => @compileError("invalid type " ++ @typeName(typ)),
@@ -2828,7 +2828,7 @@ test "sqlite: bind pointer" {
     var stmt = try db.prepare(query);
     defer stmt.deinit();
 
-    for (test_users) |test_user, i| {
+    for (test_users, 0..) |test_user, i| {
         stmt.reset();
 
         const name = try stmt.oneAlloc([]const u8, allocator, .{}, .{&test_user.id});
@@ -2864,7 +2864,7 @@ test "sqlite: read pointers" {
     );
 
     try testing.expectEqual(@as(usize, 3), rows.len);
-    for (rows) |row, i| {
+    for (rows, 0..) |row, i| {
         const exp = test_users[i];
         try testing.expectEqual(exp.id, row.id.*);
         try testing.expectEqualStrings(exp.name, row.name.*);
@@ -2998,7 +2998,7 @@ test "sqlite: statement iterator" {
         // Check the data
         try testing.expectEqual(expected_rows.items.len, rows.items.len);
 
-        for (rows.items) |row, j| {
+        for (rows.items, 0..) |row, j| {
             const exp_row = expected_rows.items[j];
             try testing.expectEqualStrings(exp_row.name, mem.sliceTo(&row.name, 0));
             try testing.expectEqual(exp_row.age, row.age);
@@ -3025,7 +3025,7 @@ test "sqlite: statement iterator" {
         // Check the data
         try testing.expectEqual(expected_rows.items.len, rows.items.len);
 
-        for (rows.items) |row, j| {
+        for (rows.items, 0..) |row, j| {
             const exp_row = expected_rows.items[j];
             try testing.expectEqualStrings(exp_row.name, row.name.data);
             try testing.expectEqual(exp_row.age, row.age);
@@ -3386,7 +3386,7 @@ test "sqlite: bind custom type" {
         const rows = try stmt.all(Article, arena.allocator(), .{}, .{});
         try testing.expectEqual(@as(usize, 20), rows.len);
 
-        for (rows) |row, i| {
+        for (rows, 0..) |row, i| {
             var exp_data: MyData = undefined;
             mem.set(u8, &exp_data.data, @intCast(u8, i));
 

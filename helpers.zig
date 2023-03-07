@@ -84,5 +84,5 @@ fn sliceFromValue(sqlite_value: *c.sqlite3_value) []const u8 {
     const value = c.sqlite3_value_text(sqlite_value);
     debug.assert(value != null); // TODO(vincent): how do we handle this properly ?
 
-    return value.?[0..size];
+    return value[0..size];
 }
