@@ -1618,7 +1618,8 @@ pub const DynamicStatement = struct {
                     },
                     .Slice => switch (ptr.child) {
                         u8 => {
-                            const result = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), null);
+                            // NOTE(vincent): The slice must live until after the prepared statement is finaliuzed, therefore we use SQLITE_STATIC to avoid a copy
+                            const result = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), c.SQLITE_STATIC);
                             return convertResultToError(result);
                         },
                         else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
@@ -1629,7 +1630,8 @@ pub const DynamicStatement = struct {
                     u8 => {
                         const data: []const u8 = field[0..field.len];
 
-                        const result = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), null);
+                        // NOTE(vincent): The array is temporary and must be copied, therefore we use SQLITE_TRANSIENT
+                        const result = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), c.SQLITE_TRANSIENT);
                         return convertResultToError(result);
                     },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
