@@ -249,7 +249,7 @@ pub fn build(b: *std.build.Builder) !void {
         linkSqlite(lib);
 
         const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
-        tests.setNamePrefix(b.fmt("{s}-{s}-{s} ", .{
+        tests.setName(b.fmt("{s}-{s}-{s} ", .{
             try cross_target.zigTriple(b.allocator),
             @tagName(optimize),
             single_threaded_txt,
