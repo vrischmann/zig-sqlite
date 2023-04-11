@@ -165,13 +165,24 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             TestTarget{
                 .target = .{},
                 .bundled = false,
+                .single_threaded = true,
             },
         },
     },
+    .wasm32 => [_]TestTarget{
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .wasm32,
+                    .os_tag = .wasi,
+                },
+                .bundled = true,
+                .single_threaded = true,
+            },
+        },
     else => [_]TestTarget{
-        TestTarget{
-            .target = .{},
-            .bundled = false,
+            TestTarget{
+                .target = .{},
+                .bundled = true,
         },
     },
 };
@@ -234,6 +245,12 @@ pub fn build(b: *std.build.Builder) !void {
                 .target = cross_target,
                 .optimize = optimize,
             });
+            if (cross_target.os_tag != null and cross_target.os_tag.? == .wasi){
+                lib.c_macros.append("SQLITE_OS_OTHER") catch unreachable;
+                lib.c_macros.append("_WASI_EMULATED_MMAN=1") catch unreachable;
+                lib.addCSourceFile("c/os.c", &[_][]const u8{});
+                lib.addCSourceFile("c/vfs.c", &[_][]const u8{});
+            }
             lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
             lib.linkLibC();
             sqlite3 = lib;
@@ -274,6 +291,14 @@ pub fn build(b: *std.build.Builder) !void {
         .target = getTarget(target, true),
         .optimize = optimize,
     });
+
+    if (lib.target.os_tag != null and lib.target.os_tag.? == .wasi){
+        lib.c_macros.append("SQLITE_OS_OTHER") catch unreachable;
+        lib.c_macros.append("_WASI_EMULATED_MMAN=1") catch unreachable;
+        lib.addCSourceFile("c/os.c", &[_][]const u8{});
+        lib.addCSourceFile("c/vfs.c", &[_][]const u8{});
+    }
+
     lib.addCSourceFile("c/sqlite3.c", &[_][]const u8{"-std=c99"});
     lib.addIncludePath("c");
     lib.linkLibC();
