@@ -3360,7 +3360,7 @@ test "sqlite: bind custom type" {
         var i: usize = 0;
         while (i < 20) : (i += 1) {
             var my_data: MyData = undefined;
-            mem.set(u8, &my_data.data, @intCast(u8, i));
+            @memset(&my_data.data, @intCast(u8, i));
 
             var arena = heap.ArenaAllocator.init(testing.allocator);
             defer arena.deinit();
@@ -3390,7 +3390,7 @@ test "sqlite: bind custom type" {
 
         for (rows, 0..) |row, i| {
             var exp_data: MyData = undefined;
-            mem.set(u8, &exp_data.data, @intCast(u8, i));
+            @memset(&exp_data.data, @intCast(u8, i));
 
             try testing.expectEqualSlices(u8, &exp_data.data, &row.data.data);
         }

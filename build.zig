@@ -1,9 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-var sqlite3: ?*std.build.LibExeObjStep = null;
+var sqlite3: ?*std.Build.Step.Compile = null;
 
-fn linkSqlite(b: *std.build.LibExeObjStep) void {
+fn linkSqlite(b: *std.Build.Step.Compile) void {
     if (sqlite3) |lib| {
         b.linkLibrary(lib);
     } else {
@@ -176,7 +176,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
     },
 };
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
@@ -199,7 +199,7 @@ pub fn build(b: *std.build.Builder) !void {
     // Add a top-level step to run the preprocess-files tool
     const preprocess_files_run = b.step("preprocess-files", "Run the preprocess-files tool");
 
-    const preprocess_files_tool_run = preprocess_files_tool.run();
+    const preprocess_files_tool_run = b.addRunArtifact(preprocess_files_tool);
     preprocess_files_run.dependOn(&preprocess_files_tool_run.step);
 
     // If the target is native we assume the user didn't change it with -Dtarget and run all test targets.
@@ -222,10 +222,19 @@ pub fn build(b: *std.build.Builder) !void {
     for (test_targets) |test_target| {
         const bundled = use_bundled orelse test_target.bundled;
         const cross_target = getTarget(test_target.target, bundled);
+        const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
+        const test_name = b.fmt("{s}-{s}-{s}", .{
+            try cross_target.zigTriple(b.allocator),
+            @tagName(optimize),
+            single_threaded_txt,
+        });
 
         const tests = b.addTest(.{
+            .name = test_name,
             .target = cross_target,
+            .optimize = optimize,
             .root_source_file = .{ .path = "sqlite.zig" },
+            .single_threaded = test_target.single_threaded,
         });
 
         if (bundled) {
@@ -239,6 +248,9 @@ pub fn build(b: *std.build.Builder) !void {
             sqlite3 = lib;
         }
 
+        if (bundled) tests.addIncludePath("c");
+        linkSqlite(tests);
+
         const lib = b.addStaticLibrary(.{
             .name = "zig-sqlite",
             .root_source_file = .{ .path = "sqlite.zig" },
@@ -247,16 +259,6 @@ pub fn build(b: *std.build.Builder) !void {
         });
         if (bundled) lib.addIncludePath("c");
         linkSqlite(lib);
-
-        const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
-        tests.setName(b.fmt("{s}-{s}-{s} ", .{
-            try cross_target.zigTriple(b.allocator),
-            @tagName(optimize),
-            single_threaded_txt,
-        }));
-        tests.single_threaded = test_target.single_threaded;
-        if (bundled) tests.addIncludePath("c");
-        linkSqlite(tests);
 
         const tests_options = b.addOptions();
         tests.addOptions("build_options", tests_options);
