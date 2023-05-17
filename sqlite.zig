@@ -3919,7 +3919,7 @@ test "tagged union" {
 
     {
         try db.exec("INSERT INTO foobar(key, value) VALUES($key, $value)", .{}, .{
-            .key = std.meta.tagName(std.meta.activeTag(foobar)),
+            .key = @tagName(std.meta.activeTag(foobar)),
             .value = foobar,
         });
 
@@ -3935,7 +3935,7 @@ test "tagged union" {
             "SELECT key, value FROM foobar WHERE key = $key",
             .{},
             .{
-                std.meta.tagName(std.meta.activeTag(foobar)),
+                @tagName(std.meta.activeTag(foobar)),
             },
         );
         try testing.expect(result != null);
@@ -3947,7 +3947,7 @@ test "tagged union" {
         foobar = Foobar{ .age = 204 };
 
         try db.exec("INSERT INTO foobar(key, value) VALUES($key, $value)", .{}, .{
-            .key = std.meta.tagName(std.meta.activeTag(foobar)),
+            .key = @tagName(std.meta.activeTag(foobar)),
             .value = foobar,
         });
 
@@ -3963,7 +3963,7 @@ test "tagged union" {
             "SELECT key, value FROM foobar WHERE key = $key",
             .{},
             .{
-                std.meta.tagName(std.meta.activeTag(foobar)),
+                @tagName(std.meta.activeTag(foobar)),
             },
         );
         try testing.expect(result != null);
