@@ -247,7 +247,7 @@ fn preprocessSqlite3ExtHeaderFile(gpa: mem.Allocator) !void {
 
 pub fn main() !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
-    defer if (gpa.deinit()) debug.panic("leaks detected\n", .{});
+    defer if (gpa.deinit() == .leak) debug.panic("leaks detected\n", .{});
 
     try preprocessSqlite3HeaderFile(gpa.allocator());
     try preprocessSqlite3ExtHeaderFile(gpa.allocator());
