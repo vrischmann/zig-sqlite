@@ -49,7 +49,7 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ matrix.os }}-zig-
 
       - name: Run Tests in memory
-        run: zig build test -Din_memory=true -fsummary
+        run: zig build test -Din_memory=true --summary all
 
       - name: Build the example zigcrypto loadable extension
         run: zig build zigcrypto
