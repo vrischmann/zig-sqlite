@@ -17,7 +17,7 @@ fn getTarget(original_target: std.zig.CrossTarget, bundled: bool) std.zig.CrossT
         var tmp = original_target;
 
         if (tmp.isGnuLibC()) {
-            const min_glibc_version = std.builtin.Version{
+            const min_glibc_version = std.SemanticVersion{
                 .major = 2,
                 .minor = 28,
                 .patch = 0,
