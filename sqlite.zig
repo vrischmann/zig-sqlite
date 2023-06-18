@@ -3584,7 +3584,7 @@ test "sqlite: create scalar function" {
             "myMax",
             struct {
                 fn run(a: f64, b: f64) f64 {
-                    return std.math.max(a, b);
+                    return @max(a, b);
                 }
             }.run,
             .{},
