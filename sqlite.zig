@@ -1073,7 +1073,7 @@ pub fn Iterator(comptime Type: type) type {
 
                     if (@typeInfo(Type.BaseType) == .Int) {
                         const inner_value = try self.readField(Type.BaseType, options, 0);
-                        return @intToEnum(Type, @intCast(TI.tag_type, inner_value));
+                        return @enumFromInt(Type, @intCast(TI.tag_type, inner_value));
                     }
 
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
@@ -1157,7 +1157,7 @@ pub fn Iterator(comptime Type: type) type {
                         return std.meta.stringToEnum(Type, inner_value) orelse unreachable;
                     }
                     if (@typeInfo(Type.BaseType) == .Int) {
-                        return @intToEnum(Type, @intCast(TI.tag_type, inner_value));
+                        return @enumFromInt(Type, @intCast(TI.tag_type, inner_value));
                     }
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
@@ -1445,7 +1445,7 @@ pub fn Iterator(comptime Type: type) type {
                             return std.meta.stringToEnum(FieldType, inner_value) orelse unreachable;
                         }
                         if (@typeInfo(FieldType.BaseType) == .Int) {
-                            return @intToEnum(FieldType, @intCast(TI.tag_type, inner_value));
+                            return @enumFromInt(FieldType, @intCast(TI.tag_type, inner_value));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
@@ -1609,7 +1609,7 @@ pub const DynamicStatement = struct {
                     return convertResultToError(result);
                 },
                 .Bool => {
-                    const result = c.sqlite3_bind_int64(self.stmt, column, @boolToInt(field));
+                    const result = c.sqlite3_bind_int64(self.stmt, column, @intFromBool(field));
                     return convertResultToError(result);
                 },
                 .Pointer => |ptr| switch (ptr.size) {
@@ -1650,7 +1650,7 @@ pub const DynamicStatement = struct {
                     if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
                     } else if (@typeInfo(FieldType.BaseType) == .Int) {
-                        try self.bindField(FieldType.BaseType, options, field_name, i, @enumToInt(field));
+                        try self.bindField(FieldType.BaseType, options, field_name, i, @intFromEnum(field));
                     } else {
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
                     }
@@ -2969,7 +2969,7 @@ test "sqlite: statement iterator" {
     var i: usize = 0;
     while (i < 20) : (i += 1) {
         const name = try std.fmt.allocPrint(allocator, "Vincent {d}", .{i});
-        const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @intToFloat(f32, i + 200), .favorite_color = .indigo };
+        const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @floatFromInt(f32, i + 200), .favorite_color = .indigo };
 
         try expected_rows.append(user);
 
