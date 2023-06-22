@@ -7,7 +7,7 @@ pub export fn main() callconv(.C) void {
 
 pub fn zigMain() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.debug.assert(gpa.deinit() == false);
+    defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
     // Read the data from stdin
