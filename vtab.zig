@@ -24,7 +24,7 @@ pub const ModuleContext = struct {
 };
 
 fn dupeToSQLiteString(s: []const u8) [*c]const u8 {
-    var buffer = @ptrCast([*c]u8, c.sqlite3_malloc(@intCast(c_int, s.len) + 1));
+    var buffer = @as([*c]u8, @ptrCast(c.sqlite3_malloc(@as(c_int, @intCast(s.len)) + 1)));
 
     mem.copy(u8, buffer[0..s.len], s);
     buffer[s.len] = 0;
@@ -202,15 +202,15 @@ pub const BestIndexBuilder = struct {
             .allocator = allocator,
             .index_info = index_info,
             .id_str_buffer = std.ArrayList(u8).init(allocator),
-            .constraints = try allocator.alloc(Constraint, @intCast(usize, index_info.nConstraint)),
-            .columns_used = @intCast(u64, index_info.colUsed),
+            .constraints = try allocator.alloc(Constraint, @as(usize, @intCast(index_info.nConstraint))),
+            .columns_used = @as(u64, @intCast(index_info.colUsed)),
             .id = .{},
         };
 
         for (res.constraints, 0..) |*constraint, i| {
             const raw_constraint = index_info.aConstraint[i];
 
-            constraint.column = @intCast(isize, raw_constraint.iColumn);
+            constraint.column = @as(isize, @intCast(raw_constraint.iColumn));
             constraint.op = try constraintOpFromCode(raw_constraint.op);
             constraint.usable = if (raw_constraint.usable == 1) true else false;
             constraint.usage = .{};
@@ -239,10 +239,10 @@ pub const BestIndexBuilder = struct {
         }
 
         // Identifiers
-        index_info.idxNum = @intCast(c_int, self.id.num);
+        index_info.idxNum = @as(c_int, @intCast(self.id.num));
         if (self.id.str.len > 0) {
             // Must always be NULL-terminated so add 1
-            const tmp = @ptrCast([*c]u8, c.sqlite3_malloc(@intCast(c_int, self.id.str.len + 1)));
+            const tmp = @as([*c]u8, @ptrCast(c.sqlite3_malloc(@as(c_int, @intCast(self.id.str.len + 1)))));
 
             mem.copy(u8, tmp[0..self.id.str.len], self.id.str);
             tmp[self.id.str.len] = 0;
@@ -278,7 +278,7 @@ pub const IndexIdentifier = struct {
 
     fn fromC(idx_num: c_int, idx_str: [*c]const u8) IndexIdentifier {
         return IndexIdentifier{
-            .num = @intCast(i32, idx_num),
+            .num = @as(i32, @intCast(idx_num)),
             .str = if (idx_str != null) mem.sliceTo(idx_str, 0) else "",
         };
     }
@@ -538,7 +538,7 @@ pub const ModuleArgument = union(enum) {
 const ParseModuleArgumentsError = error{} || mem.Allocator.Error;
 
 fn parseModuleArguments(allocator: mem.Allocator, argc: c_int, argv: [*c]const [*c]const u8) ParseModuleArgumentsError![]ModuleArgument {
-    var res = try allocator.alloc(ModuleArgument, @intCast(usize, argc));
+    var res = try allocator.alloc(ModuleArgument, @as(usize, @intCast(argc)));
     errdefer allocator.free(res);
 
     for (res, 0..) |*marg, i| {
@@ -695,7 +695,7 @@ pub fn VirtualTable(
         table: Table,
 
         fn getModuleContext(ptr: ?*anyopaque) *ModuleContext {
-            return @ptrCast(*ModuleContext, @alignCast(@alignOf(ModuleContext), ptr.?));
+            return @as(*ModuleContext, @ptrCast(@alignCast(ptr.?)));
         }
 
         fn createState(allocator: mem.Allocator, diags: *VTabDiagnostics, module_context: *ModuleContext, args: []const ModuleArgument) !*State {
@@ -742,9 +742,9 @@ pub fn VirtualTable(
                 err_str.* = dupeToSQLiteString(diags.error_message);
                 return c.SQLITE_ERROR;
             };
-            vtab.* = @ptrCast(*c.sqlite3_vtab, state);
+            vtab.* = @ptrCast(state);
 
-            const res = c.sqlite3_declare_vtab(db, @ptrCast([*c]const u8, state.table.schema));
+            const res = c.sqlite3_declare_vtab(db, @as([*c]const u8, @ptrCast(state.table.schema)));
             if (res != c.SQLITE_OK) {
                 return c.SQLITE_ERROR;
             }
@@ -800,7 +800,7 @@ pub fn VirtualTable(
                 logger.err("unable to create cursor state, err: {!}", .{err});
                 return c.SQLITE_ERROR;
             };
-            vtab_cursor.* = @ptrCast(*c.sqlite3_vtab_cursor, cursor_state);
+            vtab_cursor.* = @as(*c.sqlite3_vtab_cursor, @ptrCast(cursor_state));
 
             return c.SQLITE_OK;
         }
@@ -837,7 +837,7 @@ pub fn VirtualTable(
         const FilterArgsFromCPointerError = error{} || mem.Allocator.Error;
 
         fn filterArgsFromCPointer(allocator: mem.Allocator, argc: c_int, argv: [*c]?*c.sqlite3_value) FilterArgsFromCPointerError![]FilterArg {
-            const size = @intCast(usize, argc);
+            const size = @as(usize, @intCast(argc));
 
             var res = try allocator.alloc(FilterArg, size);
             for (res, 0..) |*item, i| {
@@ -902,7 +902,7 @@ pub fn VirtualTable(
             //
 
             var diags = VTabDiagnostics{ .allocator = arena.allocator() };
-            const column = cursor.column(&diags, @intCast(i32, n)) catch {
+            const column = cursor.column(&diags, @as(i32, @intCast(n))) catch {
                 logger.err("unable to call Table.Cursor.column: {s}", .{diags.error_message});
                 return c.SQLITE_ERROR;
             };
@@ -1214,7 +1214,7 @@ const TestVirtualTableCursor = struct {
     pub fn rowId(cursor: *TestVirtualTableCursor, diags: *VTabDiagnostics) RowIDError!i64 {
         _ = diags;
 
-        return @intCast(i64, cursor.iterator.pos);
+        return @as(i64, @intCast(cursor.iterator.pos));
     }
 };
 
@@ -1278,13 +1278,13 @@ test "parse module arguments" {
     var args = try allocator.alloc([*c]const u8, 20);
     for (args, 0..) |*arg, i| {
         const tmp = try fmt.allocPrintZ(allocator, "arg={d}", .{i});
-        arg.* = @ptrCast([*c]const u8, tmp);
+        arg.* = @as([*c]const u8, @ptrCast(tmp));
     }
 
     const res = try parseModuleArguments(
         allocator,
-        @intCast(c_int, args.len),
-        @ptrCast([*c]const [*c]const u8, args),
+        @as(c_int, @intCast(args.len)),
+        @as([*c]const [*c]const u8, @ptrCast(args)),
     );
     try testing.expectEqual(@as(usize, 20), res.len);
 

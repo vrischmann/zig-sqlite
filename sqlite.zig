@@ -107,21 +107,21 @@ pub const Blob = struct {
         }
 
         var tmp_buffer = blk: {
-            const remaining = @intCast(usize, self.size) - @intCast(usize, self.offset);
+            const remaining: usize = self.size - self.offset;
             break :blk if (buffer.len > remaining) buffer[0..remaining] else buffer;
         };
 
         const result = c.sqlite3_blob_read(
             self.handle,
             tmp_buffer.ptr,
-            @intCast(c_int, tmp_buffer.len),
+            @as(c_int, @intCast(tmp_buffer.len)),
             self.offset,
         );
         if (result != c.SQLITE_OK) {
             return errors.errorFromResultCode(result);
         }
 
-        self.offset += @intCast(c_int, tmp_buffer.len);
+        self.offset += @as(c_int, @intCast(tmp_buffer.len));
 
         return tmp_buffer.len;
     }
@@ -137,14 +137,14 @@ pub const Blob = struct {
         const result = c.sqlite3_blob_write(
             self.handle,
             data.ptr,
-            @intCast(c_int, data.len),
+            @as(c_int, @intCast(data.len)),
             self.offset,
         );
         if (result != c.SQLITE_OK) {
             return errors.errorFromResultCode(result);
         }
 
-        self.offset += @intCast(c_int, data.len);
+        self.offset += @as(c_int, @intCast(data.len));
 
         return data.len;
     }
@@ -191,7 +191,7 @@ pub const Blob = struct {
             column,
             row,
             open_flags,
-            @ptrCast([*c]?*c.sqlite3_blob, &blob.handle),
+            @as([*c]?*c.sqlite3_blob, @ptrCast(&blob.handle)),
         );
         if (result == c.SQLITE_MISUSE) debug.panic("sqlite misuse while opening a blob", .{});
         if (result != c.SQLITE_OK) {
@@ -528,7 +528,7 @@ pub const Db = struct {
 
     /// rowsAffected returns the number of rows affected by the last statement executed.
     pub fn rowsAffected(self: *Self) usize {
-        return @intCast(usize, c.sqlite3_changes(self.db));
+        return @intCast(c.sqlite3_changes(self.db));
     }
 
     /// openBlob opens a blob for incremental i/o.
@@ -827,9 +827,9 @@ pub const FunctionContext = struct {
         const Types = splitPtrTypes(Type);
 
         if (c.sqlite3_user_data(self.ctx)) |value| {
-            return @ptrCast(
+            return @as(
                 Types.PointerType,
-                @alignCast(@alignOf(Types.ValueType), value),
+                @ptrCast(@alignCast(value)),
             );
         }
         return null;
@@ -839,9 +839,9 @@ pub const FunctionContext = struct {
         const Types = splitPtrTypes(Type);
 
         if (c.sqlite3_aggregate_context(self.ctx, @sizeOf(Types.ValueType))) |value| {
-            return @ptrCast(
+            return @as(
                 Types.PointerType,
-                @alignCast(@alignOf(Types.ValueType), value),
+                @ptrCast(@alignCast(value)),
             );
         }
         return null;
@@ -1073,7 +1073,7 @@ pub fn Iterator(comptime Type: type) type {
 
                     if (@typeInfo(Type.BaseType) == .Int) {
                         const inner_value = try self.readField(Type.BaseType, options, 0);
-                        return @enumFromInt(Type, @intCast(TI.tag_type, inner_value));
+                        return @as(Type, @enumFromInt(@as(TI.tag_type, @intCast(inner_value))));
                     }
 
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
@@ -1157,7 +1157,7 @@ pub fn Iterator(comptime Type: type) type {
                         return std.meta.stringToEnum(Type, inner_value) orelse unreachable;
                     }
                     if (@typeInfo(Type.BaseType) == .Int) {
-                        return @enumFromInt(Type, @intCast(TI.tag_type, inner_value));
+                        return @as(Type, @enumFromInt(@as(TI.tag_type, @intCast(inner_value))));
                     }
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
@@ -1178,7 +1178,7 @@ pub fn Iterator(comptime Type: type) type {
         //
         // If the array is too small for the data an error will be returned.
         fn readArray(self: *Self, comptime ArrayType: type, _i: usize) !ArrayType {
-            const i = @intCast(c_int, _i);
+            const i = @as(c_int, @intCast(_i));
             const type_info = @typeInfo(ArrayType);
 
             var ret: ArrayType = undefined;
@@ -1186,7 +1186,7 @@ pub fn Iterator(comptime Type: type) type {
                 .Array => |arr| {
                     switch (arr.child) {
                         u8 => {
-                            const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
+                            const size: usize = @intCast(c.sqlite3_column_bytes(self.stmt, i));
 
                             if (arr.sentinel) |sentinel_ptr| {
                                 // An array with a sentinel need to be as big as the data, + 1 byte for the sentinel.
@@ -1195,7 +1195,7 @@ pub fn Iterator(comptime Type: type) type {
                                 }
 
                                 // Set the sentinel in the result at the correct position.
-                                const sentinel = @ptrCast(*const arr.child, sentinel_ptr).*;
+                                const sentinel = @as(*const arr.child, @ptrCast(sentinel_ptr)).*;
                                 ret[size] = sentinel;
                             } else if (size != arr.len) {
                                 // An array without a sentinel must have the exact same size as the data because we can't
@@ -1205,7 +1205,7 @@ pub fn Iterator(comptime Type: type) type {
 
                             const data = c.sqlite3_column_blob(self.stmt, i);
                             if (data != null) {
-                                const ptr = @ptrCast([*c]const u8, data)[0..size];
+                                const ptr = @as([*c]const u8, @ptrCast(data))[0..size];
 
                                 mem.copy(u8, ret[0..], ptr);
                             }
@@ -1220,19 +1220,19 @@ pub fn Iterator(comptime Type: type) type {
 
         // readInt reads a sqlite INTEGER column into an integer.
         fn readInt(self: *Self, comptime IntType: type, i: usize) error{Workaround}!IntType { // TODO remove the workaround once https://github.com/ziglang/zig/issues/5149 is resolved or if we actually return an error
-            const n = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
-            return @intCast(IntType, n);
+            const n = c.sqlite3_column_int64(self.stmt, @as(c_int, @intCast(i)));
+            return @as(IntType, @intCast(n));
         }
 
         // readFloat reads a sqlite REAL column into a float.
         fn readFloat(self: *Self, comptime FloatType: type, i: usize) error{Workaround}!FloatType { // TODO remove the workaround once https://github.com/ziglang/zig/issues/5149 is resolved or if we actually return an error
-            const d = c.sqlite3_column_double(self.stmt, @intCast(c_int, i));
-            return @floatCast(FloatType, d);
+            const d = c.sqlite3_column_double(self.stmt, @as(c_int, @intCast(i)));
+            return @as(FloatType, @floatCast(d));
         }
 
         // readFloat reads a sqlite INTEGER column into a bool (true is anything > 0, false is anything <= 0).
         fn readBool(self: *Self, i: usize) error{Workaround}!bool { // TODO remove the workaround once https://github.com/ziglang/zig/issues/5149 is resolved or if we actually return an error
-            const d = c.sqlite3_column_int64(self.stmt, @intCast(c_int, i));
+            const d = c.sqlite3_column_int64(self.stmt, @as(c_int, @intCast(i)));
             return d > 0;
         }
 
@@ -1246,7 +1246,7 @@ pub fn Iterator(comptime Type: type) type {
             switch (@typeInfo(SliceType)) {
                 .Pointer => |ptr_info| {
                     if (ptr_info.sentinel) |sentinel_ptr| {
-                        const sentinel = @ptrCast(*const ptr_info.child, sentinel_ptr).*;
+                        const sentinel = @as(*const ptr_info.child, @ptrCast(sentinel_ptr)).*;
 
                         const slice = try allocator.alloc(u8, data.len + 1);
                         mem.copy(u8, slice, data);
@@ -1272,7 +1272,7 @@ pub fn Iterator(comptime Type: type) type {
         //
         // The options must contain an `allocator` field which will be used to create a copy of the data.
         fn readBytes(self: *Self, comptime BytesType: type, allocator: mem.Allocator, _i: usize, comptime mode: ReadBytesMode) !BytesType {
-            const i = @intCast(c_int, _i);
+            const i = @as(c_int, @intCast(_i));
 
             switch (mode) {
                 .Blob => {
@@ -1284,8 +1284,8 @@ pub fn Iterator(comptime Type: type) type {
                         };
                     }
 
-                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-                    const ptr = @ptrCast([*c]const u8, data)[0..size];
+                    const size: usize = @intCast(c.sqlite3_column_bytes(self.stmt, i));
+                    const ptr = @as([*c]const u8, @ptrCast(data))[0..size];
 
                     if (BytesType == Blob) {
                         return Blob{ .data = try allocator.dupe(u8, ptr) };
@@ -1301,8 +1301,8 @@ pub fn Iterator(comptime Type: type) type {
                         };
                     }
 
-                    const size = @intCast(usize, c.sqlite3_column_bytes(self.stmt, i));
-                    const ptr = @ptrCast([*c]const u8, data)[0..size];
+                    const size: usize = @intCast(c.sqlite3_column_bytes(self.stmt, i));
+                    const ptr = @as([*c]const u8, @ptrCast(data))[0..size];
 
                     if (BytesType == Text) {
                         return Text{ .data = try allocator.dupe(u8, ptr) };
@@ -1352,7 +1352,7 @@ pub fn Iterator(comptime Type: type) type {
             switch (@typeInfo(OptionalType)) {
                 .Optional => |opt| {
                     // Easy way to know if the column represents a null value.
-                    const value = c.sqlite3_column_value(self.stmt, @intCast(c_int, _i));
+                    const value = c.sqlite3_column_value(self.stmt, @as(c_int, @intCast(_i)));
                     const datatype = c.sqlite3_value_type(value);
 
                     if (datatype == c.SQLITE_NULL) {
@@ -1445,7 +1445,7 @@ pub fn Iterator(comptime Type: type) type {
                             return std.meta.stringToEnum(FieldType, inner_value) orelse unreachable;
                         }
                         if (@typeInfo(FieldType.BaseType) == .Int) {
-                            return @enumFromInt(FieldType, @intCast(TI.tag_type, inner_value));
+                            return @as(FieldType, @enumFromInt(@as(TI.tag_type, @intCast(inner_value))));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
@@ -1526,7 +1526,7 @@ pub const DynamicStatement = struct {
             const result = c.sqlite3_prepare_v3(
                 db.db,
                 query.ptr,
-                @intCast(c_int, query.len),
+                @as(c_int, @intCast(query.len)),
                 flags,
                 &tmp,
                 options.sql_tail_ptr,
@@ -1588,11 +1588,11 @@ pub const DynamicStatement = struct {
 
         switch (FieldType) {
             Text => {
-                const result = c.sqlite3_bind_text(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null);
+                const result = c.sqlite3_bind_text(self.stmt, column, field.data.ptr, @as(c_int, @intCast(field.data.len)), null);
                 return convertResultToError(result);
             },
             Blob => {
-                const result = c.sqlite3_bind_blob(self.stmt, column, field.data.ptr, @intCast(c_int, field.data.len), null);
+                const result = c.sqlite3_bind_blob(self.stmt, column, field.data.ptr, @as(c_int, @intCast(field.data.len)), null);
                 return convertResultToError(result);
             },
             ZeroBlob => {
@@ -1601,7 +1601,7 @@ pub const DynamicStatement = struct {
             },
             else => switch (field_type_info) {
                 .Int, .ComptimeInt => {
-                    const result = c.sqlite3_bind_int64(self.stmt, column, @intCast(c_longlong, field));
+                    const result = c.sqlite3_bind_int64(self.stmt, column, @as(c_longlong, @intCast(field)));
                     return convertResultToError(result);
                 },
                 .Float, .ComptimeFloat => {
@@ -1619,7 +1619,7 @@ pub const DynamicStatement = struct {
                     .Slice => switch (ptr.child) {
                         u8 => {
                             // NOTE(vincent): The slice must live until after the prepared statement is finaliuzed, therefore we use SQLITE_STATIC to avoid a copy
-                            const result = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(c_int, field.len), c.SQLITE_STATIC);
+                            const result = c.sqlite3_bind_text(self.stmt, column, field.ptr, @as(c_int, @intCast(field.len)), c.SQLITE_STATIC);
                             return convertResultToError(result);
                         },
                         else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
@@ -1631,7 +1631,7 @@ pub const DynamicStatement = struct {
                         const data: []const u8 = field[0..field.len];
 
                         // NOTE(vincent): The array is temporary and must be copied, therefore we use SQLITE_TRANSIENT
-                        const result = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(c_int, data.len), c.SQLITE_TRANSIENT);
+                        const result = c.sqlite3_bind_text(self.stmt, column, data.ptr, @as(c_int, @intCast(data.len)), c.SQLITE_TRANSIENT);
                         return convertResultToError(result);
                     },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
@@ -1738,7 +1738,7 @@ pub const DynamicStatement = struct {
                 switch (PointerTypeInfo.size) {
                     .Slice => {
                         for (values, 0..) |value_to_bind, index| {
-                            try self.bindField(PointerTypeInfo.child, options, "unknown", @intCast(c_int, index), value_to_bind);
+                            try self.bindField(PointerTypeInfo.child, options, "unknown", @as(c_int, @intCast(index)), value_to_bind);
                         }
                     },
                     else => @compileError("TODO support pointer size " ++ @tagName(PointerTypeInfo.size)),
@@ -1746,7 +1746,7 @@ pub const DynamicStatement = struct {
             },
             .Array => |ArrayTypeInfo| {
                 for (values, 0..) |value_to_bind, index| {
-                    try self.bindField(ArrayTypeInfo.child, options, "unknown", @intCast(c_int, index), value_to_bind);
+                    try self.bindField(ArrayTypeInfo.child, options, "unknown", @as(c_int, @intCast(index)), value_to_bind);
                 }
             },
             else => @compileError("Unsupported type for values: " ++ @typeName(Type)),
@@ -2541,7 +2541,7 @@ test "sqlite: read in an anonymous struct" {
     try testing.expectEqualStrings(exp.name, mem.sliceTo(&row.?.name_2, 0xAD));
     try testing.expectEqual(exp.age, row.?.age);
     try testing.expect(row.?.is_id);
-    try testing.expectEqual(exp.weight, @floatCast(f32, row.?.weight));
+    try testing.expectEqual(exp.weight, @as(f32, @floatCast(row.?.weight)));
 }
 
 test "sqlite: read in a Text struct" {
@@ -2621,7 +2621,7 @@ test "sqlite: read a single text value" {
                         try testing.expectEqualStrings("Vincent", name.?);
                     },
                     .Array => |arr| if (arr.sentinel) |sentinel_ptr| {
-                        const sentinel = @ptrCast(*const arr.child, sentinel_ptr).*;
+                        const sentinel = @as(*const arr.child, @ptrCast(sentinel_ptr)).*;
                         const res = mem.sliceTo(&name.?, sentinel);
                         try testing.expectEqualStrings("Vincent", res);
                     } else {
@@ -2969,7 +2969,7 @@ test "sqlite: statement iterator" {
     var i: usize = 0;
     while (i < 20) : (i += 1) {
         const name = try std.fmt.allocPrint(allocator, "Vincent {d}", .{i});
-        const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @floatFromInt(f32, i + 200), .favorite_color = .indigo };
+        const user = TestUser{ .id = i, .name = name, .age = i + 200, .weight = @as(f32, @floatFromInt(i + 200)), .favorite_color = .indigo };
 
         try expected_rows.append(user);
 
@@ -3360,7 +3360,7 @@ test "sqlite: bind custom type" {
         var i: usize = 0;
         while (i < 20) : (i += 1) {
             var my_data: MyData = undefined;
-            @memset(&my_data.data, @intCast(u8, i));
+            @memset(&my_data.data, @as(u8, @intCast(i)));
 
             var arena = heap.ArenaAllocator.init(testing.allocator);
             defer arena.deinit();
@@ -3390,7 +3390,7 @@ test "sqlite: bind custom type" {
 
         for (rows, 0..) |row, i| {
             var exp_data: MyData = undefined;
-            @memset(&exp_data.data, @intCast(u8, i));
+            @memset(&exp_data.data, @as(u8, @intCast(i)));
 
             try testing.expectEqualSlices(u8, &exp_data.data, &row.data.data);
         }
@@ -3567,7 +3567,7 @@ test "sqlite: create scalar function" {
             "myInteger64",
             struct {
                 fn run(input: i64) i64 {
-                    return @intCast(i64, input) * 2;
+                    return @as(i64, @intCast(input)) * 2;
                 }
             }.run,
             .{},
@@ -3693,7 +3693,7 @@ test "sqlite: create aggregate function with no aggregate context" {
     var db = try getTestDb();
     defer db.deinit();
 
-    var rand = std.rand.DefaultPrng.init(@intCast(u64, std.time.milliTimestamp()));
+    var rand = std.rand.DefaultPrng.init(@as(u64, @intCast(std.time.milliTimestamp())));
 
     // Create an aggregate function working with a MyContext
 
@@ -3754,7 +3754,7 @@ test "sqlite: create aggregate function with an aggregate context" {
     var db = try getTestDb();
     defer db.deinit();
 
-    var rand = std.rand.DefaultPrng.init(@intCast(u64, std.time.milliTimestamp()));
+    var rand = std.rand.DefaultPrng.init(@as(u64, @intCast(std.time.milliTimestamp())));
 
     try db.createAggregateFunction(
         "mySum",
