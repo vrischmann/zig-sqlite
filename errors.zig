@@ -286,7 +286,7 @@ pub const DetailedError = struct {
 
 pub fn getDetailedErrorFromResultCode(code: c_int) DetailedError {
     return .{
-        .code = @intCast(usize, code),
+        .code = @intCast(code),
         .near = -1,
         .message = blk: {
             const msg = c.sqlite3_errstr(code);
@@ -304,7 +304,7 @@ pub fn getErrorOffset(db: *c.sqlite3) i32 {
 
 pub fn getLastDetailedErrorFromDb(db: *c.sqlite3) DetailedError {
     return .{
-        .code = @intCast(usize, c.sqlite3_extended_errcode(db)),
+        .code = @intCast(c.sqlite3_extended_errcode(db)),
         .near = getErrorOffset(db),
         .message = blk: {
             const msg = c.sqlite3_errmsg(db);
