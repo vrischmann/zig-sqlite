@@ -1444,7 +1444,8 @@ pub fn Iterator(comptime Type: type) type {
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
-                    .Struct => {
+                    .Struct => |TI| {
+                        if (TI.layout == .Packed) return @bitCast(FieldType, try self.readInt(TI.backing_integer.?, i));
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
                         return try FieldType.readField(options.allocator, inner_value);
                     },
@@ -1650,7 +1651,11 @@ pub const DynamicStatement = struct {
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
                     }
                 },
-                .Struct => {
+                .Struct => |info| {
+                    if (info.layout == .Packed) {
+                        try self.bindField(info.backing_integer.?, options, field_name, i, @bitCast(info.backing_integer.?, field));
+                        return;
+                    }
                     if (!comptime std.meta.trait.hasFn("bindField")(FieldType)) {
                         @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType) ++ ", consider implementing the bindField() method");
                     }
