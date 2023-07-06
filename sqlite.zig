@@ -2228,6 +2228,7 @@ const TestUser = struct {
         //
 
         pub const BaseType = []const u8;
+        pub const default = .red;
     };
 };
 
