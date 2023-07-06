@@ -1436,8 +1436,7 @@ pub fn Iterator(comptime Type: type) type {
                             // The inner value is never returned to the user, we must free it ourselves.
                             defer options.allocator.free(inner_value);
 
-                            // TODO(vincent): don't use unreachable
-                            return std.meta.stringToEnum(FieldType, inner_value) orelse unreachable;
+                            return std.meta.stringToEnum(FieldType, inner_value) orelse FieldType.default;
                         }
                         if (@typeInfo(FieldType.BaseType) == .Int) {
                             return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
