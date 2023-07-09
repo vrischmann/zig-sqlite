@@ -1924,7 +1924,7 @@ pub const DynamicStatement = struct {
     ///
     /// Note that this allocates all rows into a single slice: if you read a lot of data this can use a lot of memory.
     pub fn all(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
-        var iter = try self.iterator(Type, values);
+        var iter = try self.iteratorAlloc(Type, allocator, values);
 
         var rows = std.ArrayList(Type).init(allocator);
         while (try iter.nextAlloc(allocator, options)) |row| {
