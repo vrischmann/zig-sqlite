@@ -184,8 +184,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    var sqlite_module = b.createModule(.{ .source_file = .{ .path = "sqlite.zig" } });
-    try b.modules.put(b.dupe("sqlite"), sqlite_module);
+    _ = b.addModule("sqlite", .{ .source_file = .{ .path = "sqlite.zig" } });
 
     const sqlite_lib = b.addStaticLibrary(.{
         .name = "sqlite",
