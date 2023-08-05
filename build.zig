@@ -184,6 +184,9 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    var sqlite_module = b.createModule(.{ .source_file = .{ .path = "sqlite.zig" } });
+    try b.modules.put(b.dupe("sqlite"), sqlite_module);
+
     // Tool to preprocess the sqlite header files.
     //
     // Due to limitations of translate-c the standard header files can't be used for building loadable extensions
