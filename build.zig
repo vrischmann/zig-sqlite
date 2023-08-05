@@ -187,6 +187,22 @@ pub fn build(b: *std.Build) !void {
     var sqlite_module = b.createModule(.{ .source_file = .{ .path = "sqlite.zig" } });
     try b.modules.put(b.dupe("sqlite"), sqlite_module);
 
+    const sqlite_lib = b.addStaticLibrary(.{
+        .name = "sqlite",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    sqlite_lib.addIncludePath(.{ .path = "c/" });
+    sqlite_lib.addCSourceFile(.{
+        .file = .{ .path = "c/sqlite3.c" },
+        .flags = &[_][]const u8{"-std=c99"},
+    });
+    sqlite_lib.linkLibC();
+    sqlite_lib.installHeader("c/sqlite3.h", "sqlite3.h");
+
+    b.installArtifact(sqlite_lib);
+
     // Tool to preprocess the sqlite header files.
     //
     // Due to limitations of translate-c the standard header files can't be used for building loadable extensions
