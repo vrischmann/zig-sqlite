@@ -25,6 +25,7 @@ So your mileage may vary if you try to use `zig-sqlite`.
 * [Requirements](#requirements)
 * [Features](#features)
 * [Installation](#installation)
+   * [Official package manager](#official-package-manager)
    * [zigmod](#zigmod)
    * [Git submodule](#git-submodule)
    * [Using the system sqlite library](#using-the-system-sqlite-library)
