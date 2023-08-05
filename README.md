@@ -71,9 +71,32 @@ For sqlite, you have options depending on your target:
 
 # Installation
 
-There are two primary ways to include `zig-sqlite` in your project:
+There are three main ways to include `zig-sqlite` in your project:
+* using zig's official package manager
 * using the [zigmod](https://github.com/nektro/zigmod) package manager
 * using a git submodule
+
+## Official package manager
+
+Add this as one of the `.dependencies` inside your `build.zig.zon` file:
+```zig
+.sqlite = .{
+    .url = "https://github.com/vrischmann/zig-sqlite/archive/COMMIT.tar.gz",
+},
+```
+
+Now in your `build.zig` you can access the module like this:
+```zig
+const sqlite = b.dependency("sqlite", .{
+    .target = target,
+    .optimize = optimize,
+});
+
+exe.addModule("sqlite", sqlite.module("sqlite"));
+
+// links the bundled sqlite3, so leave this out if you link the system one
+exe.linkLibrary(sqlite.artifact("sqlite"));
+```
 
 ## zigmod
 
