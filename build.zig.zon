@@ -1,4 +1,4 @@
 .{
-  .name = "sqlite",
-  .version = "0.0.0",
+    .name = "sqlite",
+    .version = "0.0.0",
 }
