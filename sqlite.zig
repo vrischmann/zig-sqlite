@@ -1652,7 +1652,7 @@ pub const DynamicStatement = struct {
                 },
                 .Struct => |info| {
                     if (info.layout == .Packed) {
-                        try self.bindField(info.backing_integer.?, options, field_name, i, @bitCast(field));
+                        try self.bindField(info.backing_integer.?, options, field_name, i, @as(info.backing_integer.?, @bitCast(field)));
                         return;
                     }
                     if (!comptime std.meta.trait.hasFn("bindField")(FieldType)) {
