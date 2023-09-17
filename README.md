@@ -86,6 +86,9 @@ Add this as one of the `.dependencies` inside your `build.zig.zon` file:
 },
 ```
 
+This tells zig to fetch zig-sqlite from a tarball provided by GitHub. Make sure to replace the `COMMIT` part with an actual commit SHA in long form, like `219faa2a5cd5a268a865a1100e92805df4b84610`.
+Every time you want to update zig-sqlite you'll have to update this commit.
+
 Now in your `build.zig` you can access the module like this:
 ```zig
 const sqlite = b.dependency("sqlite", .{
