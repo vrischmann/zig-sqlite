@@ -136,7 +136,9 @@ If you want to use the system sqlite library, add the following to your `build.z
 ```zig
 exe.linkLibC();
 exe.linkSystemLibrary("sqlite3");
-exe.addPackage(.{ .name = "sqlite", .path = "third_party/zig-sqlite/sqlite.zig" });
+exe.addAnonymousModule("sqlite", .{
+    .source_file = .{ .path = "third_party/zig-sqlite/sqlite.zig" },
+});
 ```
 
 ## Using the bundled sqlite source code file
@@ -144,8 +146,18 @@ exe.addPackage(.{ .name = "sqlite", .path = "third_party/zig-sqlite/sqlite.zig" 
 If you want to use the bundled sqlite source code file, first you need to add it as a static library in your `build.zig` file:
 
 ```zig
-const sqlite = b.addStaticLibrary("sqlite", null);
-sqlite.addCSourceFile("third_party/zig-sqlite/c/sqlite3.c", &[_][]const u8{"-std=c99"});
+const sqlite = b.addStaticLibrary(.{
+    .name = "sqlite",
+    .target = target,
+    .optimize = optimize,
+});
+sqlite.addCSourceFile(.{
+    .file = .{ .path = "third_party/zig-sqlite/c/sqlite3.c" },
+    .flags = &[_][]const u8{
+        "-std=c99",
+    },
+});
+sqlite.addIncludePath(.{ .path = "third_party/zig-sqlite/c" });
 sqlite.linkLibC();
 ```
 
@@ -155,8 +167,10 @@ Now it's just a matter of linking your `build.zig` target(s) to this library ins
 
 ```zig
 exe.linkLibrary(sqlite);
-exe.addPackagePath("sqlite", "third_party/zig-sqlite/sqlite.zig");
-exe.addIncludeDir("third_party/zig-sqlite/c");
+exe.addIncludePath(.{ .path = "third_party/zig-sqlite/c" });
+exe.addAnonymousModule("sqlite", .{
+    .source_file = .{ .path = "third_party/zig-sqlite/sqlite.zig" },
+});
 ```
 
 If you're building with glibc you must make sure that the version used is at least 2.28.
