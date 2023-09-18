@@ -83,11 +83,21 @@ Add this as one of the `.dependencies` inside your `build.zig.zon` file:
 ```zig
 .sqlite = .{
     .url = "https://github.com/vrischmann/zig-sqlite/archive/COMMIT.tar.gz",
+    .hash = <hash value>,
 },
 ```
 
 This tells zig to fetch zig-sqlite from a tarball provided by GitHub. Make sure to replace the `COMMIT` part with an actual commit SHA in long form, like `219faa2a5cd5a268a865a1100e92805df4b84610`.
 Every time you want to update zig-sqlite you'll have to update this commit.
+
+You'll have to provide the `hash` field too which is actually a litte annoying because the hash is of the _content_, not the _archive_ (see [the Zig 0.11 release notes](https://ziglang.org/download/0.11.0/release-notes.html#Package-Management)).
+The easiest way to get the hash value is to omit it from the file and run `zig build`, it will report an error like this:
+```
+Fetch Packages... sqlite... /Users/vincent/dev/perso/projects/zig-sqlite-demo/build.zig.zon:6:11: error: url field is missing corresponding hash field
+   .url = "https://github.com/vrischmann/zig-sqlite/archive/219faa2a5cd5a268a865a1100e92805df4b84610.tar.gz",
+          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+note: expected .hash = "122088f0b73f5adcf07c9af8437c5149ed35c3f16f6393c330a294bdd5f91f069a08",
+```
 
 Now in your `build.zig` you can access the module like this:
 ```zig
