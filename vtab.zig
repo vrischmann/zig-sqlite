@@ -232,7 +232,7 @@ pub const BestIndexBuilder = struct {
         var index_info = self.index_info;
 
         // Populate the constraint usage
-        var constraint_usage: []c.struct_sqlite3_index_constraint_usage_4 = index_info.aConstraintUsage[0..self.constraints.len];
+        var constraint_usage = index_info.aConstraintUsage[0..self.constraints.len];
         for (self.constraints, 0..) |constraint, i| {
             constraint_usage[i].argvIndex = constraint.usage.argv_index;
             constraint_usage[i].omit = if (constraint.usage.omit) 1 else 0;
