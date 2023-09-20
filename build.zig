@@ -254,6 +254,7 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = .{ .path = "sqlite.zig" },
             .single_threaded = test_target.single_threaded,
         });
+        const run_tests = b.addRunArtifact(tests);
 
         if (bundled) {
             const lib = b.addStaticLibrary(.{
@@ -287,7 +288,7 @@ pub fn build(b: *std.Build) !void {
         tests_options.addOption(bool, "in_memory", in_memory);
         tests_options.addOption(?[]const u8, "dbfile", dbfile);
 
-        test_step.dependOn(&tests.step);
+        test_step.dependOn(&run_tests.step);
     }
 
     // Fuzzing
