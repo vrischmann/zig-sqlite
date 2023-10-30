@@ -266,7 +266,7 @@ const query =
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-try stmt.exec(.{
+try stmt.exec(.{}, .{
     .salary = 20000,
     .id = 40,
 });
@@ -288,7 +288,7 @@ defer stmt.deinit();
 var id: usize = 0;
 while (id < 20) : (id += 1) {
     stmt.reset();
-    try stmt.exec(.{
+    try stmt.exec(.{}, .{
         .salary = 2000,
         .id = id,
     });
