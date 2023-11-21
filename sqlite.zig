@@ -106,7 +106,7 @@ pub const Blob = struct {
             return 0;
         }
 
-        var tmp_buffer = blk: {
+        const tmp_buffer = blk: {
             const remaining: usize = @as(usize, @intCast(self.size)) - @as(usize, @intCast(self.offset));
             break :blk if (buffer.len > remaining) buffer[0..remaining] else buffer;
         };
@@ -401,7 +401,7 @@ pub const Db = struct {
     ///     const journal_mode = try db.pragma([]const u8, allocator, .{}, "journal_mode", null);
     ///
     pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
-        comptime var query = getPragmaQuery(name, arg);
+        const query = getPragmaQuery(name, arg);
 
         var stmt = try self.prepare(query);
         defer stmt.deinit();
@@ -423,7 +423,7 @@ pub const Db = struct {
     ///
     /// This cannot allocate memory. If your pragma command returns text you must use an array or call `pragmaAlloc`.
     pub fn pragma(self: *Self, comptime Type: type, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
-        comptime var query = getPragmaQuery(name, arg);
+        const query = getPragmaQuery(name, arg);
 
         var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();
@@ -936,7 +936,7 @@ pub const Savepoint = struct {
 
         var buffer: [256]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
-        var allocator = fba.allocator();
+        const allocator = fba.allocator();
 
         const commit_query = try std.fmt.allocPrint(allocator, "RELEASE SAVEPOINT {s}", .{name});
         const rollback_query = try std.fmt.allocPrint(allocator, "ROLLBACK TRANSACTION TO SAVEPOINT {s}", .{name});
@@ -1028,7 +1028,7 @@ pub fn Iterator(comptime Type: type) type {
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
 
-            var result = c.sqlite3_step(self.stmt);
+            const result = c.sqlite3_step(self.stmt);
             if (result == c.SQLITE_DONE) {
                 return null;
             }
@@ -1516,7 +1516,7 @@ pub const DynamicStatement = struct {
     fn prepare(db: *Db, query: []const u8, options: QueryOptions, flags: c_uint) PrepareError!Self {
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
-        var stmt = blk: {
+        const stmt = blk: {
             var tmp: ?*c.sqlite3_stmt = undefined;
             const result = c.sqlite3_prepare_v3(
                 db.db,
@@ -2312,7 +2312,7 @@ test "sqlite: exec multi with single statement" {
 test "sqlite: db pragma" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2425,7 +2425,7 @@ test "sqlite: db execAlloc" {
 test "sqlite: read a single user into a struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2434,7 +2434,7 @@ test "sqlite: read a single user into a struct" {
     var stmt = try db.prepare("SELECT * FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
-    var rows = try stmt.all(TestUser, allocator, .{}, .{
+    const rows = try stmt.all(TestUser, allocator, .{}, .{
         .id = @as(usize, 20),
     });
     for (rows) |row| {
@@ -2465,7 +2465,7 @@ test "sqlite: read a single user into a struct" {
 
     // Read a row with db.oneAlloc()
     {
-        var row = try db.oneAlloc(
+        const row = try db.oneAlloc(
             struct {
                 name: Text,
                 id: usize,
@@ -2488,7 +2488,7 @@ test "sqlite: read a single user into a struct" {
 test "sqlite: read all users into a struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2497,7 +2497,7 @@ test "sqlite: read all users into a struct" {
     var stmt = try db.prepare("SELECT * FROM user");
     defer stmt.deinit();
 
-    var rows = try stmt.all(TestUser, allocator, .{}, .{});
+    const rows = try stmt.all(TestUser, allocator, .{}, .{});
     try testing.expectEqual(@as(usize, 3), rows.len);
     for (rows, 0..) |row, i| {
         const exp = test_users[i];
@@ -2511,7 +2511,7 @@ test "sqlite: read all users into a struct" {
 test "sqlite: read in an anonymous struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2547,7 +2547,7 @@ test "sqlite: read in an anonymous struct" {
 test "sqlite: read in a Text struct" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2556,7 +2556,7 @@ test "sqlite: read in a Text struct" {
     var stmt = try db.prepare("SELECT name, id, age FROM user WHERE id = ?{usize}");
     defer stmt.deinit();
 
-    var row = try stmt.oneAlloc(
+    const row = try stmt.oneAlloc(
         struct {
             name: Text,
             id: usize,
@@ -2577,7 +2577,7 @@ test "sqlite: read in a Text struct" {
 test "sqlite: read a single text value" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2659,7 +2659,7 @@ test "sqlite: read a single integer value" {
         var stmt: StatementType(.{}, query) = try db.prepare(query);
         defer stmt.deinit();
 
-        var age = try stmt.one(typ, .{}, .{
+        const age = try stmt.one(typ, .{}, .{
             .id = @as(usize, 20),
         });
         try testing.expect(age != null);
@@ -2671,7 +2671,7 @@ test "sqlite: read a single integer value" {
 test "sqlite: read a single value into an enum backed by an integer" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2718,7 +2718,7 @@ test "sqlite: read a single value into an enum backed by an integer" {
 test "sqlite: read a single value into an enum backed by a string" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2819,7 +2819,7 @@ test "sqlite: bind string literal" {
 test "sqlite: bind pointer" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2842,7 +2842,7 @@ test "sqlite: bind pointer" {
 test "sqlite: read pointers" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -2952,7 +2952,7 @@ test "sqlite: statement reset" {
 test "sqlite: statement iterator" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3038,7 +3038,7 @@ test "sqlite: statement iterator" {
 test "sqlite: blob open, reopen" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3197,7 +3197,7 @@ test "sqlite: exec with diags, failing statement" {
 test "sqlite: savepoint with no failures" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3226,7 +3226,7 @@ test "sqlite: savepoint with no failures" {
     var stmt = try db.prepare("SELECT data, author_id FROM article ORDER BY id ASC");
     defer stmt.deinit();
 
-    var rows = try stmt.all(
+    const rows = try stmt.all(
         struct {
             data: []const u8,
             author_id: usize,
@@ -3246,7 +3246,7 @@ test "sqlite: savepoint with no failures" {
 test "sqlite: two nested savepoints with inner failure" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3280,7 +3280,7 @@ test "sqlite: two nested savepoints with inner failure" {
     var stmt = try db.prepare("SELECT data, author_id FROM article");
     defer stmt.deinit();
 
-    var rows = try stmt.all(
+    const rows = try stmt.all(
         struct {
             data: []const u8,
             author_id: usize,
@@ -3297,7 +3297,7 @@ test "sqlite: two nested savepoints with inner failure" {
 test "sqlite: two nested savepoints with outer failure" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3325,7 +3325,7 @@ test "sqlite: two nested savepoints with outer failure" {
     var stmt = try db.prepare("SELECT 1 FROM article");
     defer stmt.deinit();
 
-    var rows = try stmt.all(usize, allocator, .{}, .{});
+    const rows = try stmt.all(usize, allocator, .{}, .{});
     try testing.expectEqual(@as(usize, 0), rows.len);
 }
 
@@ -3400,7 +3400,7 @@ test "sqlite: bind custom type" {
 test "sqlite: bind runtime slice" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     // creating array list on heap so that it's deemed runtime size
     var list = std.ArrayList([]const u8).init(allocator);
@@ -3423,7 +3423,7 @@ test "sqlite: bind runtime slice" {
 test "sqlite: prepareDynamic" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3465,7 +3465,7 @@ test "sqlite: prepareDynamic" {
 test "sqlite: oneDynamic" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     var db = try getTestDb();
     defer db.deinit();
@@ -3713,7 +3713,7 @@ test "sqlite: create aggregate function with no aggregate context" {
         }.step,
         struct {
             fn finalize(fctx: FunctionContext) u32 {
-                var ctx = fctx.userContext(*MyContext) orelse return 0;
+                const ctx = fctx.userContext(*MyContext) orelse return 0;
                 return ctx.sum;
             }
         }.finalize,
@@ -3761,13 +3761,13 @@ test "sqlite: create aggregate function with an aggregate context" {
         null,
         struct {
             fn step(fctx: FunctionContext, input: u32) void {
-                var ctx = fctx.aggregateContext(*u32) orelse return;
+                const ctx = fctx.aggregateContext(*u32) orelse return;
                 ctx.* += input;
             }
         }.step,
         struct {
             fn finalize(fctx: FunctionContext) u32 {
-                var ctx = fctx.aggregateContext(*u32) orelse return 0;
+                const ctx = fctx.aggregateContext(*u32) orelse return 0;
                 return ctx.*;
             }
         }.finalize,
