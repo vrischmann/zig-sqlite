@@ -198,7 +198,7 @@ pub const BestIndexBuilder = struct {
     const InitError = error{} || mem.Allocator.Error || ConstraintOpFromCodeError;
 
     fn init(allocator: mem.Allocator, index_info: *c.sqlite3_index_info) InitError!Self {
-        var res = Self{
+        const res = Self{
             .allocator = allocator,
             .index_info = index_info,
             .id_str_buffer = std.ArrayList(u8).init(allocator),
@@ -538,7 +538,7 @@ pub const ModuleArgument = union(enum) {
 const ParseModuleArgumentsError = error{} || mem.Allocator.Error;
 
 fn parseModuleArguments(allocator: mem.Allocator, argc: c_int, argv: [*c]const [*c]const u8) ParseModuleArgumentsError![]ModuleArgument {
-    var res = try allocator.alloc(ModuleArgument, @intCast(argc));
+    const res = try allocator.alloc(ModuleArgument, @intCast(argc));
     errdefer allocator.free(res);
 
     for (res, 0..) |*marg, i| {
@@ -585,7 +585,7 @@ pub fn VirtualTable(
         const InitError = error{} || mem.Allocator.Error || Table.InitError;
 
         fn init(module_context: *ModuleContext, table: *Table) InitError!*Self {
-            var res = try module_context.allocator.create(Self);
+            const res = try module_context.allocator.create(Self);
             res.* = .{
                 .vtab = mem.zeroes(c.sqlite3_vtab),
                 .module_context = module_context,
@@ -615,7 +615,7 @@ pub fn VirtualTable(
         const InitError = error{} || mem.Allocator.Error || Table.Cursor.InitError;
 
         fn init(module_context: *ModuleContext, table: *Table) InitError!*Self {
-            var res = try module_context.allocator.create(Self);
+            const res = try module_context.allocator.create(Self);
             errdefer module_context.allocator.destroy(res);
 
             res.* = .{
@@ -839,7 +839,7 @@ pub fn VirtualTable(
         fn filterArgsFromCPointer(allocator: mem.Allocator, argc: c_int, argv: [*c]?*c.sqlite3_value) FilterArgsFromCPointerError![]FilterArg {
             const size: usize = @intCast(argc);
 
-            var res = try allocator.alloc(FilterArg, size);
+            const res = try allocator.alloc(FilterArg, size);
             for (res, 0..) |*item, i| {
                 item.* = .{
                     .value = argv[i],
@@ -860,7 +860,7 @@ pub fn VirtualTable(
 
             const id = IndexIdentifier.fromC(idx_num, idx_str);
 
-            var args = filterArgsFromCPointer(arena.allocator(), argc, argv) catch |err| {
+            const args = filterArgsFromCPointer(arena.allocator(), argc, argv) catch |err| {
                 logger.err("unable to create filter args, err: {!}", .{err});
                 return c.SQLITE_ERROR;
             };
@@ -1008,7 +1008,7 @@ const TestVirtualTable = struct {
 
             var rand = std.rand.DefaultPrng.init(204882485);
 
-            var tmp = try allocator.alloc(Row, n);
+            const tmp = try allocator.alloc(Row, n);
             for (tmp) |*s| {
                 const foo_value = data[rand.random().intRangeLessThan(usize, 0, data.len)];
                 const bar_value = data[rand.random().intRangeLessThan(usize, 0, data.len)];
@@ -1122,7 +1122,7 @@ const TestVirtualTableCursor = struct {
     pub const InitError = error{} || mem.Allocator.Error;
 
     pub fn init(allocator: mem.Allocator, parent: *TestVirtualTable) InitError!*TestVirtualTableCursor {
-        var res = try allocator.create(TestVirtualTableCursor);
+        const res = try allocator.create(TestVirtualTableCursor);
         res.* = .{
             .allocator = allocator,
             .parent = parent,
@@ -1275,7 +1275,7 @@ test "parse module arguments" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var args = try allocator.alloc([*c]const u8, 20);
+    const args = try allocator.alloc([*c]const u8, 20);
     for (args, 0..) |*arg, i| {
         const tmp = try fmt.allocPrintZ(allocator, "arg={d}", .{i});
         arg.* = @ptrCast(tmp);
