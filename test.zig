@@ -9,7 +9,7 @@ pub fn getTestDb() !Db {
     var buf: [1024]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buf);
 
-    var mode = dbMode(fba.allocator());
+    const mode = dbMode(fba.allocator());
 
     return try Db.init(.{
         .open_flags = .{
