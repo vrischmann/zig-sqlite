@@ -276,7 +276,7 @@ test "parsed query: bind markers types" {
 
         inline for (testCases) |tc| {
             @setEvalBranchQuota(100000);
-            comptime var parsed_query = ParsedQuery(tc.query);
+            const parsed_query = comptime ParsedQuery(tc.query);
 
             try testing.expectEqual(1, parsed_query.nb_bind_markers);
 
@@ -324,7 +324,7 @@ test "parsed query: bind markers identifier" {
     };
 
     inline for (testCases) |tc| {
-        comptime var parsed_query = ParsedQuery(tc.query);
+        const parsed_query = comptime ParsedQuery(tc.query);
 
         try testing.expectEqual(@as(usize, 1), parsed_query.nb_bind_markers);
 
