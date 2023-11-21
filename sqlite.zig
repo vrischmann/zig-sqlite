@@ -1086,7 +1086,7 @@ pub fn Iterator(comptime Type: type) type {
             var dummy_diags = Diagnostics{};
             var diags = options.diags orelse &dummy_diags;
 
-            var result = c.sqlite3_step(self.stmt);
+            const result = c.sqlite3_step(self.stmt);
             if (result == c.SQLITE_DONE) {
                 return null;
             }
