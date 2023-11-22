@@ -401,7 +401,7 @@ pub const Db = struct {
     ///     const journal_mode = try db.pragma([]const u8, allocator, .{}, "journal_mode", null);
     ///
     pub fn pragmaAlloc(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
-        const query = getPragmaQuery(name, arg);
+        const query = comptime getPragmaQuery(name, arg);
 
         var stmt = try self.prepare(query);
         defer stmt.deinit();
@@ -423,7 +423,7 @@ pub const Db = struct {
     ///
     /// This cannot allocate memory. If your pragma command returns text you must use an array or call `pragmaAlloc`.
     pub fn pragma(self: *Self, comptime Type: type, options: QueryOptions, comptime name: []const u8, comptime arg: ?[]const u8) !?Type {
-        const query = getPragmaQuery(name, arg);
+        const query = comptime getPragmaQuery(name, arg);
 
         var stmt = try self.prepareWithDiags(query, options);
         defer stmt.deinit();

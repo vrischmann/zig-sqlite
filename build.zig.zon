@@ -1,5 +1,5 @@
 .{
     .name = "sqlite",
-    .version = "0.0.0",
-    .paths = .{""},
+    .version = "3.44.0",
+    .paths = .{"."},
 }
