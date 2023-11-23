@@ -1693,7 +1693,7 @@ pub const DynamicStatement = struct {
                         try self.bindField(info.backing_integer.?, options, field_name, i, @as(info.backing_integer.?, @bitCast(field)));
                         return;
                     }
-                    if (!comptime std.meta.trait.hasFn("bindField")(FieldType)) {
+                    if (!comptime helpers.hasFn(FieldType, "bindField")) {
                         @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType) ++ ", consider implementing the bindField() method");
                     }
 

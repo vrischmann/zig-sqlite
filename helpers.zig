@@ -86,3 +86,19 @@ fn sliceFromValue(sqlite_value: *c.sqlite3_value) []const u8 {
 
     return value[0..size];
 }
+
+// Returns true if the type T has a function named `name`.
+pub fn hasFn(comptime T: type, comptime name: []const u8) bool {
+    if (!@hasDecl(T, name)) {
+        return false;
+    }
+
+    const decl = @field(T, name);
+    const decl_type = @TypeOf(decl);
+    const decl_type_info = @typeInfo(decl_type);
+
+    return switch (decl_type_info) {
+        .Fn => true,
+        else => false,
+    };
+}

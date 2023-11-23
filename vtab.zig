@@ -318,7 +318,7 @@ fn validateCursorType(comptime Table: type) void {
             \\the Cursor.init function must have the signature `fn init(allocator: std.mem.Allocator, parent: *Table) InitError!*Cursor`
         ;
 
-        if (!meta.trait.hasFn("init")(Cursor)) {
+        if (!comptime helpers.hasFn(Cursor, "init")) {
             @compileError("the Cursor type must have an init function, " ++ error_message);
         }
 
@@ -336,7 +336,7 @@ fn validateCursorType(comptime Table: type) void {
             \\the Cursor.deinit function must have the signature `fn deinit(cursor: *Cursor) void`
         ;
 
-        if (!meta.trait.hasFn("deinit")(Cursor)) {
+        if (!comptime helpers.hasFn(Cursor, "deinit")) {
             @compileError("the Cursor type must have a deinit function, " ++ error_message);
         }
 
@@ -357,7 +357,7 @@ fn validateCursorType(comptime Table: type) void {
             \\the Cursor.next function must have the signature `fn next(cursor: *Cursor, diags: *sqlite.vtab.VTabDiagnostics) NextError!void`
         ;
 
-        if (!meta.trait.hasFn("next")(Cursor)) {
+        if (!comptime helpers.hasFn(Cursor, "next")) {
             @compileError("the Cursor type must have a next function, " ++ error_message);
         }
 
@@ -379,7 +379,7 @@ fn validateCursorType(comptime Table: type) void {
             \\the Cursor.hasNext function must have the signature `fn hasNext(cursor: *Cursor, diags: *sqlite.vtab.VTabDiagnostics) HasNextError!bool`
         ;
 
-        if (!meta.trait.hasFn("hasNext")(Cursor)) {
+        if (!comptime helpers.hasFn(Cursor, "hasNext")) {
             @compileError("the Cursor type must have a hasNext function, " ++ error_message);
         }
 
@@ -401,7 +401,7 @@ fn validateCursorType(comptime Table: type) void {
             \\the Cursor.filter function must have the signature `fn filter(cursor: *Cursor, diags: *sqlite.vtab.VTabDiagnostics, index: sqlite.vtab.IndexIdentifier, args: []FilterArg) FilterError!bool`
         ;
 
-        if (!meta.trait.hasFn("filter")(Cursor)) {
+        if (!comptime helpers.hasFn(Cursor, "filter")) {
             @compileError("the Cursor type must have a filter function, " ++ error_message);
         }
 
@@ -428,7 +428,7 @@ fn validateCursorType(comptime Table: type) void {
             \\the Cursor.column function must have the signature `fn column(cursor: *Cursor, diags: *sqlite.vtab.VTabDiagnostics, column_number: i32) ColumnError!Column`
         ;
 
-        if (!meta.trait.hasFn("column")(Cursor)) {
+        if (!comptime helpers.hasFn(Cursor, "column")) {
             @compileError("the Cursor type must have a column function, " ++ error_message);
         }
 
@@ -451,7 +451,7 @@ fn validateCursorType(comptime Table: type) void {
             \\the Cursor.rowId function must have the signature `fn rowId(cursor: *Cursor, diags: *sqlite.vtab.VTabDiagnostics) RowIDError!i64`
         ;
 
-        if (!meta.trait.hasFn("rowId")(Cursor)) {
+        if (!comptime helpers.hasFn(Cursor, "rowId")) {
             @compileError("the Cursor type must have a rowId function, " ++ error_message);
         }
 
@@ -476,7 +476,7 @@ fn validateTableType(comptime Table: type) void {
             \\the Table.init function must have the signature `fn init(allocator: std.mem.Allocator, diags: *sqlite.vtab.VTabDiagnostics, args: []const ModuleArgument) InitError!*Table`
         ;
 
-        if (!meta.trait.hasFn("init")(Table)) {
+        if (!comptime helpers.hasFn(Table, "init")) {
             @compileError("the Table type must have a init function, " ++ error_message);
         }
 
@@ -496,7 +496,7 @@ fn validateTableType(comptime Table: type) void {
             \\the Table.deinit function must have the signature `fn deinit(table: *Table, allocator: std.mem.Allocator) void`
         ;
 
-        if (!meta.trait.hasFn("deinit")(Table)) {
+        if (!comptime helpers.hasFn(Table, "deinit")) {
             @compileError("the Table type must have a deinit function, " ++ error_message);
         }
 
@@ -518,7 +518,7 @@ fn validateTableType(comptime Table: type) void {
             \\the Table.buildBestIndex function must have the signature `fn buildBestIndex(table: *Table, diags: *sqlite.vtab.VTabDiagnostics, builder: *sqlite.vtab.BestIndexBuilder) BuildBestIndexError!void`
         ;
 
-        if (!meta.trait.hasFn("buildBestIndex")(Table)) {
+        if (!comptime helpers.hasFn(Table, "buildBestIndex")) {
             @compileError("the Table type must have a buildBestIndex function, " ++ error_message);
         }
 
