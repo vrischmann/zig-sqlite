@@ -30,9 +30,41 @@ test {
 
 const logger = std.log.scoped(.sqlite);
 
-fn isStruct(comptime typ: type) bool {
-    const type_info = @typeInfo(typ);
+// Returns true if the passed type is a struct.
+fn isStruct(comptime T: type) bool {
+    const type_info = @typeInfo(T);
     return type_info == .Struct;
+}
+
+// Returns true if the passed type will coerce to []const u8.
+//
+// NOTE(vincent): this is straight from the Zig stdlib before it was removed.
+fn isZigString(comptime T: type) bool {
+    return comptime blk: {
+        // Only pointer types can be strings, no optionals
+        const info = @typeInfo(T);
+        if (info != .Pointer) break :blk false;
+
+        const ptr = &info.Pointer;
+        // Check for CV qualifiers that would prevent coerction to []const u8
+        if (ptr.is_volatile or ptr.is_allowzero) break :blk false;
+
+        // If it's already a slice, simple check.
+        if (ptr.size == .Slice) {
+            break :blk ptr.child == u8;
+        }
+
+        // Otherwise check if it's an array type that coerces to slice.
+        if (ptr.size == .One) {
+            const child = @typeInfo(ptr.child);
+            if (child == .Array) {
+                const arr = &child.Array;
+                break :blk arr.child == u8;
+            }
+        }
+
+        break :blk false;
+    };
 }
 
 /// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
@@ -1068,7 +1100,7 @@ pub fn Iterator(comptime Type: type) type {
                 .Enum => |TI| {
                     debug.assert(columns == 1);
 
-                    if (comptime std.meta.trait.isZigString(Type.BaseType)) {
+                    if (comptime isZigString(Type.BaseType)) {
                         @compileError("cannot read into type " ++ @typeName(Type) ++ " ; BaseType " ++ @typeName(Type.BaseType) ++ " requires allocation, use nextAlloc or oneAlloc");
                     }
 
@@ -1150,7 +1182,7 @@ pub fn Iterator(comptime Type: type) type {
 
                     const inner_value = try self.readField(Type.BaseType, .{ .allocator = allocator }, 0);
 
-                    if (comptime std.meta.trait.isZigString(Type.BaseType)) {
+                    if (comptime isZigString(Type.BaseType)) {
                         // The inner value is never returned to the user, we must free it ourselves.
                         defer allocator.free(inner_value);
 
@@ -1438,7 +1470,7 @@ pub fn Iterator(comptime Type: type) type {
                     .Enum => |TI| {
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
 
-                        if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
+                        if (comptime isZigString(FieldType.BaseType)) {
                             // The inner value is never returned to the user, we must free it ourselves.
                             defer options.allocator.free(inner_value);
 
@@ -1648,7 +1680,7 @@ pub const DynamicStatement = struct {
                     return convertResultToError(result);
                 },
                 .Enum => {
-                    if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
+                    if (comptime isZigString(FieldType.BaseType)) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
                     } else if (@typeInfo(FieldType.BaseType) == .Int) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @intFromEnum(field));
