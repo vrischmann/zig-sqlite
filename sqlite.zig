@@ -21,6 +21,7 @@ const getDetailedErrorFromResultCode = errors.getDetailedErrorFromResultCode;
 
 const getTestDb = @import("test.zig").getTestDb;
 pub const vtab = @import("vtab.zig");
+
 const helpers = @import("helpers.zig");
 
 test {
@@ -28,6 +29,11 @@ test {
 }
 
 const logger = std.log.scoped(.sqlite);
+
+fn isStruct(comptime typ: type) bool {
+    const type_info = @typeInfo(typ);
+    return type_info == .Struct;
+}
 
 /// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
 pub const Text = struct { data: []const u8 };
@@ -1308,7 +1314,7 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         fn readPointer(self: *Self, comptime PointerType: type, options: anytype, i: usize) !PointerType {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readPointer must be a struct");
             }
             if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
@@ -1339,7 +1345,7 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         fn readOptional(self: *Self, comptime OptionalType: type, options: anytype, _i: usize) !OptionalType {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readOptional must be a struct");
             }
 
@@ -1384,7 +1390,7 @@ pub fn Iterator(comptime Type: type) type {
         //
         // TODO(vincent): add comptime checks for the fields/columns.
         fn readStruct(self: *Self, options: anytype) !Type {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readStruct must be a struct");
             }
 
@@ -1402,7 +1408,7 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         fn readField(self: *Self, comptime FieldType: type, options: anytype, i: usize) !FieldType {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readField must be a struct");
             }
 
@@ -2013,7 +2019,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
         /// The types are checked at comptime.
         fn bind(self: *Self, options: anytype, values: anytype) !void {
             const StructType = @TypeOf(values);
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(values))) {
+            if (!comptime isStruct(StructType)) {
                 @compileError("options passed to Statement.bind must be a struct (DynamicStatement supports runtime slices)");
             }
 
