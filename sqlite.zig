@@ -1349,7 +1349,7 @@ pub fn Iterator(comptime Type: type) type {
             if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readPointer must be a struct");
             }
-            if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+            if (!@hasField(@TypeOf(options), "allocator")) {
                 @compileError("options passed to readPointer must have an allocator field");
             }
 
@@ -1448,13 +1448,13 @@ pub fn Iterator(comptime Type: type) type {
 
             return switch (FieldType) {
                 Blob => blk: {
-                    if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+                    if (!@hasField(@TypeOf(options), "allocator")) {
                         @compileError("options passed to readPointer must have an allocator field when reading a Blob");
                     }
                     break :blk try self.readBytes(Blob, options.allocator, i, .Blob);
                 },
                 Text => blk: {
-                    if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+                    if (!@hasField(@TypeOf(options), "allocator")) {
                         @compileError("options passed to readField must have an allocator field when reading a Text");
                     }
                     break :blk try self.readBytes(Text, options.allocator, i, .Text);
