@@ -21,6 +21,7 @@ const getDetailedErrorFromResultCode = errors.getDetailedErrorFromResultCode;
 
 const getTestDb = @import("test.zig").getTestDb;
 pub const vtab = @import("vtab.zig");
+
 const helpers = @import("helpers.zig");
 
 test {
@@ -28,6 +29,43 @@ test {
 }
 
 const logger = std.log.scoped(.sqlite);
+
+// Returns true if the passed type is a struct.
+fn isStruct(comptime T: type) bool {
+    const type_info = @typeInfo(T);
+    return type_info == .Struct;
+}
+
+// Returns true if the passed type will coerce to []const u8.
+//
+// NOTE(vincent): this is straight from the Zig stdlib before it was removed.
+fn isZigString(comptime T: type) bool {
+    return comptime blk: {
+        // Only pointer types can be strings, no optionals
+        const info = @typeInfo(T);
+        if (info != .Pointer) break :blk false;
+
+        const ptr = &info.Pointer;
+        // Check for CV qualifiers that would prevent coerction to []const u8
+        if (ptr.is_volatile or ptr.is_allowzero) break :blk false;
+
+        // If it's already a slice, simple check.
+        if (ptr.size == .Slice) {
+            break :blk ptr.child == u8;
+        }
+
+        // Otherwise check if it's an array type that coerces to slice.
+        if (ptr.size == .One) {
+            const child = @typeInfo(ptr.child);
+            if (child == .Array) {
+                const arr = &child.Array;
+                break :blk arr.child == u8;
+            }
+        }
+
+        break :blk false;
+    };
+}
 
 /// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
 pub const Text = struct { data: []const u8 };
@@ -1062,7 +1100,7 @@ pub fn Iterator(comptime Type: type) type {
                 .Enum => |TI| {
                     debug.assert(columns == 1);
 
-                    if (comptime std.meta.trait.isZigString(Type.BaseType)) {
+                    if (comptime isZigString(Type.BaseType)) {
                         @compileError("cannot read into type " ++ @typeName(Type) ++ " ; BaseType " ++ @typeName(Type.BaseType) ++ " requires allocation, use nextAlloc or oneAlloc");
                     }
 
@@ -1144,7 +1182,7 @@ pub fn Iterator(comptime Type: type) type {
 
                     const inner_value = try self.readField(Type.BaseType, .{ .allocator = allocator }, 0);
 
-                    if (comptime std.meta.trait.isZigString(Type.BaseType)) {
+                    if (comptime isZigString(Type.BaseType)) {
                         // The inner value is never returned to the user, we must free it ourselves.
                         defer allocator.free(inner_value);
 
@@ -1308,10 +1346,10 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         fn readPointer(self: *Self, comptime PointerType: type, options: anytype, i: usize) !PointerType {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readPointer must be a struct");
             }
-            if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+            if (!@hasField(@TypeOf(options), "allocator")) {
                 @compileError("options passed to readPointer must have an allocator field");
             }
 
@@ -1339,7 +1377,7 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         fn readOptional(self: *Self, comptime OptionalType: type, options: anytype, _i: usize) !OptionalType {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readOptional must be a struct");
             }
 
@@ -1384,7 +1422,7 @@ pub fn Iterator(comptime Type: type) type {
         //
         // TODO(vincent): add comptime checks for the fields/columns.
         fn readStruct(self: *Self, options: anytype) !Type {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readStruct must be a struct");
             }
 
@@ -1402,7 +1440,7 @@ pub fn Iterator(comptime Type: type) type {
         }
 
         fn readField(self: *Self, comptime FieldType: type, options: anytype, i: usize) !FieldType {
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(options))) {
+            if (!comptime isStruct(@TypeOf(options))) {
                 @compileError("options passed to readField must be a struct");
             }
 
@@ -1410,13 +1448,13 @@ pub fn Iterator(comptime Type: type) type {
 
             return switch (FieldType) {
                 Blob => blk: {
-                    if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+                    if (!@hasField(@TypeOf(options), "allocator")) {
                         @compileError("options passed to readPointer must have an allocator field when reading a Blob");
                     }
                     break :blk try self.readBytes(Blob, options.allocator, i, .Blob);
                 },
                 Text => blk: {
-                    if (!comptime std.meta.trait.hasField("allocator")(@TypeOf(options))) {
+                    if (!@hasField(@TypeOf(options), "allocator")) {
                         @compileError("options passed to readField must have an allocator field when reading a Text");
                     }
                     break :blk try self.readBytes(Text, options.allocator, i, .Text);
@@ -1432,7 +1470,7 @@ pub fn Iterator(comptime Type: type) type {
                     .Enum => |TI| {
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
 
-                        if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
+                        if (comptime isZigString(FieldType.BaseType)) {
                             // The inner value is never returned to the user, we must free it ourselves.
                             defer options.allocator.free(inner_value);
 
@@ -1642,7 +1680,7 @@ pub const DynamicStatement = struct {
                     return convertResultToError(result);
                 },
                 .Enum => {
-                    if (comptime std.meta.trait.isZigString(FieldType.BaseType)) {
+                    if (comptime isZigString(FieldType.BaseType)) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
                     } else if (@typeInfo(FieldType.BaseType) == .Int) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @intFromEnum(field));
@@ -1655,7 +1693,7 @@ pub const DynamicStatement = struct {
                         try self.bindField(info.backing_integer.?, options, field_name, i, @as(info.backing_integer.?, @bitCast(field)));
                         return;
                     }
-                    if (!comptime std.meta.trait.hasFn("bindField")(FieldType)) {
+                    if (!comptime helpers.hasFn(FieldType, "bindField")) {
                         @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType) ++ ", consider implementing the bindField() method");
                     }
 
@@ -2013,7 +2051,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
         /// The types are checked at comptime.
         fn bind(self: *Self, options: anytype, values: anytype) !void {
             const StructType = @TypeOf(values);
-            if (!comptime std.meta.trait.is(.Struct)(@TypeOf(values))) {
+            if (!comptime isStruct(StructType)) {
                 @compileError("options passed to Statement.bind must be a struct (DynamicStatement supports runtime slices)");
             }
 

@@ -162,7 +162,7 @@ fn preprocessSqlite3HeaderFile(gpa: mem.Allocator) !void {
 
     //
 
-    var data = try readOriginalData(allocator, "c/sqlite3.h");
+    const data = try readOriginalData(allocator, "c/sqlite3.h");
 
     var processor = try Processor.init(allocator, data);
 
@@ -212,7 +212,7 @@ fn preprocessSqlite3ExtHeaderFile(gpa: mem.Allocator) !void {
 
     //
 
-    var data = try readOriginalData(allocator, "c/sqlite3ext.h");
+    const data = try readOriginalData(allocator, "c/sqlite3ext.h");
 
     var processor = try Processor.init(allocator, data);
 
