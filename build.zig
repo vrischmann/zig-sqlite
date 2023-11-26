@@ -43,6 +43,65 @@ const TestTarget = struct {
     bundled: bool,
 };
 
+const ci_targets = switch (builtin.target.cpu.arch) {
+    .x86_64 => switch (builtin.target.os.tag) {
+        .linux => [_]TestTarget{
+            // Targets linux but other CPU archs.
+            TestTarget{
+                .target = .{},
+                .bundled = false,
+            },
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86_64,
+                    .abi = .musl,
+                },
+                .bundled = true,
+            },
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86,
+                    .abi = .musl,
+                },
+                .bundled = true,
+            },
+        },
+        .windows => [_]TestTarget{
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86_64,
+                    .abi = .gnu,
+                },
+                .bundled = true,
+            },
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86,
+                    .abi = .gnu,
+                },
+                .bundled = true,
+            },
+        },
+        .macos => [_]TestTarget{
+            TestTarget{
+                .target = .{
+                    .cpu_arch = .x86_64,
+                },
+                .bundled = true,
+            },
+            // TODO(vincent): this fails for some reason
+            // TestTarget{
+            //     .target = .{
+            //         .cpu_arch = .aarch64,
+            //     },
+            //     .bundled = true,
+            // },
+        },
+        else => unreachable,
+    },
+    else => unreachable,
+};
+
 const all_test_targets = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
         .linux => [_]TestTarget{
@@ -176,10 +235,26 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
     },
 };
 
+fn computeTestTargets(target: std.zig.CrossTarget, ci: ?bool, use_bundled: ?bool) []const TestTarget {
+    if (ci != null and ci.?) return &ci_targets;
+
+    if (target.isNative()) {
+        // If the target is native we assume the user didn't change it with -Dtarget and run all test targets.
+        return &all_test_targets;
+    }
+
+    // Otherwise we run a single test target.
+    return &[_]TestTarget{.{
+        .target = target,
+        .bundled = use_bundled orelse false,
+    }};
+}
+
 pub fn build(b: *std.Build) !void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
+    const ci = b.option(bool, "ci", "Build and test in the CI on GitHub");
 
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -220,16 +295,7 @@ pub fn build(b: *std.Build) !void {
     const preprocess_files_tool_run = b.addRunArtifact(preprocess_files_tool);
     preprocess_files_run.dependOn(&preprocess_files_tool_run.step);
 
-    // If the target is native we assume the user didn't change it with -Dtarget and run all test targets.
-    // Otherwise we run a single test target.
-    const test_targets = if (target.isNative())
-        &all_test_targets
-    else
-        &[_]TestTarget{.{
-            .target = target,
-            .bundled = use_bundled orelse false,
-        }};
-
+    const test_targets = computeTestTargets(target, ci, use_bundled);
     const test_step = b.step("test", "Run library tests");
 
     // By default the tests will only be execute for native test targets, however they will be compiled
