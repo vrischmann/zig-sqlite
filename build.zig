@@ -97,9 +97,19 @@ const ci_targets = switch (builtin.target.cpu.arch) {
             //     .bundled = true,
             // },
         },
-        else => unreachable,
+        else => [_]TestTarget{
+            TestTarget{
+                .target = .{},
+                .bundled = false,
+            },
+        },
     },
-    else => unreachable,
+    else => [_]TestTarget{
+        TestTarget{
+            .target = .{},
+            .bundled = false,
+        },
+    },
 };
 
 const all_test_targets = switch (builtin.target.cpu.arch) {
