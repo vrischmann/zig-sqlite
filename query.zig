@@ -149,7 +149,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
         .query_len = pos,
     };
 
-    std.mem.copy(u8, &parsed_state.query, &buf);
+    std.mem.copyForwards(u8, &parsed_state.query, &buf);
 
     return parsed_state;
 }
