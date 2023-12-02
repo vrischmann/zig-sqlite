@@ -1240,7 +1240,7 @@ pub fn Iterator(comptime Type: type) type {
                             if (data != null) {
                                 const ptr = @as([*c]const u8, @ptrCast(data))[0..size];
 
-                                mem.copy(u8, ret[0..], ptr);
+                                mem.copyForwards(u8, ret[0..], ptr);
                             }
                         },
                         else => @compileError("cannot read into array of " ++ @typeName(arr.child)),
