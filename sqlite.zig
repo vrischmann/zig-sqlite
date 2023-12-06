@@ -1282,7 +1282,7 @@ pub fn Iterator(comptime Type: type) type {
                         const sentinel = @as(*const ptr_info.child, @ptrCast(sentinel_ptr)).*;
 
                         const slice = try allocator.alloc(u8, data.len + 1);
-                        mem.copy(u8, slice, data);
+                        mem.copyForwards(u8, slice, data);
                         slice[data.len] = sentinel;
 
                         return slice[0..data.len :sentinel];

@@ -35,7 +35,7 @@ pub const ModuleContext = struct {
 fn dupeToSQLiteString(s: []const u8) [*c]const u8 {
     var buffer: [*c]u8 = @ptrCast(c.sqlite3_malloc(@intCast(s.len + 1)));
 
-    mem.copy(u8, buffer[0..s.len], s);
+    mem.copyForwards(u8, buffer[0..s.len], s);
     buffer[s.len] = 0;
 
     return buffer;
@@ -253,7 +253,7 @@ pub const BestIndexBuilder = struct {
             // Must always be NULL-terminated so add 1
             const tmp: [*c]u8 = @ptrCast(c.sqlite3_malloc(@intCast(self.id.str.len + 1)));
 
-            mem.copy(u8, tmp[0..self.id.str.len], self.id.str);
+            mem.copyForwards(u8, tmp[0..self.id.str.len], self.id.str);
             tmp[self.id.str.len] = 0;
 
             index_info.idxStr = tmp;
