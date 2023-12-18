@@ -6,6 +6,8 @@ const Blob = @import("sqlite.zig").Blob;
 const Text = @import("sqlite.zig").Text;
 
 const BindMarker = struct {
+    /// Name of the bind parameter in case it's named.
+    name: ?[]const u8 = null,
     /// Contains the expected type for a bind parameter which will be checked
     /// at comptime when calling bind on a statement.
     ///
@@ -15,6 +17,14 @@ const BindMarker = struct {
 
 fn isNamedIdentifierChar(c: u8) bool {
     return std.ascii.isAlphabetic(c) or std.ascii.isDigit(c) or c == '_';
+}
+
+fn bindMarkerForName(comptime markers: []const BindMarker, comptime name: []const u8) ?BindMarker {
+    for (markers[0..]) |marker| {
+        if (marker.name != null and std.mem.eql(u8, marker.name.?, name))
+            return marker;
+    }
+    return null;
 }
 
 pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
@@ -31,6 +41,9 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
     comptime var bind_markers: [128]BindMarker = undefined;
     comptime var nb_bind_markers: usize = 0;
 
+    // used for capturing slices, such as bind parameter name
+    comptime var hold_pos = 0;
+
     inline for (query) |c| {
         switch (state) {
             .start => switch (c) {
@@ -41,7 +54,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                     buf[pos] = c;
                     pos += 1;
                 },
-                '\'', '"' => {
+                '\'', '"', '[', '`' => {
                     state = .inside_string;
                     buf[pos] = c;
                     pos += 1;
@@ -52,7 +65,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                 },
             },
             .inside_string => switch (c) {
-                '\'', '"' => {
+                '\'', '"', ']', '`' => {
                     state = .start;
                     buf[pos] = c;
                     pos += 1;
@@ -71,6 +84,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                     if (isNamedIdentifierChar(c)) {
                         // This is the start of a named bind marker.
                         state = .bind_marker_identifier;
+                        hold_pos = pos + 1;
                     } else {
                         // This is a unnamed, untyped bind marker.
                         state = .start;
@@ -92,7 +106,11 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                     if (!isNamedIdentifierChar(c)) {
                         // This marks the end of the named bind marker.
                         state = .start;
-                        nb_bind_markers += 1;
+                        const name = buf[hold_pos..pos - 1];
+                        if (bindMarkerForName(bind_markers[0..nb_bind_markers], name) == null) {
+                            bind_markers[nb_bind_markers].name = name;
+                            nb_bind_markers += 1;
+                        }
                     }
                     buf[pos] = c;
                     pos += 1;
