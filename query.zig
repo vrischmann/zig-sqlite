@@ -41,7 +41,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                     buf[pos] = c;
                     pos += 1;
                 },
-                '\'', '"' => {
+                '\'', '"', '[', '`' => {
                     state = .inside_string;
                     buf[pos] = c;
                     pos += 1;
@@ -52,7 +52,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                 },
             },
             .inside_string => switch (c) {
-                '\'', '"' => {
+                '\'', '"', ']', '`' => {
                     state = .start;
                     buf[pos] = c;
                     pos += 1;
