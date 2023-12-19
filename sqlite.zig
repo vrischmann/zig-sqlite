@@ -821,9 +821,15 @@ pub const Db = struct {
             if (sql_tail_ptr != null) {
                 const new_query = std.mem.span(sql_tail_ptr.?);
                 if (new_query.len == 0) break;
-                stmt = try self.prepareDynamicWithDiags(new_query, new_options);
+                stmt = self.prepareDynamicWithDiags(new_query, new_options) catch |err| switch (err) {
+                    error.EmptyQuery => break,
+                    else => return err,
+                };
             } else {
-                stmt = try self.prepareDynamicWithDiags(query, new_options);
+                stmt = self.prepareDynamicWithDiags(query, new_options) catch |err| switch (err) {
+                    error.EmptyQuery => break,
+                    else => return err,
+                };
             }
 
             defer stmt.deinit();
@@ -960,6 +966,9 @@ pub const Savepoint = struct {
 
         // From execDynamic
         ExecReturnedData,
+
+        // From DynamiStatement
+        EmptyQuery,
     } || std.fmt.AllocPrintError || Error;
 
     fn init(db: *Db, name: []const u8) InitError!Self {
@@ -1549,7 +1558,7 @@ pub const DynamicStatement = struct {
 
     const Self = @This();
 
-    pub const PrepareError = error{} || Error;
+    pub const PrepareError = error{EmptyQuery} || Error;
 
     fn prepare(db: *Db, query: []const u8, options: QueryOptions, flags: c_uint) PrepareError!Self {
         var dummy_diags = Diagnostics{};
@@ -1574,7 +1583,7 @@ pub const DynamicStatement = struct {
                     .near = -1,
                     .message = "the input query is not valid SQL (empty string or a comment)",
                 };
-                return error.SQLiteError;
+                return error.EmptyQuery;
             }
             break :blk tmp.?;
         };
@@ -3924,7 +3933,7 @@ test "sqlite: fuzzer found crashes" {
     }{
         .{
             .input = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00CREATE TABLE \x80\x00\x00\x00ar(Wb)\x01",
-            .exp_error = error.SQLiteError,
+            .exp_error = error.EmptyQuery,
         },
         .{
             .input = "SELECT?",

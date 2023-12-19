@@ -106,7 +106,7 @@ pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
                     if (!isNamedIdentifierChar(c)) {
                         // This marks the end of the named bind marker.
                         state = .start;
-                        const name = buf[hold_pos..pos - 1];
+                        const name = buf[hold_pos .. pos - 1];
                         if (bindMarkerForName(bind_markers[0..nb_bind_markers], name) == null) {
                             bind_markers[nb_bind_markers].name = name;
                             nb_bind_markers += 1;
