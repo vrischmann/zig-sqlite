@@ -245,7 +245,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
     },
 };
 
-fn computeTestTargets(target: std.zig.CrossTarget, ci: ?bool, use_bundled: ?bool) []const TestTarget {
+fn computeTestTargets(target: std.zig.CrossTarget, ci: ?bool) ?[]const TestTarget {
     if (ci != null and ci.?) return &ci_targets;
 
     if (target.isNative()) {
@@ -254,10 +254,7 @@ fn computeTestTargets(target: std.zig.CrossTarget, ci: ?bool, use_bundled: ?bool
     }
 
     // Otherwise we run a single test target.
-    return &[_]TestTarget{.{
-        .target = target,
-        .bundled = use_bundled orelse false,
-    }};
+    return null;
 }
 
 pub fn build(b: *std.Build) !void {
@@ -305,7 +302,10 @@ pub fn build(b: *std.Build) !void {
     const preprocess_files_tool_run = b.addRunArtifact(preprocess_files_tool);
     preprocess_files_run.dependOn(&preprocess_files_tool_run.step);
 
-    const test_targets = computeTestTargets(target, ci, use_bundled);
+    const test_targets = computeTestTargets(target, ci) orelse &[_]TestTarget{.{
+        .target = target,
+        .bundled = use_bundled orelse false,
+    }};
     const test_step = b.step("test", "Run library tests");
 
     // By default the tests will only be execute for native test targets, however they will be compiled
