@@ -1,9 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const Step = std.Build.Step;
 
-var sqlite3: ?*std.Build.Step.Compile = null;
+var sqlite3: ?*Step.Compile = null;
 
-fn linkSqlite(b: *std.Build.Step.Compile) void {
+fn linkSqlite(b: *Step.Compile) void {
     if (sqlite3) |lib| {
         b.linkLibrary(lib);
     } else {
@@ -12,22 +13,19 @@ fn linkSqlite(b: *std.Build.Step.Compile) void {
     }
 }
 
-fn getTarget(original_target: std.zig.CrossTarget, bundled: bool) std.zig.CrossTarget {
+fn getTarget(original_target: std.Build.ResolvedTarget, bundled: bool) std.Build.ResolvedTarget {
     if (bundled) {
         var tmp = original_target;
 
-        if (tmp.isGnuLibC()) {
+        if (tmp.result.isGnuLibC()) {
             const min_glibc_version = std.SemanticVersion{
                 .major = 2,
                 .minor = 28,
                 .patch = 0,
             };
-            if (tmp.glibc_version) |ver| {
-                if (ver.order(min_glibc_version) == .lt) {
-                    std.debug.panic("sqlite requires glibc version >= 2.28", .{});
-                }
-            } else {
-                tmp.setGnuLibCVersion(2, 28, 0);
+            const ver = tmp.result.os.version_range.linux.glibc;
+            if (ver.order(min_glibc_version) == .lt) {
+                std.debug.panic("sqlite requires glibc version >= 2.28", .{});
             }
         }
 
@@ -38,7 +36,7 @@ fn getTarget(original_target: std.zig.CrossTarget, bundled: bool) std.zig.CrossT
 }
 
 const TestTarget = struct {
-    target: std.zig.CrossTarget = @as(std.zig.CrossTarget, .{}),
+    target: std.Build.ResolvedTarget,
     single_threaded: bool = false,
     bundled: bool,
 };
@@ -106,7 +104,7 @@ const ci_targets = switch (builtin.target.cpu.arch) {
     },
     else => [_]TestTarget{
         TestTarget{
-            .target = .{},
+            .target = .{ .query = .{}, .result = comptime std.zig.system.resolveTargetQuery(.{}) catch @panic("") },
             .bundled = false,
         },
     },
@@ -245,7 +243,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
     },
 };
 
-fn computeTestTargets(target: std.zig.CrossTarget, ci: ?bool) ?[]const TestTarget {
+fn computeTestTargets(target: std.Build.ResolvedTarget, ci: ?bool) ?[]const TestTarget {
     if (ci != null and ci.?) return &ci_targets;
 
     if (target.isNative()) {
@@ -266,7 +264,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("sqlite", .{ .source_file = .{ .path = "sqlite.zig" } });
+    _ = b.addModule("sqlite", .{ .root_source_file = .{ .path = "sqlite.zig" } });
 
     const sqlite_lib = b.addStaticLibrary(.{
         .name = "sqlite",
@@ -318,7 +316,7 @@ pub fn build(b: *std.Build) !void {
         const cross_target = getTarget(test_target.target, bundled);
         const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
         const test_name = b.fmt("{s}-{s}-{s}", .{
-            try cross_target.zigTriple(b.allocator),
+            try cross_target.result.zigTriple(b.allocator),
             @tagName(optimize),
             single_threaded_txt,
         });
@@ -359,7 +357,7 @@ pub fn build(b: *std.Build) !void {
         linkSqlite(lib);
 
         const tests_options = b.addOptions();
-        tests.addOptions("build_options", tests_options);
+        tests.root_module.addImport("build_options", tests_options.createModule());
 
         tests_options.addOption(bool, "in_memory", in_memory);
         tests_options.addOption(?[]const u8, "dbfile", dbfile);
@@ -392,9 +390,9 @@ pub fn build(b: *std.Build) !void {
     fuzz_lib.linkLibrary(lib);
     fuzz_lib.want_lto = true;
     fuzz_lib.bundle_compiler_rt = true;
-    fuzz_lib.addAnonymousModule("sqlite", .{
-        .source_file = .{ .path = "sqlite.zig" },
-    });
+    fuzz_lib.root_module.addImport("sqlite", b.createModule(.{
+        .root_source_file = .{ .path = "sqlite.zig" },
+    }));
 
     // Setup the output name
     const fuzz_executable_name = "fuzz";
@@ -423,9 +421,9 @@ pub fn build(b: *std.Build) !void {
     });
     fuzz_debug_exe.addIncludePath(.{ .path = "c" });
     fuzz_debug_exe.linkLibrary(lib);
-    fuzz_debug_exe.addAnonymousModule("sqlite", .{
-        .source_file = .{ .path = "sqlite.zig" },
-    });
+    fuzz_debug_exe.root_module.addImport("sqlite", b.createModule(.{
+        .root_source_file = .{ .path = "sqlite.zig" },
+    }));
 
     // Only install fuzz-debug when the fuzz step is run
     const install_fuzz_debug_exe = b.addInstallArtifact(fuzz_debug_exe, .{});
@@ -446,11 +444,11 @@ pub fn build(b: *std.Build) !void {
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    zigcrypto_loadable_ext.force_pic = true;
+    // zigcrypto_loadable_ext.force_pic = true;
     zigcrypto_loadable_ext.addIncludePath(.{ .path = "c" });
-    zigcrypto_loadable_ext.addAnonymousModule("sqlite", .{
-        .source_file = .{ .path = "sqlite.zig" },
-    });
+    zigcrypto_loadable_ext.root_module.addImport("sqlite", b.createModule(.{
+        .root_source_file = .{ .path = "sqlite.zig" },
+    }));
     zigcrypto_loadable_ext.linkLibrary(lib);
 
     const install_zigcrypto_loadable_ext = b.addInstallArtifact(zigcrypto_loadable_ext, .{});
@@ -462,9 +460,9 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     zigcrypto_test.addIncludePath(.{ .path = "c" });
-    zigcrypto_test.addAnonymousModule("sqlite", .{
-        .source_file = .{ .path = "sqlite.zig" },
-    });
+    zigcrypto_test.root_module.addImport("sqlite", b.createModule(.{
+        .root_source_file = .{ .path = "sqlite.zig" },
+    }));
     zigcrypto_test.linkLibrary(lib);
 
     const install_zigcrypto_test = b.addInstallArtifact(zigcrypto_test, .{});
