@@ -266,7 +266,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("sqlite", .{ .source_file = .{ .path = "sqlite.zig" } });
+    _ = b.addModule("sqlite", .{ .root_source_file = .{ .path = "sqlite.zig" } });
 
     const sqlite_lib = b.addStaticLibrary(.{
         .name = "sqlite",
