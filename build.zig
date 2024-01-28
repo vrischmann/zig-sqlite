@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Step = std.Build.Step;
+const ResolvedTarget = std.Build.ResolvedTarget;
+const Query = std.Target.Query;
 
 var sqlite3: ?*Step.Compile = null;
 
@@ -13,7 +15,7 @@ fn linkSqlite(b: *Step.Compile) void {
     }
 }
 
-fn getTarget(original_target: std.Build.ResolvedTarget, bundled: bool) std.Build.ResolvedTarget {
+fn getTarget(original_target: ResolvedTarget, bundled: bool) ResolvedTarget {
     if (bundled) {
         var tmp = original_target;
 
@@ -36,7 +38,7 @@ fn getTarget(original_target: std.Build.ResolvedTarget, bundled: bool) std.Build
 }
 
 const TestTarget = struct {
-    target: std.Build.ResolvedTarget,
+    query: Query,
     single_threaded: bool = false,
     bundled: bool,
 };
@@ -46,18 +48,18 @@ const ci_targets = switch (builtin.target.cpu.arch) {
         .linux => [_]TestTarget{
             // Targets linux but other CPU archs.
             TestTarget{
-                .target = .{},
+                .query = .{},
                 .bundled = false,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                     .abi = .musl,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86,
                     .abi = .musl,
                 },
@@ -66,14 +68,14 @@ const ci_targets = switch (builtin.target.cpu.arch) {
         },
         .windows => [_]TestTarget{
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                     .abi = .gnu,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86,
                     .abi = .gnu,
                 },
@@ -82,14 +84,14 @@ const ci_targets = switch (builtin.target.cpu.arch) {
         },
         .macos => [_]TestTarget{
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                 },
                 .bundled = true,
             },
             // TODO(vincent): this fails for some reason
             // TestTarget{
-            //     .target = .{
+            //     .query =.{
             //         .cpu_arch = .aarch64,
             //     },
             //     .bundled = true,
@@ -97,14 +99,14 @@ const ci_targets = switch (builtin.target.cpu.arch) {
         },
         else => [_]TestTarget{
             TestTarget{
-                .target = .{},
+                .query = .{},
                 .bundled = false,
             },
         },
     },
     else => [_]TestTarget{
         TestTarget{
-            .target = .{ .query = .{}, .result = comptime std.zig.system.resolveTargetQuery(.{}) catch @panic("") },
+            .query = .{},
             .bundled = false,
         },
     },
@@ -115,39 +117,39 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
         .linux => [_]TestTarget{
             // Targets linux but other CPU archs.
             TestTarget{
-                .target = .{},
+                .query = .{},
                 .bundled = false,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                     .abi = .musl,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86,
                     .abi = .musl,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .aarch64,
                     .abi = .musl,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .riscv64,
                     .abi = .musl,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .mips,
                     .abi = .musl,
                 },
@@ -155,7 +157,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             },
             // TODO(vincent): failing for some time for unknown reasons
             // TestTarget{
-            //     .target = .{
+            //     .query =.{
             //         .cpu_arch = .arm,
             //         .abi = .musleabihf,
             //     },
@@ -163,14 +165,14 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             // },
             // Targets windows
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                     .os_tag = .windows,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86,
                     .os_tag = .windows,
                 },
@@ -178,14 +180,14 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             },
             // Targets macOS
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                     .os_tag = .macos,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .aarch64,
                     .os_tag = .macos,
                 },
@@ -194,14 +196,14 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
         },
         .windows => [_]TestTarget{
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                     .abi = .gnu,
                 },
                 .bundled = true,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86,
                     .abi = .gnu,
                 },
@@ -210,11 +212,11 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
         },
         .freebsd => [_]TestTarget{
             TestTarget{
-                .target = .{},
+                .query = .{},
                 .bundled = false,
             },
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                 },
                 .bundled = true,
@@ -222,7 +224,7 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
         },
         .macos => [_]TestTarget{
             TestTarget{
-                .target = .{
+                .query = .{
                     .cpu_arch = .x86_64,
                 },
                 .bundled = true,
@@ -230,23 +232,23 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
         },
         else => [_]TestTarget{
             TestTarget{
-                .target = .{},
+                .query = .{},
                 .bundled = false,
             },
         },
     },
     else => [_]TestTarget{
         TestTarget{
-            .target = .{},
+            .query = .{},
             .bundled = false,
         },
     },
 };
 
-fn computeTestTargets(target: std.Build.ResolvedTarget, ci: ?bool) ?[]const TestTarget {
+fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
     if (ci != null and ci.?) return &ci_targets;
 
-    if (target.isNative()) {
+    if (isNative) {
         // If the target is native we assume the user didn't change it with -Dtarget and run all test targets.
         return &all_test_targets;
     }
@@ -261,7 +263,8 @@ pub fn build(b: *std.Build) !void {
     const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
     const ci = b.option(bool, "ci", "Build and test in the CI on GitHub");
 
-    const target = b.standardTargetOptions(.{});
+    const query = b.standardTargetOptionsQueryOnly(.{});
+    const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
 
     _ = b.addModule("sqlite", .{ .root_source_file = .{ .path = "sqlite.zig" } });
@@ -300,8 +303,8 @@ pub fn build(b: *std.Build) !void {
     const preprocess_files_tool_run = b.addRunArtifact(preprocess_files_tool);
     preprocess_files_run.dependOn(&preprocess_files_tool_run.step);
 
-    const test_targets = computeTestTargets(target, ci) orelse &[_]TestTarget{.{
-        .target = target,
+    const test_targets = computeTestTargets(query.isNative(), ci) orelse &[_]TestTarget{.{
+        .query = query,
         .bundled = use_bundled orelse false,
     }};
     const test_step = b.step("test", "Run library tests");
@@ -313,7 +316,7 @@ pub fn build(b: *std.Build) !void {
 
     for (test_targets) |test_target| {
         const bundled = use_bundled orelse test_target.bundled;
-        const cross_target = getTarget(test_target.target, bundled);
+        const cross_target = getTarget(b.resolveTargetQuery(test_target.query), bundled);
         const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
         const test_name = b.fmt("{s}-{s}-{s}", .{
             try cross_target.result.zigTriple(b.allocator),
