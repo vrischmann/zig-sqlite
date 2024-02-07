@@ -106,7 +106,7 @@ const sqlite = b.dependency("sqlite", .{
     .optimize = optimize,
 });
 
-exe.addModule("sqlite", sqlite.module("sqlite"));
+exe.root_module.addImport("sqlite", sqlite.module("sqlite"));
 
 // links the bundled sqlite3, so leave this out if you link the system one
 exe.linkLibrary(sqlite.artifact("sqlite"));
