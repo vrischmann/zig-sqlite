@@ -267,8 +267,6 @@ pub fn build(b: *std.Build) !void {
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("sqlite", .{ .root_source_file = .{ .path = "sqlite.zig" } });
-
     const sqlite_lib = b.addStaticLibrary(.{
         .name = "sqlite",
         .target = target,
@@ -284,6 +282,14 @@ pub fn build(b: *std.Build) !void {
     sqlite_lib.installHeader("c/sqlite3.h", "sqlite3.h");
 
     b.installArtifact(sqlite_lib);
+
+    // Create the public 'sqlite' module to be exported
+    const sqlite_mod = b.addModule("sqlite", .{
+        .root_source_file = .{ .path = "sqlite.zig" },
+        .link_libc = true,
+    });
+    sqlite_mod.addIncludePath(.{ .path = "c/" });
+    sqlite_mod.linkLibrary(sqlite_lib);
 
     // Tool to preprocess the sqlite header files.
     //
