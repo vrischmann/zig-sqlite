@@ -35,66 +35,21 @@ const TestTarget = struct {
 const ci_targets = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
         .linux => [_]TestTarget{
-            // Targets linux but other CPU archs.
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .aarch64, .abi = .musl }, .bundled = true },
         },
         .windows => [_]TestTarget{
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .abi = .gnu,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86,
-                    .abi = .gnu,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .gnu }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
         },
         .macos => [_]TestTarget{
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                },
-                .bundled = true,
-            },
-            // TODO(vincent): this fails for some reason
-            // TestTarget{
-            //     .query =.{
-            //         .cpu_arch = .aarch64,
-            //     },
-            //     .bundled = true,
-            // },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64 }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .aarch64 }, .bundled = true },
         },
-        else => [_]TestTarget{
-            TestTarget{
-                .query = .{},
-                .bundled = false,
-            },
-        },
+        else => unreachable,
     },
-    else => [_]TestTarget{
-        TestTarget{
-            .query = .{},
-            .bundled = false,
-        },
-    },
+    else => unreachable,
 };
 
 const all_test_targets = switch (builtin.target.cpu.arch) {
