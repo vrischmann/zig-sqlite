@@ -766,7 +766,8 @@ pub fn VirtualTable(
 
             //
 
-            const state = @fieldParentPtr(State, "vtab", vtab);
+            const nullable_state: ?*State = @fieldParentPtr("vtab", vtab);
+            const state = nullable_state orelse unreachable;
 
             var arena = heap.ArenaAllocator.init(state.module_context.allocator);
             defer arena.deinit();
@@ -788,7 +789,9 @@ pub fn VirtualTable(
         }
 
         fn xDisconnect(vtab: [*c]c.sqlite3_vtab) callconv(.C) c_int {
-            const state = @fieldParentPtr(State, "vtab", vtab);
+            const nullable_state: ?*State = @fieldParentPtr("vtab", vtab);
+            const state = nullable_state orelse unreachable;
+
             state.deinit();
 
             return c.SQLITE_OK;
@@ -803,7 +806,8 @@ pub fn VirtualTable(
         }
 
         fn xOpen(vtab: [*c]c.sqlite3_vtab, vtab_cursor: [*c][*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
-            const state = @fieldParentPtr(State, "vtab", vtab);
+            const nullable_state: ?*State = @fieldParentPtr("vtab", vtab);
+            const state = nullable_state orelse unreachable;
 
             const cursor_state = CursorState.init(state.module_context, state.table) catch |err| {
                 logger.err("unable to create cursor state, err: {!}", .{err});
@@ -815,14 +819,17 @@ pub fn VirtualTable(
         }
 
         fn xClose(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
-            const cursor_state = @fieldParentPtr(CursorState, "vtab_cursor", vtab_cursor);
+            const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
+            const cursor_state = nullable_cursor_state orelse unreachable;
+
             cursor_state.deinit();
 
             return c.SQLITE_OK;
         }
 
         fn xEof(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
-            const cursor_state = @fieldParentPtr(CursorState, "vtab_cursor", vtab_cursor);
+            const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
+            const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
 
             var arena = heap.ArenaAllocator.init(cursor_state.module_context.allocator);
@@ -859,7 +866,8 @@ pub fn VirtualTable(
         }
 
         fn xFilter(vtab_cursor: [*c]c.sqlite3_vtab_cursor, idx_num: c_int, idx_str: [*c]const u8, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.C) c_int {
-            const cursor_state = @fieldParentPtr(CursorState, "vtab_cursor", vtab_cursor);
+            const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
+            const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
 
             var arena = heap.ArenaAllocator.init(cursor_state.module_context.allocator);
@@ -884,7 +892,8 @@ pub fn VirtualTable(
         }
 
         fn xNext(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
-            const cursor_state = @fieldParentPtr(CursorState, "vtab_cursor", vtab_cursor);
+            const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
+            const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
 
             var arena = heap.ArenaAllocator.init(cursor_state.module_context.allocator);
@@ -902,7 +911,8 @@ pub fn VirtualTable(
         }
 
         fn xColumn(vtab_cursor: [*c]c.sqlite3_vtab_cursor, ctx: ?*c.sqlite3_context, n: c_int) callconv(.C) c_int {
-            const cursor_state = @fieldParentPtr(CursorState, "vtab_cursor", vtab_cursor);
+            const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
+            const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
 
             var arena = heap.ArenaAllocator.init(cursor_state.module_context.allocator);
@@ -945,7 +955,8 @@ pub fn VirtualTable(
         }
 
         fn xRowid(vtab_cursor: [*c]c.sqlite3_vtab_cursor, row_id_ptr: [*c]c.sqlite3_int64) callconv(.C) c_int {
-            const cursor_state = @fieldParentPtr(CursorState, "vtab_cursor", vtab_cursor);
+            const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
+            const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
 
             var arena = heap.ArenaAllocator.init(cursor_state.module_context.allocator);

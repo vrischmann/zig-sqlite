@@ -279,7 +279,7 @@ pub fn build(b: *std.Build) !void {
         .flags = &[_][]const u8{"-std=c99"},
     });
     sqlite_lib.linkLibC();
-    sqlite_lib.installHeader("c/sqlite3.h", "sqlite3.h");
+    sqlite_lib.installHeader(.{ .path = "c/sqlite3.h" }, "sqlite3.h");
 
     b.installArtifact(sqlite_lib);
 
