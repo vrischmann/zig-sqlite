@@ -37,10 +37,6 @@ const ci_targets = switch (builtin.target.cpu.arch) {
         .linux => [_]TestTarget{
             // Targets linux but other CPU archs.
             TestTarget{
-                .query = .{},
-                .bundled = false,
-            },
-            TestTarget{
                 .query = .{
                     .cpu_arch = .x86_64,
                     .abi = .musl,
