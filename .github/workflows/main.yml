@@ -32,14 +32,18 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: goto-bus-stop/setup-zig@v2
+
+      - name: Setup zig
+        uses: goto-bus-stop/setup-zig@v2
         with:
           version: master
 
-      - uses: actions/cache@v4
+      - name: Restore cache
+        uses: actions/cache@v4
         with:
           path: |
             zig-cache
