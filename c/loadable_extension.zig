@@ -1,5 +1,6 @@
 const c = @cImport({
     @cInclude("loadable-ext-sqlite3ext.h");
+    @cInclude("workaround.h");
 });
 
 pub usingnamespace c;
