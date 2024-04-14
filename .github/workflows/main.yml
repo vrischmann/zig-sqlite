@@ -39,7 +39,7 @@ jobs:
         with:
           version: master
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         if: ${{ matrix.os != 'windows-latest' }}
         with:
           path: |
