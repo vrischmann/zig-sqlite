@@ -4,17 +4,6 @@ const Step = std.Build.Step;
 const ResolvedTarget = std.Build.ResolvedTarget;
 const Query = std.Target.Query;
 
-var sqlite3: ?*Step.Compile = null;
-
-fn linkSqlite(b: *Step.Compile) void {
-    if (sqlite3) |lib| {
-        b.linkLibrary(lib);
-    } else {
-        b.linkLibC();
-        b.linkSystemLibrary("sqlite3");
-    }
-}
-
 fn getTarget(original_target: ResolvedTarget, bundled: bool) ResolvedTarget {
     if (bundled) {
         var tmp = original_target;
@@ -335,6 +324,20 @@ pub fn build(b: *std.Build) !void {
             single_threaded_txt,
         });
 
+        const test_sqlite_lib = b.addStaticLibrary(.{
+            .name = "sqlite",
+            .target = cross_target,
+            .optimize = optimize,
+        });
+        test_sqlite_lib.addCSourceFiles(.{
+            .files = &[_][]const u8{
+                "c/sqlite3.c",
+                "c/workaround.c",
+            },
+            .flags = c_flags,
+        });
+        test_sqlite_lib.linkLibC();
+
         const tests = b.addTest(.{
             .name = test_name,
             .target = cross_target,
@@ -342,37 +345,14 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = .{ .path = "sqlite.zig" },
             .single_threaded = test_target.single_threaded,
         });
-        const run_tests = b.addRunArtifact(tests);
-
+        tests.addIncludePath(.{ .path = "c" });
         if (bundled) {
-            const lib = b.addStaticLibrary(.{
-                .name = "sqlite",
-                .target = cross_target,
-                .optimize = optimize,
-            });
-            lib.addCSourceFiles(.{
-                .files = &[_][]const u8{
-                    "c/sqlite3.c",
-                    "c/workaround.c",
-                },
-                .flags = c_flags,
-            });
-            lib.linkLibC();
-            sqlite3 = lib;
+            tests.linkLibrary(test_sqlite_lib);
+        } else {
+            tests.linkLibC();
+            tests.addCSourceFile(.{ .file = .{ .path = "c/workaround.c" }, .flags = c_flags });
+            tests.linkSystemLibrary("sqlite3");
         }
-
-        if (bundled) tests.addIncludePath(.{ .path = "c" });
-        linkSqlite(tests);
-
-        const lib = b.addStaticLibrary(.{
-            .name = "zig-sqlite",
-            .root_source_file = .{ .path = "sqlite.zig" },
-            .target = cross_target,
-            .optimize = optimize,
-        });
-        lib.addCSourceFile(.{ .file = .{ .path = "c/workaround.c" }, .flags = c_flags });
-        if (bundled) lib.addIncludePath(.{ .path = "c" });
-        linkSqlite(lib);
 
         const tests_options = b.addOptions();
         tests.root_module.addImport("build_options", tests_options.createModule());
@@ -380,6 +360,7 @@ pub fn build(b: *std.Build) !void {
         tests_options.addOption(bool, "in_memory", in_memory);
         tests_options.addOption(?[]const u8, "dbfile", dbfile);
 
+        const run_tests = b.addRunArtifact(tests);
         test_step.dependOn(&run_tests.step);
     }
 
