@@ -453,7 +453,6 @@ pub fn build(b: *std.Build) !void {
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    zigcrypto_loadable_ext.pie = true;
     zigcrypto_loadable_ext.addIncludePath(.{ .path = "c" });
     zigcrypto_loadable_ext.root_module.addImport("sqlite", b.createModule(.{
         .root_source_file = .{ .path = "sqlite.zig" },
