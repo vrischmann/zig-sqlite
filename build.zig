@@ -267,6 +267,8 @@ pub fn build(b: *std.Build) !void {
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
 
+    const c_flags = &[_][]const u8{"-std=c99"};
+
     const sqlite_lib = b.addStaticLibrary(.{
         .name = "sqlite",
         .target = target,
@@ -274,9 +276,12 @@ pub fn build(b: *std.Build) !void {
     });
 
     sqlite_lib.addIncludePath(.{ .path = "c/" });
-    sqlite_lib.addCSourceFile(.{
-        .file = .{ .path = "c/sqlite3.c" },
-        .flags = &[_][]const u8{"-std=c99"},
+    sqlite_lib.addCSourceFiles(.{
+        .files = &[_][]const u8{
+            "c/sqlite3.c",
+            "c/workaround.c",
+        },
+        .flags = c_flags,
     });
     sqlite_lib.linkLibC();
     sqlite_lib.installHeader(.{ .path = "c/sqlite3.h" }, "sqlite3.h");
@@ -345,9 +350,12 @@ pub fn build(b: *std.Build) !void {
                 .target = cross_target,
                 .optimize = optimize,
             });
-            lib.addCSourceFile(.{
-                .file = .{ .path = "c/sqlite3.c" },
-                .flags = &[_][]const u8{"-std=c99"},
+            lib.addCSourceFiles(.{
+                .files = &[_][]const u8{
+                    "c/sqlite3.c",
+                    "c/workaround.c",
+                },
+                .flags = c_flags,
             });
             lib.linkLibC();
             sqlite3 = lib;
@@ -362,6 +370,7 @@ pub fn build(b: *std.Build) !void {
             .target = cross_target,
             .optimize = optimize,
         });
+        lib.addCSourceFile(.{ .file = .{ .path = "c/workaround.c" }, .flags = c_flags });
         if (bundled) lib.addIncludePath(.{ .path = "c" });
         linkSqlite(lib);
 
@@ -381,10 +390,7 @@ pub fn build(b: *std.Build) !void {
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    lib.addCSourceFile(.{
-        .file = .{ .path = "c/sqlite3.c" },
-        .flags = &[_][]const u8{"-std=c99"},
-    });
+    lib.addCSourceFile(.{ .file = .{ .path = "c/sqlite3.c" }, .flags = c_flags });
     lib.addIncludePath(.{ .path = "c" });
     lib.linkLibC();
 
