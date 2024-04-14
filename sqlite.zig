@@ -1491,7 +1491,7 @@ pub fn Iterator(comptime Type: type) type {
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
                     .Struct => |TI| {
-                        if (TI.layout == .Packed) return @bitCast(try self.readInt(TI.backing_integer.?, i));
+                        if (TI.layout == .@"packed") return @bitCast(try self.readInt(TI.backing_integer.?, i));
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
                         return try FieldType.readField(options.allocator, inner_value);
                     },
@@ -1512,8 +1512,11 @@ pub fn Iterator(comptime Type: type) type {
 ///     };
 ///
 pub fn StatementType(comptime opts: StatementOptions, comptime query: []const u8) type {
-    @setEvalBranchQuota(100000);
-    return Statement(opts, ParsedQuery(query));
+    comptime {
+        @setEvalBranchQuota(100000);
+        const parsed_query = ParsedQuery(query);
+        return Statement(opts, parsed_query);
+    }
 }
 
 pub const StatementOptions = struct {};
@@ -1698,7 +1701,7 @@ pub const DynamicStatement = struct {
                     }
                 },
                 .Struct => |info| {
-                    if (info.layout == .Packed) {
+                    if (info.layout == .@"packed") {
                         try self.bindField(info.backing_integer.?, options, field_name, i, @as(info.backing_integer.?, @bitCast(field)));
                         return;
                     }
@@ -2066,9 +2069,9 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
 
             const StructTypeInfo = @typeInfo(StructType).Struct;
 
-            if (comptime query.nb_bind_markers != StructTypeInfo.fields.len) {
+            if (comptime query.bind_markers.len != StructTypeInfo.fields.len) {
                 @compileError(std.fmt.comptimePrint("expected {d} bind parameters but got {d}", .{
-                    query.nb_bind_markers,
+                    query.bind_markers.len,
                     StructTypeInfo.fields.len,
                 }));
             }

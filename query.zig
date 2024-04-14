@@ -20,168 +20,178 @@ fn isNamedIdentifierChar(c: u8) bool {
 }
 
 fn bindMarkerForName(comptime markers: []const BindMarker, comptime name: []const u8) ?BindMarker {
-    for (markers[0..]) |marker| {
+    for (markers) |marker| {
         if (marker.name != null and std.mem.eql(u8, marker.name.?, name))
             return marker;
     }
     return null;
 }
 
-pub fn ParsedQuery(comptime query: []const u8) ParsedQueryState(query.len) {
-    // This contains the final SQL query after parsing with our
-    // own typed bind markers removed.
-    comptime var buf: [query.len]u8 = undefined;
-    comptime var pos = 0;
-    comptime var state = .start;
-
-    comptime var current_bind_marker_type: [256]u8 = undefined;
-    comptime var current_bind_marker_type_pos = 0;
-
-    // becomes part of our result
-    comptime var bind_markers: [128]BindMarker = undefined;
-    comptime var nb_bind_markers: usize = 0;
-
-    // used for capturing slices, such as bind parameter name
-    comptime var hold_pos = 0;
-
-    inline for (query) |c| {
-        switch (state) {
-            .start => switch (c) {
-                '?', ':', '@', '$' => {
-                    bind_markers[nb_bind_markers] = BindMarker{};
-                    current_bind_marker_type_pos = 0;
-                    state = .bind_marker;
-                    buf[pos] = c;
-                    pos += 1;
-                },
-                '\'', '"', '[', '`' => {
-                    state = .inside_string;
-                    buf[pos] = c;
-                    pos += 1;
-                },
-                else => {
-                    buf[pos] = c;
-                    pos += 1;
-                },
-            },
-            .inside_string => switch (c) {
-                '\'', '"', ']', '`' => {
-                    state = .start;
-                    buf[pos] = c;
-                    pos += 1;
-                },
-                else => {
-                    buf[pos] = c;
-                    pos += 1;
-                },
-            },
-            .bind_marker => switch (c) {
-                '?', ':', '@', '$' => @compileError("invalid multiple '?', ':', '$' or '@'."),
-                '{' => {
-                    state = .bind_marker_type;
-                },
-                else => {
-                    if (isNamedIdentifierChar(c)) {
-                        // This is the start of a named bind marker.
-                        state = .bind_marker_identifier;
-                        hold_pos = pos + 1;
-                    } else {
-                        // This is a unnamed, untyped bind marker.
-                        state = .start;
-
-                        bind_markers[nb_bind_markers].typed = null;
-                        nb_bind_markers += 1;
-                    }
-                    buf[pos] = c;
-                    pos += 1;
-                },
-            },
-            .bind_marker_identifier => switch (c) {
-                '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
-                '{' => {
-                    state = .bind_marker_type;
-                    current_bind_marker_type_pos = 0;
-                },
-                else => {
-                    if (!isNamedIdentifierChar(c)) {
-                        // This marks the end of the named bind marker.
-                        state = .start;
-                        const name = buf[hold_pos .. pos - 1];
-                        if (bindMarkerForName(bind_markers[0..nb_bind_markers], name) == null) {
-                            bind_markers[nb_bind_markers].name = name;
-                            nb_bind_markers += 1;
-                        }
-                    }
-                    buf[pos] = c;
-                    pos += 1;
-                },
-            },
-            .bind_marker_type => switch (c) {
-                '}' => {
-                    state = .start;
-
-                    const type_info_string = current_bind_marker_type[0..current_bind_marker_type_pos];
-                    // Handles optional types
-                    const typ = if (type_info_string[0] == '?') blk: {
-                        const child_type = ParseType(type_info_string[1..]);
-                        break :blk @Type(std.builtin.Type{
-                            .Optional = .{
-                                .child = child_type,
-                            },
-                        });
-                    } else blk: {
-                        break :blk ParseType(type_info_string);
-                    };
-
-                    bind_markers[nb_bind_markers].typed = typ;
-                    nb_bind_markers += 1;
-                },
-                else => {
-                    current_bind_marker_type[current_bind_marker_type_pos] = c;
-                    current_bind_marker_type_pos += 1;
-                },
-            },
-            else => {
-                @compileError("invalid state " ++ @tagName(state));
-            },
-        }
-    }
-
-    // The last character was a bind marker prefix so this must be an untyped bind marker.
-    switch (state) {
-        .bind_marker => {
-            bind_markers[nb_bind_markers].typed = null;
-            nb_bind_markers += 1;
-        },
-        .bind_marker_identifier => {
-            nb_bind_markers += 1;
-        },
-        .start => {},
-        else => @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type"),
-    }
-
-    var parsed_state = ParsedQueryState(query.len){
-        .bind_markers = bind_markers,
-        .nb_bind_markers = nb_bind_markers,
-        .query = undefined,
-        .query_len = pos,
-    };
-
-    std.mem.copyForwards(u8, &parsed_state.query, &buf);
-
-    return parsed_state;
-}
-
-pub fn ParsedQueryState(comptime max_query_len: usize) type {
+pub fn ParsedQuery(comptime tmp_query: []const u8) type {
     return struct {
         const Self = @This();
-        bind_markers: [128]BindMarker,
-        nb_bind_markers: usize,
-        query: [max_query_len]u8,
-        query_len: usize,
 
-        pub fn getQuery(comptime self: *const Self) []const u8 {
-            return self.query[0..self.query_len];
+        const result = parse();
+
+        pub const bind_markers = result.bind_markers[0..result.bind_markers_len];
+
+        pub fn getQuery() []const u8 {
+            return Self.result.query[0..Self.result.query_len];
+        }
+
+        const ParsedQueryResult = struct {
+            bind_markers: [128]BindMarker,
+            bind_markers_len: usize,
+            query: [tmp_query.len]u8,
+            query_len: usize,
+        };
+
+        fn parse() ParsedQueryResult {
+            // This contains the final SQL query after parsing with our
+            // own typed bind markers removed.
+            var buf: [tmp_query.len]u8 = undefined;
+            var pos = 0;
+            var state = .start;
+
+            var current_bind_marker_type: [256]u8 = undefined;
+            var current_bind_marker_type_pos = 0;
+
+            // becomes part of our result
+            var tmp_bind_markers: [128]BindMarker = undefined;
+            var nb_tmp_bind_markers: usize = 0;
+
+            // used for capturing slices, such as bind parameter name
+            var hold_pos = 0;
+
+            for (tmp_query) |c| {
+                switch (state) {
+                    .start => switch (c) {
+                        '?', ':', '@', '$' => {
+                            tmp_bind_markers[nb_tmp_bind_markers] = BindMarker{};
+                            current_bind_marker_type_pos = 0;
+                            state = .bind_marker;
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                        '\'', '"', '[', '`' => {
+                            state = .inside_string;
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                        else => {
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                    },
+                    .inside_string => switch (c) {
+                        '\'', '"', ']', '`' => {
+                            state = .start;
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                        else => {
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                    },
+                    .bind_marker => switch (c) {
+                        '?', ':', '@', '$' => @compileError("invalid multiple '?', ':', '$' or '@'."),
+                        '{' => {
+                            state = .bind_marker_type;
+                        },
+                        else => {
+                            if (isNamedIdentifierChar(c)) {
+                                // This is the start of a named bind marker.
+                                state = .bind_marker_identifier;
+                                hold_pos = pos + 1;
+                            } else {
+                                // This is a unnamed, untyped bind marker.
+                                state = .start;
+
+                                tmp_bind_markers[nb_tmp_bind_markers].typed = null;
+                                nb_tmp_bind_markers += 1;
+                            }
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                    },
+                    .bind_marker_identifier => switch (c) {
+                        '?', ':', '@', '$' => @compileError("unregconised multiple '?', ':', '$' or '@'."),
+                        '{' => {
+                            state = .bind_marker_type;
+                            current_bind_marker_type_pos = 0;
+                        },
+                        else => {
+                            if (!isNamedIdentifierChar(c)) {
+                                // This marks the end of the named bind marker.
+                                state = .start;
+                                const name = buf[hold_pos .. pos - 1];
+                                // TODO(vincent): name retains a pointer to a comptime var, FIX !
+                                if (bindMarkerForName(tmp_bind_markers[0..nb_tmp_bind_markers], name) == null) {
+                                    const new_buf = buf;
+                                    tmp_bind_markers[nb_tmp_bind_markers].name = new_buf[hold_pos .. pos - 1];
+                                    nb_tmp_bind_markers += 1;
+                                }
+                            }
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                    },
+                    .bind_marker_type => switch (c) {
+                        '}' => {
+                            state = .start;
+
+                            const type_info_string = current_bind_marker_type[0..current_bind_marker_type_pos];
+                            // Handles optional types
+                            const typ = if (type_info_string[0] == '?') blk: {
+                                const child_type = ParseType(type_info_string[1..]);
+                                break :blk @Type(std.builtin.Type{
+                                    .Optional = .{
+                                        .child = child_type,
+                                    },
+                                });
+                            } else blk: {
+                                break :blk ParseType(type_info_string);
+                            };
+
+                            tmp_bind_markers[nb_tmp_bind_markers].typed = typ;
+                            nb_tmp_bind_markers += 1;
+                        },
+                        else => {
+                            current_bind_marker_type[current_bind_marker_type_pos] = c;
+                            current_bind_marker_type_pos += 1;
+                        },
+                    },
+                    else => {
+                        @compileError("invalid state " ++ @tagName(state));
+                    },
+                }
+            }
+
+            // The last character was a bind marker prefix so this must be an untyped bind marker.
+            switch (state) {
+                .bind_marker => {
+                    tmp_bind_markers[nb_tmp_bind_markers].typed = null;
+                    nb_tmp_bind_markers += 1;
+                },
+                .bind_marker_identifier => {
+                    nb_tmp_bind_markers += 1;
+                },
+                .start => {},
+                else => @compileError("invalid final state " ++ @tagName(state) ++ ", this means you wrote an incomplete bind marker type"),
+            }
+
+            const final_bind_markers = tmp_bind_markers;
+            const final_bind_markers_len = nb_tmp_bind_markers;
+            const final_buf = buf;
+            const final_query_len = pos;
+
+            return .{
+                .bind_markers = final_bind_markers,
+                .bind_markers_len = final_bind_markers_len,
+                .query = final_buf,
+                .query_len = final_query_len,
+            };
         }
     };
 }
@@ -246,7 +256,7 @@ test "parsed query: query" {
 
     inline for (testCases) |tc| {
         @setEvalBranchQuota(100000);
-        comptime var parsed_query = ParsedQuery(tc.query);
+        const parsed_query = ParsedQuery(tc.query);
         try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
     }
 }
@@ -296,7 +306,7 @@ test "parsed query: bind markers types" {
             @setEvalBranchQuota(100000);
             const parsed_query = comptime ParsedQuery(tc.query);
 
-            try testing.expectEqual(1, parsed_query.nb_bind_markers);
+            try testing.expectEqual(1, parsed_query.bind_markers.len);
 
             const bind_marker = parsed_query.bind_markers[0];
             try testing.expectEqual(tc.expected_marker.typed, bind_marker.typed);
@@ -344,7 +354,7 @@ test "parsed query: bind markers identifier" {
     inline for (testCases) |tc| {
         const parsed_query = comptime ParsedQuery(tc.query);
 
-        try testing.expectEqual(@as(usize, 1), parsed_query.nb_bind_markers);
+        try testing.expectEqual(@as(usize, 1), parsed_query.bind_markers.len);
 
         const bind_marker = parsed_query.bind_markers[0];
         try testing.expectEqual(tc.expected_marker, bind_marker);
@@ -388,9 +398,13 @@ test "parsed query: query bind identifier" {
 
     inline for (testCases) |tc| {
         @setEvalBranchQuota(100000);
-        comptime var parsed_query = ParsedQuery(tc.query);
-        try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
-        try testing.expectEqual(tc.expected_nb_bind_markers, parsed_query.nb_bind_markers);
+
+        comptime {
+            const parsed_query = ParsedQuery(tc.query);
+
+            try testing.expectEqual(tc.expected_nb_bind_markers, parsed_query.bind_markers.len);
+            try testing.expectEqualStrings(tc.expected_query, parsed_query.getQuery());
+        }
     }
 }
 
@@ -416,9 +430,9 @@ test "parsed query: bind marker character inside string" {
 
     inline for (testCases) |tc| {
         @setEvalBranchQuota(100000);
-        comptime var parsed_query = ParsedQuery(tc.query);
+        const parsed_query = ParsedQuery(tc.query);
 
-        try testing.expectEqual(@as(usize, tc.exp_bind_markers), parsed_query.nb_bind_markers);
+        try testing.expectEqual(@as(usize, tc.exp_bind_markers), parsed_query.bind_markers.len);
         try testing.expectEqualStrings(tc.exp, parsed_query.getQuery());
     }
 }

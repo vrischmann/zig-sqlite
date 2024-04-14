@@ -279,7 +279,7 @@ pub fn build(b: *std.Build) !void {
         .flags = &[_][]const u8{"-std=c99"},
     });
     sqlite_lib.linkLibC();
-    sqlite_lib.installHeader("c/sqlite3.h", "sqlite3.h");
+    sqlite_lib.installHeader(.{ .path = "c/sqlite3.h" }, "sqlite3.h");
 
     b.installArtifact(sqlite_lib);
 
@@ -399,9 +399,7 @@ pub fn build(b: *std.Build) !void {
     fuzz_lib.linkLibrary(lib);
     fuzz_lib.want_lto = true;
     fuzz_lib.bundle_compiler_rt = true;
-    fuzz_lib.root_module.addImport("sqlite", b.createModule(.{
-        .root_source_file = .{ .path = "sqlite.zig" },
-    }));
+    fuzz_lib.root_module.addImport("sqlite", sqlite_mod);
 
     // Setup the output name
     const fuzz_executable_name = "fuzz";
@@ -430,9 +428,7 @@ pub fn build(b: *std.Build) !void {
     });
     fuzz_debug_exe.addIncludePath(.{ .path = "c" });
     fuzz_debug_exe.linkLibrary(lib);
-    fuzz_debug_exe.root_module.addImport("sqlite", b.createModule(.{
-        .root_source_file = .{ .path = "sqlite.zig" },
-    }));
+    fuzz_debug_exe.root_module.addImport("sqlite", sqlite_mod);
 
     // Only install fuzz-debug when the fuzz step is run
     const install_fuzz_debug_exe = b.addInstallArtifact(fuzz_debug_exe, .{});
@@ -453,11 +449,8 @@ pub fn build(b: *std.Build) !void {
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    zigcrypto_loadable_ext.pie = true;
     zigcrypto_loadable_ext.addIncludePath(.{ .path = "c" });
-    zigcrypto_loadable_ext.root_module.addImport("sqlite", b.createModule(.{
-        .root_source_file = .{ .path = "sqlite.zig" },
-    }));
+    zigcrypto_loadable_ext.root_module.addImport("sqlite", sqlite_mod);
     zigcrypto_loadable_ext.linkLibrary(lib);
 
     const install_zigcrypto_loadable_ext = b.addInstallArtifact(zigcrypto_loadable_ext, .{});
@@ -469,9 +462,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     zigcrypto_test.addIncludePath(.{ .path = "c" });
-    zigcrypto_test.root_module.addImport("sqlite", b.createModule(.{
-        .root_source_file = .{ .path = "sqlite.zig" },
-    }));
+    zigcrypto_test.root_module.addImport("sqlite", sqlite_mod);
     zigcrypto_test.linkLibrary(lib);
 
     const install_zigcrypto_test = b.addInstallArtifact(zigcrypto_test, .{});
