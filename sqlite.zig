@@ -1676,7 +1676,7 @@ pub const DynamicStatement = struct {
                         const data: []const u8 = field[0..field.len];
 
                         // NOTE(vincent): The array is temporary and must be copied, therefore we use SQLITE_TRANSIENT
-                        const result = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(data.len), c.SQLITE_TRANSIENT);
+                        const result = c.sqlite3_bind_text(self.stmt, column, data.ptr, @intCast(data.len), c.sqliteTransientAsDestructor());
                         return convertResultToError(result);
                     },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),

@@ -29,18 +29,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, macos-12]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: goto-bus-stop/setup-zig@v2
+
+      - name: Setup zig
+        uses: goto-bus-stop/setup-zig@v2
         with:
           version: master
 
-      - uses: actions/cache@v4
-        if: ${{ matrix.os != 'windows-latest' }}
+      - name: Install qemu
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y qemu-user-binfmt
+
+      - name: Restore cache
+        uses: actions/cache@v4
         with:
           path: |
             zig-cache
@@ -49,9 +57,17 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ matrix.os }}-zig-
 
       - name: Run Tests in memory
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: zig build test -Dci=true -Din_memory=true --summary all -fqemu -fwine
+      - name: Run Tests in memory
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: zig build test -Dci=true -Din_memory=true --summary all -frosetta
+      - name: Run Tests in memory
+        if: ${{ matrix.os == 'windows-latest' }}
         run: zig build test -Dci=true -Din_memory=true --summary all
 
       - name: Build the example zigcrypto loadable extension
         run: zig build zigcrypto
       - name: Test the zigcrypto loadable extension
+        if: ${{ matrix.os != 'windows-latest' }}
         run: ./zig-out/bin/zigcrypto-test

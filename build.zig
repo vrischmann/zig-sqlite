@@ -4,17 +4,6 @@ const Step = std.Build.Step;
 const ResolvedTarget = std.Build.ResolvedTarget;
 const Query = std.Target.Query;
 
-var sqlite3: ?*Step.Compile = null;
-
-fn linkSqlite(b: *Step.Compile) void {
-    if (sqlite3) |lib| {
-        b.linkLibrary(lib);
-    } else {
-        b.linkLibC();
-        b.linkSystemLibrary("sqlite3");
-    }
-}
-
 fn getTarget(original_target: ResolvedTarget, bundled: bool) ResolvedTarget {
     if (bundled) {
         var tmp = original_target;
@@ -46,70 +35,21 @@ const TestTarget = struct {
 const ci_targets = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
         .linux => [_]TestTarget{
-            // Targets linux but other CPU archs.
-            TestTarget{
-                .query = .{},
-                .bundled = false,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .aarch64, .abi = .musl }, .bundled = true },
         },
         .windows => [_]TestTarget{
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .abi = .gnu,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86,
-                    .abi = .gnu,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .gnu }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
         },
         .macos => [_]TestTarget{
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                },
-                .bundled = true,
-            },
-            // TODO(vincent): this fails for some reason
-            // TestTarget{
-            //     .query =.{
-            //         .cpu_arch = .aarch64,
-            //     },
-            //     .bundled = true,
-            // },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64 }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .aarch64 }, .bundled = true },
         },
-        else => [_]TestTarget{
-            TestTarget{
-                .query = .{},
-                .bundled = false,
-            },
-        },
+        else => unreachable,
     },
-    else => [_]TestTarget{
-        TestTarget{
-            .query = .{},
-            .bundled = false,
-        },
-    },
+    else => unreachable,
 };
 
 const all_test_targets = switch (builtin.target.cpu.arch) {
@@ -267,6 +207,8 @@ pub fn build(b: *std.Build) !void {
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
 
+    const c_flags = &[_][]const u8{"-std=c99"};
+
     const sqlite_lib = b.addStaticLibrary(.{
         .name = "sqlite",
         .target = target,
@@ -274,9 +216,12 @@ pub fn build(b: *std.Build) !void {
     });
 
     sqlite_lib.addIncludePath(.{ .path = "c/" });
-    sqlite_lib.addCSourceFile(.{
-        .file = .{ .path = "c/sqlite3.c" },
-        .flags = &[_][]const u8{"-std=c99"},
+    sqlite_lib.addCSourceFiles(.{
+        .files = &[_][]const u8{
+            "c/sqlite3.c",
+            "c/workaround.c",
+        },
+        .flags = c_flags,
     });
     sqlite_lib.linkLibC();
     sqlite_lib.installHeader(.{ .path = "c/sqlite3.h" }, "sqlite3.h");
@@ -330,6 +275,20 @@ pub fn build(b: *std.Build) !void {
             single_threaded_txt,
         });
 
+        const test_sqlite_lib = b.addStaticLibrary(.{
+            .name = "sqlite",
+            .target = cross_target,
+            .optimize = optimize,
+        });
+        test_sqlite_lib.addCSourceFiles(.{
+            .files = &[_][]const u8{
+                "c/sqlite3.c",
+                "c/workaround.c",
+            },
+            .flags = c_flags,
+        });
+        test_sqlite_lib.linkLibC();
+
         const tests = b.addTest(.{
             .name = test_name,
             .target = cross_target,
@@ -337,33 +296,14 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = .{ .path = "sqlite.zig" },
             .single_threaded = test_target.single_threaded,
         });
-        const run_tests = b.addRunArtifact(tests);
-
+        tests.addIncludePath(.{ .path = "c" });
         if (bundled) {
-            const lib = b.addStaticLibrary(.{
-                .name = "sqlite",
-                .target = cross_target,
-                .optimize = optimize,
-            });
-            lib.addCSourceFile(.{
-                .file = .{ .path = "c/sqlite3.c" },
-                .flags = &[_][]const u8{"-std=c99"},
-            });
-            lib.linkLibC();
-            sqlite3 = lib;
+            tests.linkLibrary(test_sqlite_lib);
+        } else {
+            tests.linkLibC();
+            tests.addCSourceFile(.{ .file = .{ .path = "c/workaround.c" }, .flags = c_flags });
+            tests.linkSystemLibrary("sqlite3");
         }
-
-        if (bundled) tests.addIncludePath(.{ .path = "c" });
-        linkSqlite(tests);
-
-        const lib = b.addStaticLibrary(.{
-            .name = "zig-sqlite",
-            .root_source_file = .{ .path = "sqlite.zig" },
-            .target = cross_target,
-            .optimize = optimize,
-        });
-        if (bundled) lib.addIncludePath(.{ .path = "c" });
-        linkSqlite(lib);
 
         const tests_options = b.addOptions();
         tests.root_module.addImport("build_options", tests_options.createModule());
@@ -371,6 +311,7 @@ pub fn build(b: *std.Build) !void {
         tests_options.addOption(bool, "in_memory", in_memory);
         tests_options.addOption(?[]const u8, "dbfile", dbfile);
 
+        const run_tests = b.addRunArtifact(tests);
         test_step.dependOn(&run_tests.step);
     }
 
@@ -381,10 +322,7 @@ pub fn build(b: *std.Build) !void {
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    lib.addCSourceFile(.{
-        .file = .{ .path = "c/sqlite3.c" },
-        .flags = &[_][]const u8{"-std=c99"},
-    });
+    lib.addCSourceFile(.{ .file = .{ .path = "c/sqlite3.c" }, .flags = c_flags });
     lib.addIncludePath(.{ .path = "c" });
     lib.linkLibC();
 
