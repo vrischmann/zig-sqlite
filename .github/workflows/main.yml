@@ -34,8 +34,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: true
 
       - name: Setup zig
         uses: goto-bus-stop/setup-zig@v2
@@ -60,14 +58,21 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: zig build test -Dci=true -Din_memory=true --summary all -fqemu -fwine
       - name: Run Tests in memory
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: zig build test -Dci=true -Din_memory=true --summary all -frosetta
-      - name: Run Tests in memory
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os != 'ubuntu-latest' }}
         run: zig build test -Dci=true -Din_memory=true --summary all
+
+  test-loadable-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: master
 
       - name: Build the example zigcrypto loadable extension
         run: zig build zigcrypto
       - name: Test the zigcrypto loadable extension
-        if: ${{ matrix.os != 'windows-latest' }}
         run: ./zig-out/bin/zigcrypto-test

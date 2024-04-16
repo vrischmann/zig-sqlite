@@ -44,7 +44,7 @@ const ci_targets = switch (builtin.target.cpu.arch) {
             TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
         },
         .macos => [_]TestTarget{
-            TestTarget{ .query = .{ .cpu_arch = .aarch64 }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64 }, .bundled = true },
         },
         else => unreachable,
     },
@@ -54,133 +54,42 @@ const ci_targets = switch (builtin.target.cpu.arch) {
 const all_test_targets = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
         .linux => [_]TestTarget{
-            // Targets linux but other CPU archs.
-            TestTarget{
-                .query = .{},
-                .bundled = false,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .aarch64,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .riscv64,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .mips,
-                    .abi = .musl,
-                },
-                .bundled = true,
-            },
-            // TODO(vincent): failing for some time for unknown reasons
-            // TestTarget{
-            //     .query =.{
-            //         .cpu_arch = .arm,
-            //         .abi = .musleabihf,
-            //     },
-            //     .bundled = true,
-            // },
-            // Targets windows
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .os_tag = .windows,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86,
-                    .os_tag = .windows,
-                },
-                .bundled = true,
-            },
-            // Targets macOS
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .os_tag = .macos,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .aarch64,
-                    .os_tag = .macos,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{}, .bundled = false },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .aarch64, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .riscv64, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .mips, .abi = .musl }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .os_tag = .windows }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86, .os_tag = .windows }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .os_tag = .macos }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .aarch64, .os_tag = .macos }, .bundled = true },
         },
         .windows => [_]TestTarget{
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                    .abi = .gnu,
-                },
-                .bundled = true,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86,
-                    .abi = .gnu,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .gnu }, .bundled = true },
+            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
         },
         .freebsd => [_]TestTarget{
-            TestTarget{
-                .query = .{},
-                .bundled = false,
-            },
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{}, .bundled = false },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64 }, .bundled = true },
         },
         .macos => [_]TestTarget{
-            TestTarget{
-                .query = .{
-                    .cpu_arch = .x86_64,
-                },
-                .bundled = true,
-            },
+            TestTarget{ .query = .{ .cpu_arch = .x86_64 }, .bundled = true },
         },
         else => [_]TestTarget{
-            TestTarget{
-                .query = .{},
-                .bundled = false,
-            },
+            TestTarget{ .query = .{}, .bundled = false },
+        },
+    },
+    .aarch64 => switch (builtin.target.os.tag) {
+        .linux, .windows, .freebsd, .macos => [_]TestTarget{
+            TestTarget{ .query = .{}, .bundled = true },
+        },
+        else => [_]TestTarget{
+            TestTarget{ .query = .{}, .bundled = false },
         },
     },
     else => [_]TestTarget{
-        TestTarget{
-            .query = .{},
-            .bundled = false,
-        },
+        TestTarget{ .query = .{}, .bundled = false },
     },
 };
 
