@@ -61,7 +61,7 @@ jobs:
         run: zig build test -Dci=true -Din_memory=true --summary all -fqemu -fwine
       - name: Run Tests in memory
         if: ${{ matrix.os == 'macos-latest' }}
-        run: zig build test -Dci=true -Din_memory=true --summary all -frosetta
+        run: zig build test -Dci=true -Din_memory=true --summary all
       - name: Run Tests in memory
         if: ${{ matrix.os == 'windows-latest' }}
         run: zig build test -Dci=true -Din_memory=true --summary all
