@@ -46,9 +46,9 @@ const ci_targets = switch (builtin.target.cpu.arch) {
         .macos => [_]TestTarget{
             TestTarget{ .query = .{ .cpu_arch = .x86_64 }, .bundled = true },
         },
-        else => unreachable,
+        else => [_]TestTarget{},
     },
-    else => unreachable,
+    else => [_]TestTarget{},
 };
 
 const all_test_targets = switch (builtin.target.cpu.arch) {
