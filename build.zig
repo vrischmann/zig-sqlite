@@ -123,7 +123,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    sqlite_lib.addIncludePath(.{ .path = "c/" });
+    sqlite_lib.addIncludePath(b.path("c/"));
     sqlite_lib.addCSourceFiles(.{
         .files = &[_][]const u8{
             "c/sqlite3.c",
@@ -132,16 +132,16 @@ pub fn build(b: *std.Build) !void {
         .flags = c_flags,
     });
     sqlite_lib.linkLibC();
-    sqlite_lib.installHeader(.{ .path = "c/sqlite3.h" }, "sqlite3.h");
+    sqlite_lib.installHeader(b.path("c/sqlite3.h"), "sqlite3.h");
 
     b.installArtifact(sqlite_lib);
 
     // Create the public 'sqlite' module to be exported
     const sqlite_mod = b.addModule("sqlite", .{
-        .root_source_file = .{ .path = "sqlite.zig" },
+        .root_source_file = b.path("sqlite.zig"),
         .link_libc = true,
     });
-    sqlite_mod.addIncludePath(.{ .path = "c/" });
+    sqlite_mod.addIncludePath(b.path("c/"));
     sqlite_mod.linkLibrary(sqlite_lib);
 
     // Tool to preprocess the sqlite header files.
@@ -151,7 +151,7 @@ pub fn build(b: *std.Build) !void {
 
     const preprocess_files_tool = b.addExecutable(.{
         .name = "preprocess-files",
-        .root_source_file = .{ .path = "tools/preprocess_files.zig" },
+        .root_source_file = b.path("tools/preprocess_files.zig"),
         .target = getTarget(target, true),
         .optimize = optimize,
     });
@@ -201,15 +201,15 @@ pub fn build(b: *std.Build) !void {
             .name = test_name,
             .target = cross_target,
             .optimize = optimize,
-            .root_source_file = .{ .path = "sqlite.zig" },
+            .root_source_file = b.path("sqlite.zig"),
             .single_threaded = test_target.single_threaded,
         });
-        tests.addIncludePath(.{ .path = "c" });
+        tests.addIncludePath(b.path("c"));
         if (bundled) {
             tests.linkLibrary(test_sqlite_lib);
         } else {
             tests.linkLibC();
-            tests.addCSourceFile(.{ .file = .{ .path = "c/workaround.c" }, .flags = c_flags });
+            tests.addCSourceFile(.{ .file = b.path("c/workaround.c"), .flags = c_flags });
             tests.linkSystemLibrary("sqlite3");
         }
 
@@ -230,18 +230,18 @@ pub fn build(b: *std.Build) !void {
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    lib.addCSourceFile(.{ .file = .{ .path = "c/sqlite3.c" }, .flags = c_flags });
-    lib.addIncludePath(.{ .path = "c" });
+    lib.addCSourceFile(.{ .file = b.path("c/sqlite3.c"), .flags = c_flags });
+    lib.addIncludePath(b.path("c"));
     lib.linkLibC();
 
     // The library
     const fuzz_lib = b.addStaticLibrary(.{
         .name = "fuzz-lib",
-        .root_source_file = .{ .path = "fuzz/main.zig" },
+        .root_source_file = b.path("fuzz/main.zig"),
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    fuzz_lib.addIncludePath(.{ .path = "c" });
+    fuzz_lib.addIncludePath(b.path("c"));
     fuzz_lib.linkLibrary(lib);
     fuzz_lib.want_lto = true;
     fuzz_lib.bundle_compiler_rt = true;
@@ -257,7 +257,7 @@ pub fn build(b: *std.Build) !void {
     fuzz_compile.addArtifactArg(fuzz_lib);
 
     // Install the cached output to the install 'bin' path
-    const fuzz_install = b.addInstallBinFile(.{ .path = fuzz_exe_path }, fuzz_executable_name);
+    const fuzz_install = b.addInstallBinFile(.{ .cwd_relative = fuzz_exe_path }, fuzz_executable_name);
 
     // Add a top-level step that compiles and installs the fuzz executable
     const fuzz_compile_run = b.step("fuzz", "Build executable for fuzz testing using afl-clang-lto");
@@ -268,11 +268,11 @@ pub fn build(b: *std.Build) !void {
     // Compile a companion exe for debugging crashes
     const fuzz_debug_exe = b.addExecutable(.{
         .name = "fuzz-debug",
-        .root_source_file = .{ .path = "fuzz/main.zig" },
+        .root_source_file = b.path("fuzz/main.zig"),
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    fuzz_debug_exe.addIncludePath(.{ .path = "c" });
+    fuzz_debug_exe.addIncludePath(b.path("c"));
     fuzz_debug_exe.linkLibrary(lib);
     fuzz_debug_exe.root_module.addImport("sqlite", sqlite_mod);
 
@@ -290,12 +290,12 @@ pub fn build(b: *std.Build) !void {
 
     const zigcrypto_loadable_ext = b.addSharedLibrary(.{
         .name = "zigcrypto",
-        .root_source_file = .{ .path = "examples/zigcrypto.zig" },
+        .root_source_file = b.path("examples/zigcrypto.zig"),
         .version = null,
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    zigcrypto_loadable_ext.addIncludePath(.{ .path = "c" });
+    zigcrypto_loadable_ext.addIncludePath(b.path("c"));
     zigcrypto_loadable_ext.root_module.addImport("sqlite", sqlite_mod);
     zigcrypto_loadable_ext.linkLibrary(lib);
 
@@ -303,11 +303,11 @@ pub fn build(b: *std.Build) !void {
 
     const zigcrypto_test = b.addExecutable(.{
         .name = "zigcrypto-test",
-        .root_source_file = .{ .path = "examples/zigcrypto_test.zig" },
+        .root_source_file = b.path("examples/zigcrypto_test.zig"),
         .target = getTarget(target, true),
         .optimize = optimize,
     });
-    zigcrypto_test.addIncludePath(.{ .path = "c" });
+    zigcrypto_test.addIncludePath(b.path("c"));
     zigcrypto_test.root_module.addImport("sqlite", sqlite_mod);
     zigcrypto_test.linkLibrary(lib);
 
