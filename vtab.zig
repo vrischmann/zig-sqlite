@@ -1026,7 +1026,7 @@ const TestVirtualTable = struct {
                 "Vincent", "José", "Michel",
             };
 
-            var rand = std.rand.DefaultPrng.init(204882485);
+            var rand = std.Random.DefaultPrng.init(204882485);
 
             const tmp = try allocator.alloc(Row, n);
             for (tmp) |*s| {
