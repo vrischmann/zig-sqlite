@@ -115,7 +115,23 @@ pub fn build(b: *std.Build) !void {
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
 
-    const c_flags = &[_][]const u8{"-std=c99"};
+    var flags = std.ArrayList([]const u8).init(b.allocator);
+    defer flags.deinit();
+    try flags.append("-std=c99");
+
+    inline for (std.meta.fields(EnableOptions)) |field| {
+        const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse @as(*const bool, @ptrCast(field.default_value.?)).*;
+
+        if (opt) {
+            var buf: [field.name.len]u8 = undefined;
+            const name = std.ascii.upperString(&buf, field.name);
+            const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_ENABLE_{s}", .{name});
+
+            try flags.append(flag);
+        }
+    }
+
+    const c_flags = flags.items;
 
     const sqlite_lib = b.addStaticLibrary(.{
         .name = "sqlite",
@@ -317,3 +333,9 @@ pub fn build(b: *std.Build) !void {
     zigcrypto_compile_run.dependOn(&install_zigcrypto_loadable_ext.step);
     zigcrypto_compile_run.dependOn(&install_zigcrypto_test.step);
 }
+
+// See https://www.sqlite.org/compile.html for flags
+const EnableOptions = struct {
+    // https://www.sqlite.org/fts5.html
+    fts5: bool = false,
+};
