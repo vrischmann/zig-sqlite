@@ -144,44 +144,44 @@ Then you need to chose if you want to use the system sqlite library or the bundl
 If you want to use the system sqlite library, add the following to your `build.zig` target(s):
 
 ```zig
+const sqlite = b.addModule("sqlite", .{
+    .root_source_file = b.path("third_party/zig-sqlite/sqlite.zig"),
+});
+sqlite.addCSourceFiles(.{
+    .files = &[_][]const u8{
+        "third_party/zig-sqlite/c/workaround.c",
+    },
+    .flags = &[_][]const u8{"-std=c99"},
+});
+sqlite.addIncludePath(b.path("third_party/sqlite/c"));
+
 exe.linkLibC();
 exe.linkSystemLibrary("sqlite3");
-exe.addAnonymousModule("sqlite", .{
-    .source_file = .{ .path = "third_party/zig-sqlite/sqlite.zig" },
-});
+exe.root_module.addImport("sqlite", sqlite);
 ```
 
 ## Using the bundled sqlite source code file
 
-If you want to use the bundled sqlite source code file, first you need to add it as a static library in your `build.zig` file:
+If you want to use the bundled sqlite source code file, first you need to add it to the module in your `build.zig` file:
 
 ```zig
-const sqlite = b.addStaticLibrary(.{
-    .name = "sqlite",
-    .target = target,
-    .optimize = optimize,
+const sqlite = b.addModule("sqlite", .{
+    .root_source_file = b.path("third_party/zig-sqlite/sqlite.zig"),
 });
-sqlite.addCSourceFile(.{
-    .file = .{ .path = "third_party/zig-sqlite/c/sqlite3.c" },
-    .flags = &[_][]const u8{
-        "-std=c99",
+sqlite.addCSourceFiles(.{
+    .files = &[_][]const u8{
+        "third_party/zig-sqlite/c/sqlite3.c",
+        "third_party/zig-sqlite/c/workaround.c",
     },
+    .flags = &[_][]const u8{"-std=c99"},
 });
-sqlite.addIncludePath(.{ .path = "third_party/zig-sqlite/c" });
-sqlite.linkLibC();
+sqlite.addIncludePath(b.path("third_party/sqlite/c"));
+
+exe.linkLibC();
+exe.root_module.addImport("sqlite", sqlite);
 ```
 
-If you need to define custom [compile-time options](https://www.sqlite.org/compile.html#overview) for sqlite, modify the flags (second argument to `addCSourceFile`).
-
-Now it's just a matter of linking your `build.zig` target(s) to this library instead of the system one:
-
-```zig
-exe.linkLibrary(sqlite);
-exe.addIncludePath(.{ .path = "third_party/zig-sqlite/c" });
-exe.addAnonymousModule("sqlite", .{
-    .source_file = .{ .path = "third_party/zig-sqlite/sqlite.zig" },
-});
-```
+If you need to define custom [compile-time options](https://www.sqlite.org/compile.html#overview) for sqlite, modify the flags (second argument to `addCSourceFiles`).
 
 If you're building with glibc you must make sure that the version used is at least 2.28.
 
