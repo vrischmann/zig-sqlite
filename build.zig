@@ -41,7 +41,8 @@ const ci_targets = switch (builtin.target.cpu.arch) {
         },
         .windows => [_]TestTarget{
             TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .gnu }, .bundled = true },
-            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
+            // Disabled due to https://github.com/ziglang/zig/issues/20047
+            // TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
         },
         .macos => [_]TestTarget{
             TestTarget{ .query = .{ .cpu_arch = .x86_64 }, .bundled = true },
@@ -61,13 +62,15 @@ const all_test_targets = switch (builtin.target.cpu.arch) {
             TestTarget{ .query = .{ .cpu_arch = .riscv64, .abi = .musl }, .bundled = true },
             TestTarget{ .query = .{ .cpu_arch = .mips, .abi = .musl }, .bundled = true },
             TestTarget{ .query = .{ .cpu_arch = .x86_64, .os_tag = .windows }, .bundled = true },
-            TestTarget{ .query = .{ .cpu_arch = .x86, .os_tag = .windows }, .bundled = true },
+            // Disabled due to https://github.com/ziglang/zig/issues/20047
+            // TestTarget{ .query = .{ .cpu_arch = .x86, .os_tag = .windows }, .bundled = true },
             TestTarget{ .query = .{ .cpu_arch = .x86_64, .os_tag = .macos }, .bundled = true },
             TestTarget{ .query = .{ .cpu_arch = .aarch64, .os_tag = .macos }, .bundled = true },
         },
         .windows => [_]TestTarget{
             TestTarget{ .query = .{ .cpu_arch = .x86_64, .abi = .gnu }, .bundled = true },
-            TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
+            // Disabled due to https://github.com/ziglang/zig/issues/20047
+            // TestTarget{ .query = .{ .cpu_arch = .x86, .abi = .gnu }, .bundled = true },
         },
         .freebsd => [_]TestTarget{
             TestTarget{ .query = .{}, .bundled = false },
