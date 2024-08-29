@@ -33,7 +33,7 @@ const logger = std.log.scoped(.sqlite);
 // Returns true if the passed type is a struct.
 fn isStruct(comptime T: type) bool {
     const type_info = @typeInfo(T);
-    return type_info == .Struct;
+    return type_info == .@"struct";
 }
 
 // Returns true if the passed type will coerce to []const u8.
@@ -43,9 +43,9 @@ fn isZigString(comptime T: type) bool {
     return comptime blk: {
         // Only pointer types can be strings, no optionals
         const info = @typeInfo(T);
-        if (info != .Pointer) break :blk false;
+        if (info != .pointer) break :blk false;
 
-        const ptr = &info.Pointer;
+        const ptr = &info.pointer;
         // Check for CV qualifiers that would prevent coerction to []const u8
         if (ptr.is_volatile or ptr.is_allowzero) break :blk false;
 
@@ -57,8 +57,8 @@ fn isZigString(comptime T: type) bool {
         // Otherwise check if it's an array type that coerces to slice.
         if (ptr.size == .One) {
             const child = @typeInfo(ptr.child);
-            if (child == .Array) {
-                const arr = &child.Array;
+            if (child == .array) {
+                const arr = &child.array;
                 break :blk arr.child == u8;
             }
         }
@@ -668,14 +668,14 @@ pub const Db = struct {
         // Validate the functions
 
         const step_fn_info = switch (@typeInfo(@TypeOf(step_func))) {
-            .Fn => |fn_info| fn_info,
+            .@"fn" => |fn_info| fn_info,
             else => @compileError("cannot use func, expecting a function"),
         };
         if (step_fn_info.is_generic) @compileError("step function can't be generic");
         if (step_fn_info.is_var_args) @compileError("step function can't be variadic");
 
         const finalize_fn_info = switch (@typeInfo(@TypeOf(finalize_func))) {
-            .Fn => |fn_info| fn_info,
+            .@"fn" => |fn_info| fn_info,
             else => @compileError("cannot use func, expecting a function"),
         };
         if (finalize_fn_info.params.len != 1) @compileError("finalize function must take exactly one argument");
@@ -761,7 +761,7 @@ pub const Db = struct {
         const Type = @TypeOf(func);
 
         const fn_info = switch (@typeInfo(Type)) {
-            .Fn => |fn_info| fn_info,
+            .@"fn" => |fn_info| fn_info,
             else => @compileError("expecting a function"),
         };
         if (fn_info.is_generic) @compileError("function can't be generic");
@@ -893,14 +893,14 @@ pub const FunctionContext = struct {
 
     fn splitPtrTypes(comptime Type: type) SplitPtrTypes {
         switch (@typeInfo(Type)) {
-            .Pointer => |ptr_info| switch (ptr_info.size) {
+            .pointer => |ptr_info| switch (ptr_info.size) {
                 .One => return SplitPtrTypes{
                     .ValueType = ptr_info.child,
                     .PointerType = Type,
                 },
                 else => @compileError("cannot use type " ++ @typeName(Type) ++ ", must be a single-item pointer"),
             },
-            .Void => return SplitPtrTypes{
+            .void => return SplitPtrTypes{
                 .ValueType = void,
                 .PointerType = undefined,
             },
@@ -1087,41 +1087,41 @@ pub fn Iterator(comptime Type: type) type {
             const columns = c.sqlite3_column_count(self.stmt);
 
             switch (TypeInfo) {
-                .Int => {
+                .int => {
                     debug.assert(columns == 1);
                     return try self.readInt(Type, 0);
                 },
-                .Float => {
+                .float => {
                     debug.assert(columns == 1);
                     return try self.readFloat(Type, 0);
                 },
-                .Bool => {
+                .bool => {
                     debug.assert(columns == 1);
                     return try self.readBool(0);
                 },
-                .Void => {
+                .void => {
                     debug.assert(columns == 1);
                 },
-                .Array => {
+                .array => {
                     debug.assert(columns == 1);
                     return try self.readArray(Type, 0);
                 },
-                .Enum => |TI| {
+                .@"enum" => |TI| {
                     debug.assert(columns == 1);
 
                     if (comptime isZigString(Type.BaseType)) {
                         @compileError("cannot read into type " ++ @typeName(Type) ++ " ; BaseType " ++ @typeName(Type.BaseType) ++ " requires allocation, use nextAlloc or oneAlloc");
                     }
 
-                    if (@typeInfo(Type.BaseType) == .Int) {
+                    if (@typeInfo(Type.BaseType) == .int) {
                         const inner_value = try self.readField(Type.BaseType, options, 0);
                         return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
                     }
 
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
-                .Struct => {
-                    std.debug.assert(columns == TypeInfo.Struct.fields.len);
+                .@"struct" => {
+                    std.debug.assert(columns == TypeInfo.@"struct".fields.len);
                     return try self.readStruct(options);
                 },
                 else => @compileError("cannot read into type " ++ @typeName(Type) ++ " ; if dynamic memory allocation is required use nextAlloc or oneAlloc"),
@@ -1161,32 +1161,32 @@ pub fn Iterator(comptime Type: type) type {
             }
 
             switch (TypeInfo) {
-                .Int => {
+                .int => {
                     debug.assert(columns == 1);
                     return try self.readInt(Type, 0);
                 },
-                .Float => {
+                .float => {
                     debug.assert(columns == 1);
                     return try self.readFloat(Type, 0);
                 },
-                .Bool => {
+                .bool => {
                     debug.assert(columns == 1);
                     return try self.readBool(0);
                 },
-                .Void => {
+                .void => {
                     debug.assert(columns == 1);
                 },
-                .Array => {
+                .array => {
                     debug.assert(columns == 1);
                     return try self.readArray(Type, 0);
                 },
-                .Pointer => {
+                .pointer => {
                     debug.assert(columns == 1);
                     return try self.readPointer(Type, .{
                         .allocator = allocator,
                     }, 0);
                 },
-                .Enum => |TI| {
+                .@"enum" => |TI| {
                     debug.assert(columns == 1);
 
                     const inner_value = try self.readField(Type.BaseType, .{ .allocator = allocator }, 0);
@@ -1198,13 +1198,13 @@ pub fn Iterator(comptime Type: type) type {
                         // TODO(vincent): don't use unreachable
                         return std.meta.stringToEnum(Type, inner_value) orelse unreachable;
                     }
-                    if (@typeInfo(Type.BaseType) == .Int) {
+                    if (@typeInfo(Type.BaseType) == .int) {
                         return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
                     }
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
-                .Struct => {
-                    std.debug.assert(columns == TypeInfo.Struct.fields.len);
+                .@"struct" => {
+                    std.debug.assert(columns == TypeInfo.@"struct".fields.len);
                     return try self.readStruct(.{
                         .allocator = allocator,
                     });
@@ -1225,7 +1225,7 @@ pub fn Iterator(comptime Type: type) type {
 
             var ret: ArrayType = undefined;
             switch (type_info) {
-                .Array => |arr| {
+                .array => |arr| {
                     switch (arr.child) {
                         u8 => {
                             const size: usize = @intCast(c.sqlite3_column_bytes(self.stmt, i));
@@ -1286,7 +1286,7 @@ pub fn Iterator(comptime Type: type) type {
         // dupeWithSentinel is like dupe/dupeZ but allows for any sentinel value.
         fn dupeWithSentinel(comptime SliceType: type, allocator: mem.Allocator, data: []const u8) !SliceType {
             switch (@typeInfo(SliceType)) {
-                .Pointer => |ptr_info| {
+                .pointer => |ptr_info| {
                     if (ptr_info.sentinel) |sentinel_ptr| {
                         const sentinel = @as(*const ptr_info.child, @ptrCast(sentinel_ptr)).*;
 
@@ -1364,7 +1364,7 @@ pub fn Iterator(comptime Type: type) type {
 
             var ret: PointerType = undefined;
             switch (@typeInfo(PointerType)) {
-                .Pointer => |ptr| {
+                .pointer => |ptr| {
                     switch (ptr.size) {
                         .One => {
                             ret = try options.allocator.create(ptr.child);
@@ -1392,7 +1392,7 @@ pub fn Iterator(comptime Type: type) type {
 
             var ret: OptionalType = undefined;
             switch (@typeInfo(OptionalType)) {
-                .Optional => |opt| {
+                .optional => |opt| {
                     // Easy way to know if the column represents a null value.
                     const value = c.sqlite3_column_value(self.stmt, @intCast(_i));
                     const datatype = c.sqlite3_value_type(value);
@@ -1437,7 +1437,7 @@ pub fn Iterator(comptime Type: type) type {
 
             var value: Type = undefined;
 
-            inline for (@typeInfo(Type).Struct.fields, 0..) |field, _i| {
+            inline for (@typeInfo(Type).@"struct".fields, 0..) |field, _i| {
                 const i = @as(usize, _i);
 
                 const ret = try self.readField(field.type, options, i);
@@ -1469,14 +1469,14 @@ pub fn Iterator(comptime Type: type) type {
                     break :blk try self.readBytes(Text, options.allocator, i, .Text);
                 },
                 else => switch (field_type_info) {
-                    .Int => try self.readInt(FieldType, i),
-                    .Float => try self.readFloat(FieldType, i),
-                    .Bool => try self.readBool(i),
-                    .Void => {},
-                    .Array => try self.readArray(FieldType, i),
-                    .Pointer => try self.readPointer(FieldType, options, i),
-                    .Optional => try self.readOptional(FieldType, options, i),
-                    .Enum => |TI| {
+                    .int => try self.readInt(FieldType, i),
+                    .float => try self.readFloat(FieldType, i),
+                    .bool => try self.readBool(i),
+                    .void => {},
+                    .array => try self.readArray(FieldType, i),
+                    .pointer => try self.readPointer(FieldType, options, i),
+                    .optional => try self.readOptional(FieldType, options, i),
+                    .@"enum" => |TI| {
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
 
                         if (comptime isZigString(FieldType.BaseType)) {
@@ -1490,7 +1490,7 @@ pub fn Iterator(comptime Type: type) type {
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
-                    .Struct => |TI| {
+                    .@"struct" => |TI| {
                         if (TI.layout == .@"packed") return @bitCast(try self.readInt(TI.backing_integer.?, i));
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
                         return try FieldType.readField(options.allocator, inner_value);
@@ -1645,19 +1645,19 @@ pub const DynamicStatement = struct {
                 return convertResultToError(result);
             },
             else => switch (field_type_info) {
-                .Int, .ComptimeInt => {
+                .int, .comptime_int => {
                     const result = c.sqlite3_bind_int64(self.stmt, column, @intCast(field));
                     return convertResultToError(result);
                 },
-                .Float, .ComptimeFloat => {
+                .float, .comptime_float => {
                     const result = c.sqlite3_bind_double(self.stmt, column, field);
                     return convertResultToError(result);
                 },
-                .Bool => {
+                .bool => {
                     const result = c.sqlite3_bind_int64(self.stmt, column, @intFromBool(field));
                     return convertResultToError(result);
                 },
-                .Pointer => |ptr| switch (ptr.size) {
+                .pointer => |ptr| switch (ptr.size) {
                     .One => {
                         try self.bindField(ptr.child, options, field_name, i, field.*);
                     },
@@ -1671,7 +1671,7 @@ pub const DynamicStatement = struct {
                     },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type " ++ @typeName(FieldType)),
                 },
-                .Array => |arr| switch (arr.child) {
+                .array => |arr| switch (arr.child) {
                     u8 => {
                         const data: []const u8 = field[0..field.len];
 
@@ -1681,17 +1681,17 @@ pub const DynamicStatement = struct {
                     },
                     else => @compileError("cannot bind field " ++ field_name ++ " of type array of " ++ @typeName(arr.child)),
                 },
-                .Optional => |opt| if (field) |non_null_field| {
+                .optional => |opt| if (field) |non_null_field| {
                     try self.bindField(opt.child, options, field_name, i, non_null_field);
                 } else {
                     const result = c.sqlite3_bind_null(self.stmt, column);
                     return convertResultToError(result);
                 },
-                .Null => {
+                .null => {
                     const result = c.sqlite3_bind_null(self.stmt, column);
                     return convertResultToError(result);
                 },
-                .Enum => {
+                .@"enum" => {
                     if (comptime isZigString(FieldType.BaseType)) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
                     } else if (@typeInfo(FieldType.BaseType) == .Int) {
@@ -1700,7 +1700,7 @@ pub const DynamicStatement = struct {
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
                     }
                 },
-                .Struct => |info| {
+                .@"struct" => |info| {
                     if (info.layout == .@"packed") {
                         try self.bindField(info.backing_integer.?, options, field_name, i, @as(info.backing_integer.?, @bitCast(field)));
                         return;
@@ -1713,7 +1713,7 @@ pub const DynamicStatement = struct {
 
                     try self.bindField(FieldType.BaseType, options, field_name, i, field_value);
                 },
-                .Union => |info| {
+                .@"union" => |info| {
                     if (info.tag_type) |UnionTagType| {
                         inline for (info.fields) |u_field| {
                             // This wasn't entirely obvious when I saw code like this elsewhere, it works because of type coercion.
@@ -1771,7 +1771,7 @@ pub const DynamicStatement = struct {
         const Type = @TypeOf(values);
 
         switch (@typeInfo(Type)) {
-            .Struct => |StructTypeInfo| {
+            .@"struct" => |StructTypeInfo| {
                 inline for (StructTypeInfo.fields, 0..) |struct_field, struct_field_i| {
                     const field_value = @field(values, struct_field.name);
 
@@ -1783,7 +1783,7 @@ pub const DynamicStatement = struct {
                     }
                 }
             },
-            .Pointer => |PointerTypeInfo| {
+            .pointer => |PointerTypeInfo| {
                 switch (PointerTypeInfo.size) {
                     .Slice => {
                         for (values, 0..) |value_to_bind, index| {
@@ -1793,7 +1793,7 @@ pub const DynamicStatement = struct {
                     else => @compileError("TODO support pointer size " ++ @tagName(PointerTypeInfo.size)),
                 }
             },
-            .Array => |ArrayTypeInfo| {
+            .array => |ArrayTypeInfo| {
                 for (values, 0..) |value_to_bind, index| {
                     try self.bindField(ArrayTypeInfo.child, options, "unknown", @intCast(index), value_to_bind);
                 }
@@ -2067,7 +2067,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
                 @compileError("options passed to Statement.bind must be a struct (DynamicStatement supports runtime slices)");
             }
 
-            const StructTypeInfo = @typeInfo(StructType).Struct;
+            const StructTypeInfo = @typeInfo(StructType).@"struct";
 
             if (comptime query.bind_markers.len != StructTypeInfo.fields.len) {
                 @compileError(std.fmt.comptimePrint("expected {d} bind parameters but got {d}", .{
@@ -2081,7 +2081,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
                 if (bind_marker.typed) |typ| {
                     const FieldTypeInfo = @typeInfo(struct_field.type);
                     switch (FieldTypeInfo) {
-                        .Struct, .Enum, .Union => comptime assertMarkerType(
+                        .@"struct", .@"enum", .@"union" => comptime assertMarkerType(
                             if (@hasDecl(struct_field.type, "BaseType")) struct_field.type.BaseType else struct_field.type,
                             typ,
                         ),
@@ -2667,10 +2667,10 @@ test "sqlite: read a single text value" {
             else => {
                 const type_info = @typeInfo(typ);
                 switch (type_info) {
-                    .Pointer => {
+                    .pointer => {
                         try testing.expectEqualStrings("Vincent", name.?);
                     },
-                    .Array => |arr| if (arr.sentinel) |sentinel_ptr| {
+                    .array => |arr| if (arr.sentinel) |sentinel_ptr| {
                         const sentinel = @as(*const arr.child, @ptrCast(sentinel_ptr)).*;
                         const res = mem.sliceTo(&name.?, sentinel);
                         try testing.expectEqualStrings("Vincent", res);

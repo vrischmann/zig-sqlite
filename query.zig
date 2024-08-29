@@ -146,7 +146,7 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
                             const typ = if (type_info_string[0] == '?') blk: {
                                 const child_type = ParseType(type_info_string[1..]);
                                 break :blk @Type(std.builtin.Type{
-                                    .Optional = .{
+                                    .optional = .{
                                         .child = child_type,
                                     },
                                 });
@@ -205,7 +205,7 @@ fn ParseType(comptime type_info: []const u8) type {
 
     if (type_info[0] == 'u' or type_info[0] == 'i') {
         return @Type(std.builtin.Type{
-            .Int = std.builtin.Type.Int{
+            .int = std.builtin.Type.Int{
                 .signedness = if (type_info[0] == 'i') .signed else .unsigned,
                 .bits = std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
                     @compileError("invalid type info " ++ type_info);
