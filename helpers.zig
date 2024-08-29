@@ -16,20 +16,20 @@ pub fn setResult(ctx: ?*c.sqlite3_context, result: anytype) void {
         Text => c.sqlite3_result_text(ctx, result.data.ptr, @intCast(result.data.len), c.sqliteTransientAsDestructor()),
         Blob => c.sqlite3_result_blob(ctx, result.data.ptr, @intCast(result.data.len), c.sqliteTransientAsDestructor()),
         else => switch (@typeInfo(ResultType)) {
-            .Int => |info| if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 32) {
+            .int => |info| if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 32) {
                 c.sqlite3_result_int(ctx, result);
             } else if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 64) {
                 c.sqlite3_result_int64(ctx, result);
             } else {
                 @compileError("integer " ++ @typeName(ResultType) ++ " is not representable in sqlite");
             },
-            .Float => c.sqlite3_result_double(ctx, result),
-            .Bool => c.sqlite3_result_int(ctx, if (result) 1 else 0),
-            .Array => |arr| switch (arr.child) {
+            .float => c.sqlite3_result_double(ctx, result),
+            .bool => c.sqlite3_result_int(ctx, if (result) 1 else 0),
+            .array => |arr| switch (arr.child) {
                 u8 => c.sqlite3_result_blob(ctx, &result, arr.len, c.sqliteTransientAsDestructor()),
                 else => @compileError("cannot use a result of type " ++ @typeName(ResultType)),
             },
-            .Pointer => |ptr| switch (ptr.size) {
+            .pointer => |ptr| switch (ptr.size) {
                 .Slice => switch (ptr.child) {
                     u8 => c.sqlite3_result_text(ctx, result.ptr, @intCast(result.len), c.sqliteTransientAsDestructor()),
                     else => @compileError("cannot use a result of type " ++ @typeName(ResultType)),
@@ -49,7 +49,7 @@ pub fn setTypeFromValue(comptime ArgType: type, arg: *ArgType, sqlite_value: *c.
         Text => arg.*.data = sliceFromValue(sqlite_value),
         Blob => arg.*.data = sliceFromValue(sqlite_value),
         else => switch (@typeInfo(ArgType)) {
-            .Int => |info| if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 32) {
+            .int => |info| if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 32) {
                 const value = c.sqlite3_value_int(sqlite_value);
                 arg.* = @intCast(value);
             } else if ((info.bits + if (info.signedness == .unsigned) 1 else 0) <= 64) {
@@ -58,15 +58,15 @@ pub fn setTypeFromValue(comptime ArgType: type, arg: *ArgType, sqlite_value: *c.
             } else {
                 @compileError("integer " ++ @typeName(ArgType) ++ " is not representable in sqlite");
             },
-            .Float => {
+            .float => {
                 const value = c.sqlite3_value_double(sqlite_value);
                 arg.* = @floatCast(value);
             },
-            .Bool => {
+            .bool => {
                 const value = c.sqlite3_value_int(sqlite_value);
                 arg.* = value > 0;
             },
-            .Pointer => |ptr| switch (ptr.size) {
+            .pointer => |ptr| switch (ptr.size) {
                 .Slice => switch (ptr.child) {
                     u8 => arg.* = sliceFromValue(sqlite_value),
                     else => @compileError("cannot use an argument of type " ++ @typeName(ArgType)),
@@ -98,7 +98,7 @@ pub fn hasFn(comptime T: type, comptime name: []const u8) bool {
     const decl_type_info = @typeInfo(decl_type);
 
     return switch (decl_type_info) {
-        .Fn => true,
+        .@"fn" => true,
         else => false,
     };
 }
