@@ -197,13 +197,17 @@ $ zig build -Dtarget=native-linux-gnu.2.28
 
 # Usage
 
+## Demo
+
+See https://github.com/vrischmann/zig-sqlite-demo for a quick demo.
+
+## Initialization
+
 Import `zig-sqlite` like this:
 
 ```zig
 const sqlite = @import("sqlite");
 ```
-
-## Initialization
 
 You must create and initialize an instance of `sqlite.Db`:
 
