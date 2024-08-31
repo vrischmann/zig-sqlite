@@ -15,8 +15,6 @@ If you use this library, expect to have to make changes when you update the code
 
 `zig-sqlite` only tracks Zig master (as can be found [here](https://ziglang.org/download/)). The plan is to support releases once Zig 1.0 is released but this can still change.
 
-Unfortunately as of zig `0.11.0-dev.3312+ab37ab33c` some things still don't compile properly, for example our tests don't compile. However [this demo program](https://github.com/vrischmann/zig-sqlite-demo) compiles fine.
-
 So your mileage may vary if you try to use `zig-sqlite`.
 
 # Table of contents
