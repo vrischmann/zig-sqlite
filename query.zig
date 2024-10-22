@@ -125,11 +125,11 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
                             if (!isNamedIdentifierChar(c)) {
                                 // This marks the end of the named bind marker.
                                 state = .start;
-                                const name = buf[hold_pos .. pos - 1];
+                                const name = buf[hold_pos - 1 .. pos];
                                 // TODO(vincent): name retains a pointer to a comptime var, FIX !
                                 if (bindMarkerForName(tmp_bind_markers[0..nb_tmp_bind_markers], name) == null) {
                                     const new_buf = buf;
-                                    tmp_bind_markers[nb_tmp_bind_markers].name = new_buf[hold_pos .. pos - 1];
+                                    tmp_bind_markers[nb_tmp_bind_markers].name = new_buf[hold_pos - 1 .. pos];
                                     nb_tmp_bind_markers += 1;
                                 }
                             }
@@ -175,6 +175,8 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
                     nb_tmp_bind_markers += 1;
                 },
                 .bind_marker_identifier => {
+                    const new_buf = buf;
+                    tmp_bind_markers[nb_tmp_bind_markers].name = @as([]const u8, new_buf[hold_pos - 1 .. pos]);
                     nb_tmp_bind_markers += 1;
                 },
                 .start => {},
@@ -339,15 +341,15 @@ test "parsed query: bind markers identifier" {
         },
         .{
             .query = "foobar ?123",
-            .expected_marker = .{},
+            .expected_marker = .{ .typed = null, .name = "123" },
         },
         .{
             .query = "foobar :hola",
-            .expected_marker = .{},
+            .expected_marker = .{ .typed = null, .name = "hola" },
         },
         .{
             .query = "foobar @foo",
-            .expected_marker = .{},
+            .expected_marker = .{ .typed = null, .name = "foo" },
         },
     };
 
@@ -357,7 +359,10 @@ test "parsed query: bind markers identifier" {
         try testing.expectEqual(@as(usize, 1), parsed_query.bind_markers.len);
 
         const bind_marker = parsed_query.bind_markers[0];
-        try testing.expectEqual(tc.expected_marker, bind_marker);
+        if (bind_marker.name) |name| {
+            try testing.expectEqualStrings(tc.expected_marker.name.?, name);
+        }
+        try testing.expectEqual(tc.expected_marker.typed, bind_marker.typed);
     }
 }
 
