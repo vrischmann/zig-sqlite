@@ -2069,11 +2069,26 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
 
             const StructTypeInfo = @typeInfo(StructType).@"struct";
 
-            if (comptime query.bind_markers.len != StructTypeInfo.fields.len) {
-                @compileError(std.fmt.comptimePrint("expected {d} bind parameters but got {d}", .{
-                    query.bind_markers.len,
-                    StructTypeInfo.fields.len,
-                }));
+            comptime marker_len_check: {
+                if (query.bind_markers.len != StructTypeInfo.fields.len) {
+                    if (query.bind_markers.len > StructTypeInfo.fields.len) {
+                        var found_markers = 0;
+                        for (query.bind_markers) |bind_marker| {
+                            if (bind_marker.name) |name| {
+                                if (@hasField(StructType, name)) {
+                                    found_markers += 1;
+                                }
+                            }
+                        }
+                        if (found_markers == query.bind_markers.len) {
+                            break :marker_len_check;
+                        }
+                    }
+                    @compileError(std.fmt.comptimePrint("expected {d} bind parameters but got {d}", .{
+                        query.bind_markers.len,
+                        StructTypeInfo.fields.len,
+                    }));
+                }
             }
 
             inline for (StructTypeInfo.fields, 0..) |struct_field, _i| {
@@ -4020,4 +4035,27 @@ test "tagged union" {
         try testing.expectEqualStrings("age", result.?.key);
         try testing.expectEqual(foobar.age, result.?.value);
     }
+}
+
+test "reuse same field twice in query string" {
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    const update_name = "NewUpdatedName";
+
+    const update_name_query = "UPDATE user SET id = $id, name = $name WHERE id = $id";
+    try db.exec(update_name_query, .{}, .{ .id = 20, .name = update_name });
+
+    const fetch_name_query = "SELECT name FROM user WHERE id = $id";
+    const name = try db.oneAlloc(
+        []const u8,
+        testing.allocator,
+        fetch_name_query,
+        .{},
+        .{ .id = 20 },
+    );
+    try testing.expect(name != null);
+    defer testing.allocator.free(name.?);
+    try testing.expectEqualStrings(name.?, update_name);
 }
