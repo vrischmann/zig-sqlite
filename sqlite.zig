@@ -1490,8 +1490,12 @@ pub fn Iterator(comptime Type: type) type {
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
-                    .@"struct" => |TI| {
-                        if (TI.layout == .@"packed") return @bitCast(try self.readInt(TI.backing_integer.?, i));
+                    inline .@"struct", .@"union" => |TI| {
+                        if (TI.layout == .@"packed" and !@hasField(FieldType, "readField")) {
+                            const Backing = @Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
+                            return @bitCast(try self.readInt(Backing, i));
+                        }
+
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
                         return try FieldType.readField(options.allocator, inner_value);
                     },
@@ -1714,6 +1718,11 @@ pub const DynamicStatement = struct {
                     try self.bindField(FieldType.BaseType, options, field_name, i, field_value);
                 },
                 .@"union" => |info| {
+                    if (info.layout == .@"packed") {
+                        const Backing = @Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
+                        try self.bindField(Backing, options, field_name, i, @as(Backing, @bitCast(field)));
+                        return;
+                    }
                     if (info.tag_type) |UnionTagType| {
                         inline for (info.fields) |u_field| {
                             // This wasn't entirely obvious when I saw code like this elsewhere, it works because of type coercion.
