@@ -4,26 +4,22 @@ const Step = std.Build.Step;
 const ResolvedTarget = std.Build.ResolvedTarget;
 const Query = std.Target.Query;
 
-fn getTarget(original_target: ResolvedTarget, bundled: bool) ResolvedTarget {
-    if (bundled) {
-        var tmp = original_target;
+fn getTarget(original_target: ResolvedTarget) ResolvedTarget {
+    var tmp = original_target;
 
-        if (tmp.result.isGnuLibC()) {
-            const min_glibc_version = std.SemanticVersion{
-                .major = 2,
-                .minor = 28,
-                .patch = 0,
-            };
-            const ver = tmp.result.os.version_range.linux.glibc;
-            if (ver.order(min_glibc_version) == .lt) {
-                std.debug.panic("sqlite requires glibc version >= 2.28", .{});
-            }
+    if (tmp.result.isGnuLibC()) {
+        const min_glibc_version = std.SemanticVersion{
+            .major = 2,
+            .minor = 28,
+            .patch = 0,
+        };
+        const ver = tmp.result.os.version_range.linux.glibc;
+        if (ver.order(min_glibc_version) == .lt) {
+            std.debug.panic("sqlite requires glibc version >= 2.28", .{});
         }
-
-        return tmp;
     }
 
-    return original_target;
+    return tmp;
 }
 
 const TestTarget = struct {
@@ -111,7 +107,6 @@ fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
 pub fn build(b: *std.Build) !void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
-    const use_bundled = b.option(bool, "use_bundled", "Use the bundled sqlite3 source instead of linking the system library (default false)");
     const ci = b.option(bool, "ci", "Build and test in the CI on GitHub");
 
     const query = b.standardTargetOptionsQueryOnly(.{});
@@ -171,7 +166,7 @@ pub fn build(b: *std.Build) !void {
     const preprocess_files_tool = b.addExecutable(.{
         .name = "preprocess-files",
         .root_source_file = b.path("tools/preprocess_files.zig"),
-        .target = getTarget(target, true),
+        .target = getTarget(target),
         .optimize = optimize,
     });
 
@@ -183,7 +178,7 @@ pub fn build(b: *std.Build) !void {
 
     const test_targets = computeTestTargets(query.isNative(), ci) orelse &[_]TestTarget{.{
         .query = query,
-        .bundled = use_bundled orelse false,
+        .bundled = true,
     }};
     const test_step = b.step("test", "Run library tests");
 
@@ -193,8 +188,7 @@ pub fn build(b: *std.Build) !void {
     // If you want to execute tests for other targets you can pass -fqemu, -fdarling, -fwine, -frosetta.
 
     for (test_targets) |test_target| {
-        const bundled = use_bundled orelse test_target.bundled;
-        const cross_target = getTarget(b.resolveTargetQuery(test_target.query), bundled);
+        const cross_target = getTarget(b.resolveTargetQuery(test_target.query));
         const single_threaded_txt = if (test_target.single_threaded) "single" else "multi";
         const test_name = b.fmt("{s}-{s}-{s}", .{
             try cross_target.result.zigTriple(b.allocator),
@@ -224,13 +218,7 @@ pub fn build(b: *std.Build) !void {
             .single_threaded = test_target.single_threaded,
         });
         tests.addIncludePath(b.path("c"));
-        if (bundled) {
-            tests.linkLibrary(test_sqlite_lib);
-        } else {
-            tests.linkLibC();
-            tests.addCSourceFile(.{ .file = b.path("c/workaround.c"), .flags = c_flags });
-            tests.linkSystemLibrary("sqlite3");
-        }
+        tests.linkLibrary(test_sqlite_lib);
 
         const tests_options = b.addOptions();
         tests.root_module.addImport("build_options", tests_options.createModule());
@@ -244,7 +232,7 @@ pub fn build(b: *std.Build) !void {
 
     const lib = b.addStaticLibrary(.{
         .name = "sqlite",
-        .target = getTarget(target, true),
+        .target = getTarget(target),
         .optimize = optimize,
     });
     lib.addCSourceFile(.{ .file = b.path("c/sqlite3.c"), .flags = c_flags });
@@ -263,7 +251,7 @@ pub fn build(b: *std.Build) !void {
         .name = "zigcrypto",
         .root_source_file = b.path("examples/zigcrypto.zig"),
         .version = null,
-        .target = getTarget(target, true),
+        .target = getTarget(target),
         .optimize = optimize,
     });
     zigcrypto_loadable_ext.addIncludePath(b.path("c"));
@@ -275,7 +263,7 @@ pub fn build(b: *std.Build) !void {
     const zigcrypto_test = b.addExecutable(.{
         .name = "zigcrypto-test",
         .root_source_file = b.path("examples/zigcrypto_test.zig"),
-        .target = getTarget(target, true),
+        .target = getTarget(target),
         .optimize = optimize,
     });
     zigcrypto_test.addIncludePath(b.path("c"));
