@@ -242,8 +242,6 @@ pub fn build(b: *std.Build) !void {
         test_step.dependOn(&run_tests.step);
     }
 
-    // Fuzzing
-
     const lib = b.addStaticLibrary(.{
         .name = "sqlite",
         .target = getTarget(target, true),
@@ -252,52 +250,6 @@ pub fn build(b: *std.Build) !void {
     lib.addCSourceFile(.{ .file = b.path("c/sqlite3.c"), .flags = c_flags });
     lib.addIncludePath(b.path("c"));
     lib.linkLibC();
-
-    // The library
-    const fuzz_lib = b.addStaticLibrary(.{
-        .name = "fuzz-lib",
-        .root_source_file = b.path("fuzz/main.zig"),
-        .target = getTarget(target, true),
-        .optimize = optimize,
-    });
-    fuzz_lib.addIncludePath(b.path("c"));
-    fuzz_lib.linkLibrary(lib);
-    fuzz_lib.want_lto = true;
-    fuzz_lib.bundle_compiler_rt = true;
-    fuzz_lib.root_module.addImport("sqlite", sqlite_mod);
-
-    // Setup the output name
-    const fuzz_executable_name = "fuzz";
-    const fuzz_exe_path = try b.cache_root.join(b.allocator, &.{fuzz_executable_name});
-
-    // We want `afl-clang-lto -o path/to/output path/to/library`
-    const fuzz_compile = b.addSystemCommand(&.{ "afl-clang-lto", "-o", fuzz_exe_path });
-    fuzz_compile.addArtifactArg(lib);
-    fuzz_compile.addArtifactArg(fuzz_lib);
-
-    // Install the cached output to the install 'bin' path
-    const fuzz_install = b.addInstallBinFile(.{ .cwd_relative = fuzz_exe_path }, fuzz_executable_name);
-
-    // Add a top-level step that compiles and installs the fuzz executable
-    const fuzz_compile_run = b.step("fuzz", "Build executable for fuzz testing using afl-clang-lto");
-    // fuzz_compile_run.dependOn(&fuzz_lib.step);
-    fuzz_compile_run.dependOn(&fuzz_compile.step);
-    fuzz_compile_run.dependOn(&fuzz_install.step);
-
-    // Compile a companion exe for debugging crashes
-    const fuzz_debug_exe = b.addExecutable(.{
-        .name = "fuzz-debug",
-        .root_source_file = b.path("fuzz/main.zig"),
-        .target = getTarget(target, true),
-        .optimize = optimize,
-    });
-    fuzz_debug_exe.addIncludePath(b.path("c"));
-    fuzz_debug_exe.linkLibrary(lib);
-    fuzz_debug_exe.root_module.addImport("sqlite", sqlite_mod);
-
-    // Only install fuzz-debug when the fuzz step is run
-    const install_fuzz_debug_exe = b.addInstallArtifact(fuzz_debug_exe, .{});
-    fuzz_compile_run.dependOn(&install_fuzz_debug_exe.step);
 
     //
     // Examples
