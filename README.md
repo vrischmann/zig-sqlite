@@ -79,7 +79,6 @@ For sqlite, you have options depending on your target:
 There are three main ways to include `zig-sqlite` in your project:
 * using zig's official package manager
 * using the [zigmod](https://github.com/nektro/zigmod) package manager
-* using a git submodule
 
 ## Official package manager
 
