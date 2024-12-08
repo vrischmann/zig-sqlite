@@ -19,38 +19,44 @@ So your mileage may vary if you try to use `zig-sqlite`.
 
 # Table of contents
 
-* [Status](#status)
-* [Requirements](#requirements)
-* [Features](#features)
-* [Installation](#installation)
-   * [Official package manager](#official-package-manager)
-   * [zigmod](#zigmod)
-   * [Git submodule](#git-submodule)
-   * [Using the system sqlite library](#using-the-system-sqlite-library)
-   * [Using the bundled sqlite source code file](#using-the-bundled-sqlite-source-code-file)
-* [Usage](#usage)
-   * [Initialization](#initialization)
-   * [Preparing a statement](#preparing-a-statement)
-      * [Common use](#common-use)
-      * [Diagnostics](#diagnostics)
-   * [Executing a statement](#executing-a-statement)
-   * [Reuse a statement](#reuse-a-statement)
-   * [Reading data](#reading-data)
-      * [Type parameter](#type-parameter)
-      * [Non allocating](#non-allocating)
-      * [Allocating](#allocating)
-   * [Iterating](#iterating)
-      * [Non allocating](#non-allocating-1)
-      * [Allocating](#allocating-1)
-   * [Bind parameters and resultset rows](#bind-parameters-and-resultset-rows)
-   * [Custom type binding and reading](#custom-type-binding-and-reading)
-   * [Note about complex allocations](#note-about-complex-allocations)
-* [Comptime checks](#comptime-checks)
-   * [Check the number of bind parameters.](#check-the-number-of-bind-parameters)
-   * [Assign types to bind markers and check them.](#assign-types-to-bind-markers-and-check-them)
-* [User defined SQL functions](#user-defined-sql-functions)
-   * [Scalar functions](#scalar-functions)
-   * [Aggregate functions](#aggregate-functions)
+<!--toc:start-->
+- [zig-sqlite](#zig-sqlite)
+- [Status](#status)
+- [Zig release support](#zig-release-support)
+- [Table of contents](#table-of-contents)
+- [Requirements](#requirements)
+- [Features](#features)
+- [Installation](#installation)
+  - [Official package manager](#official-package-manager)
+  - [zigmod](#zigmod)
+  - [Git submodule](#git-submodule)
+  - [Using the system sqlite library](#using-the-system-sqlite-library)
+  - [Using the bundled sqlite source code file](#using-the-bundled-sqlite-source-code-file)
+- [Usage](#usage)
+  - [Demo](#demo)
+  - [Initialization](#initialization)
+  - [Preparing a statement](#preparing-a-statement)
+    - [Common use](#common-use)
+    - [Diagnostics](#diagnostics)
+  - [Executing a statement](#executing-a-statement)
+  - [Reuse a statement](#reuse-a-statement)
+  - [Reading data in one go](#reading-data-in-one-go)
+    - [Type parameter](#type-parameter)
+    - [`Statement.one`](#statementone)
+    - [`Statement.all` and `Statement.oneAlloc`](#statementall-and-statementonealloc)
+  - [Iterating](#iterating)
+    - [`Iterator.next`](#iteratornext)
+    - [`Iterator.nextAlloc`](#iteratornextalloc)
+  - [Bind parameters and resultset rows](#bind-parameters-and-resultset-rows)
+  - [Custom type binding and reading](#custom-type-binding-and-reading)
+  - [Note about complex allocations](#note-about-complex-allocations)
+- [Comptime checks](#comptime-checks)
+  - [Check the number of bind parameters.](#check-the-number-of-bind-parameters)
+  - [Assign types to bind markers and check them.](#assign-types-to-bind-markers-and-check-them)
+- [User defined SQL functions](#user-defined-sql-functions)
+  - [Scalar functions](#scalar-functions)
+  - [Aggregate functions](#aggregate-functions)
+<!--toc:end-->
 
 # Requirements
 
@@ -297,7 +303,7 @@ while (id < 20) : (id += 1) {
 }
 ```
 
-## Reading data
+## Reading data in one go
 
 For queries which return data you have multiple options:
 * `Statement.all` which takes an allocator and can allocate memory.
@@ -316,7 +322,7 @@ The type can be a pointer but only when using the methods taking an allocator.
 
 Not all types are allowed, see the section "Bind parameters and resultset rows" for more information on the types mapping rules.
 
-### Non allocating
+### `Statement.one`
 
 Using `one`:
 
@@ -379,7 +385,7 @@ if (row) |age| {
 }
 ```
 
-### Allocating
+### `Statement.all` and `Statement.oneAlloc`
 
 Using `all`:
 
@@ -430,7 +436,7 @@ Iterating is done by calling the `next` or `nextAlloc` method on an iterator. Ju
 
 `next` or `nextAlloc` will either return an optional value or an error; you should keep iterating until `null` is returned.
 
-### Non allocating
+### `Iterator.next`
 
 ```zig
 var stmt = try db.prepare("SELECT age FROM user WHERE age < ?");
@@ -445,7 +451,7 @@ while (try iter.next(.{})) |age| {
 }
 ```
 
-### Allocating
+### `Iterator.nextAlloc`
 
 ```zig
 var stmt = try db.prepare("SELECT name FROM user WHERE age < ?");
