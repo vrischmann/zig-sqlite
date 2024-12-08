@@ -4068,3 +4068,70 @@ test "reuse same field twice in query string" {
     defer testing.allocator.free(name.?);
     try testing.expectEqualStrings(name.?, update_name);
 }
+
+test "fuzzing" {
+    const global = struct {
+        fn testOne(input: []const u8) anyerror!void {
+            var db = try Db.init(.{
+                .mode = .Memory,
+                .open_flags = .{
+                    .write = true,
+                    .create = true,
+                },
+            });
+            defer db.deinit();
+
+            try db.exec("CREATE TABLE test(id integer primary key, name text, data blob)", .{}, .{});
+
+            db.execDynamic(input, .{}, .{}) catch |err| switch (err) {
+                error.SQLiteError => return,
+                error.ExecReturnedData => return,
+                error.EmptyQuery => return,
+                else => return err,
+            };
+
+            db.execDynamic(
+                "INSERT INTO test(name, data) VALUES($name, $data)",
+                .{},
+                .{
+                    .name = "foo",
+                    .data = input,
+                },
+            ) catch |err| switch (err) {
+                error.SQLiteError => return,
+                else => return err,
+            };
+
+            var stmt = db.prepareDynamic("SELECT name, data FROM test") catch |err| switch (err) {
+                error.SQLiteError => return,
+                else => return err,
+            };
+            defer stmt.deinit();
+
+            var rows_memory: [4096]u8 = undefined;
+            var rows_fba = std.heap.FixedBufferAllocator.init(&rows_memory);
+
+            const row_opt = stmt.oneAlloc(
+                struct {
+                    name: Text,
+                    data: Blob,
+                },
+                rows_fba.allocator(),
+                .{},
+                .{},
+            ) catch |err| switch (err) {
+                error.SQLiteError => return,
+                else => return err,
+            };
+
+            if (row_opt) |row| {
+                if (!std.mem.eql(u8, row.name.data, "foo")) return error.InvalidNameField;
+                if (!std.mem.eql(u8, row.data.data, input)) return error.InvalidDataField;
+            } else {
+                return error.NoRowsFound;
+            }
+        }
+    };
+
+    try testing.fuzz(global.testOne, .{});
+}
