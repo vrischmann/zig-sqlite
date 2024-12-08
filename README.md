@@ -76,12 +76,6 @@ For sqlite, you have options depending on your target:
 
 # Installation
 
-There are three main ways to include `zig-sqlite` in your project:
-* using zig's official package manager
-* using the [zigmod](https://github.com/nektro/zigmod) package manager
-
-## Official package manager
-
 Use the following `zig fetch` command:
 
 ```
@@ -96,27 +90,6 @@ const sqlite = b.dependency("sqlite", .{
 });
 exe.root_module.addImport("sqlite", sqlite.module("sqlite"));
 ```
-
-## zigmod
-
-Add this to your `zig.mod` file:
-```
-dependencies:
-  - src: git https://github.com/vrischmann/zig-sqlite branch-master
-```
-
-Note that if you're building an executable and not a library you should use `dev_dependencies` instead.
-
-Next run `zigmod fetch`; it should create a `deps.zig` file.
-
-Now in your `build.zig` you can access the package like this:
-```zig
-const deps = @import("deps.zig");
-...
-deps.addAllTo(exe);
-```
-
-This is the easiest way to add `zig-sqlite` because it uses the bundled source code, avoiding all sorts of linking problems.
 
 # Usage
 
