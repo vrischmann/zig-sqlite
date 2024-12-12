@@ -227,8 +227,8 @@ const row = try stmt.one(
     .{},
     .{ .id = 20 },
 );
-if (row) |row| {
-    std.log.debug("name: {}, age: {}", .{std.mem.spanZ(&row.name), row.age});
+if (row) |r| {
+    std.log.debug("name: {}, age: {}", .{std.mem.span((&row.name).ptr), row.age});
 }
 ```
 Notice that to read text we need to use a 0-terminated array; if the `name` column is bigger than 127 bytes the call to `one` will fail.
