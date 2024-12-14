@@ -614,7 +614,7 @@ Each input arguments in the function call in the statement is passed on to the r
 
 ## Aggregate functions
 
-You can define a scalar function using `db.createAggregateFunction`:
+You can define a aggregate function using `db.createAggregateFunction`:
 ```zig
 const MyContext = struct {
     sum: u32,
