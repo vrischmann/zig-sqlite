@@ -625,12 +625,14 @@ try db.createAggregateFunction(
     "mySum",
     &my_ctx,
     struct {
-        fn step(ctx: *MyContext, input: u32) void {
+        fn step(fctx: sqlite.FunctionContext, input: u32) void {
+            var ctx = fctx.userContext(*MyContext) orelse return;
             ctx.sum += input;
         }
     }.step,
     struct {
-        fn finalize(ctx: *MyContext) u32 {
+        fn finalize(fctx: sqlite.FunctionContext) u32 {
+            const ctx = fctx.userContext(*MyContext) orelse return 0;
             return ctx.sum;
         }
     }.finalize,
