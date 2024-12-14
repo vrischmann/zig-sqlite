@@ -331,7 +331,7 @@ Iterating is done by calling the `next` or `nextAlloc` method on an iterator. Ju
 ### `Iterator.next`
 
 ```zig
-var stmt = try db.prepare("SELECT age FROM user WHERE age < ?");
+var stmt = try db.prepare("SELECT age FROM employees WHERE age < ?");
 defer stmt.deinit();
 
 var iter = try stmt.iterator(usize, .{
@@ -346,7 +346,7 @@ while (try iter.next(.{})) |age| {
 ### `Iterator.nextAlloc`
 
 ```zig
-var stmt = try db.prepare("SELECT name FROM user WHERE age < ?");
+var stmt = try db.prepare("SELECT name FROM employees WHERE age < ?");
 defer stmt.deinit();
 
 var iter = try stmt.iterator([]const u8, .{
