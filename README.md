@@ -445,6 +445,8 @@ This will do multiple allocations:
 
 To facilitate memory handling, consider using an arena allocator like this:
 ```zig
+const allocator = std.heap.page_allocator; // Use a suitable allocator
+
 var arena = std.heap.ArenaAllocator.init(allocator);
 defer arena.deinit();
 
