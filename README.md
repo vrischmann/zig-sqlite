@@ -124,6 +124,8 @@ Only the `mode` field is mandatory, the other fields have sane default values.
 sqlite works exclusively by using prepared statements. The wrapper type is `sqlite.Statement`. Here is how you get one:
 
 ```zig
+try db.exec("CREATE TABLE IF NOT EXISTS employees(id integer primary key, name text, age integer, salary integer)", .{}, .{});
+
 const query =
     \\SELECT id, name, age, salary FROM employees WHERE age > ? AND age < ?
 ;
