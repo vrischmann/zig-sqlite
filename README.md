@@ -523,6 +523,8 @@ We can make sure the bind parameters have the right type if we rewrite the query
 var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?{usize}");
 defer stmt.deinit();
 
+const allocator = std.heap.page_allocator; // Use a suitable allocator
+
 const rows = try stmt.all(usize, allocator, .{}, .{
     .age_1 = 10,
     .age_2 = 20,
@@ -567,7 +569,9 @@ To finish our example, passing the proper type allows it compile:
 var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?{usize}");
 defer stmt.deinit();
 
-const rows = try stmt.all(usize, .{}, .{
+const allocator = std.heap.page_allocator; // Use a suitable allocator
+
+const rows = try stmt.all(usize, allocator, .{}, .{
     .age_1 = 10,
     .age_2 = 20,
     .weight = @as(usize, 200),
