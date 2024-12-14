@@ -360,7 +360,7 @@ while (true) {
     defer arena.deinit();
 
     const name = (try iter.nextAlloc(arena.allocator(), .{})) orelse break;
-    std.debug.print("name: {}\n", .{name});
+    std.debug.print("name: {s}\n", .{name});
 }
 ```
 
