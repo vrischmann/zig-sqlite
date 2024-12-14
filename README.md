@@ -155,15 +155,16 @@ For queries which do not return data (`INSERT`, `UPDATE`) you can use the `exec`
 
 ```zig
 const query =
-    \\UPDATE foo SET salary = ? WHERE id = ?
+    \\INSERT INTO employees(name, age, salary) VALUES(?, ?, ?)
 ;
 
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
 try stmt.exec(.{}, .{
+    .name = "José",
+    .age = 40,
     .salary = 20000,
-    .id = 40,
 });
 ```
 
