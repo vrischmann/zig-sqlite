@@ -353,6 +353,8 @@ var iter = try stmt.iterator([]const u8, .{
     .age = 20,
 });
 
+const allocator = std.heap.page_allocator; // Use a proper allocator
+
 while (true) {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
