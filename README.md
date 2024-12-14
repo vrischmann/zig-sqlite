@@ -285,7 +285,7 @@ const query =
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-const allocator = std.heap.page_allocator; // Use a proper allocator
+const allocator = std.heap.page_allocator; // Use a suitable allocator
 
 const names = try stmt.all([]const u8, allocator, .{}, .{
     .age1 = 20,
@@ -306,7 +306,7 @@ const query =
 var stmt = try db.prepare(query);
 defer stmt.deinit();
 
-const allocator = std.heap.page_allocator; // Use a proper allocator
+const allocator = std.heap.page_allocator; // Use a suitable allocator
 
 const row = try stmt.oneAlloc([]const u8, allocator, .{}, .{
     .id = 200,
@@ -353,7 +353,7 @@ var iter = try stmt.iterator([]const u8, .{
     .age = 20,
 });
 
-const allocator = std.heap.page_allocator; // Use a proper allocator
+const allocator = std.heap.page_allocator; // Use a suitable allocator
 
 while (true) {
     var arena = std.heap.ArenaAllocator.init(allocator);
