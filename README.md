@@ -312,7 +312,7 @@ const row = try stmt.oneAlloc([]const u8, allocator, .{}, .{
     .id = 200,
 });
 if (row) |name| {
-    std.log.debug("name: {}", .{name});
+    std.log.debug("name: {s}", .{name});
 }
 ```
 
