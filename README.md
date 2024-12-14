@@ -175,7 +175,7 @@ See the section "Bind parameters and resultset rows" for more information on the
 You can reuse a statement by resetting it like this:
 ```zig
 const query =
-    \\UPDATE foo SET salary = ? WHERE id = ?
+    \\UPDATE employees SET salary = ? WHERE id = ?
 ;
 
 var stmt = try db.prepare(query);
