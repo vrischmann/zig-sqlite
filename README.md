@@ -469,7 +469,9 @@ Take the following code:
 var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?");
 defer stmt.deinit();
 
-const rows = try stmt.all(usize, .{}, .{
+const allocator = std.heap.page_allocator; // Use a suitable allocator
+
+const rows = try stmt.all(usize, allocator, .{}, .{
     .age_1 = 10,
     .age_2 = 20,
 });
@@ -504,7 +506,9 @@ For example, take the same code as above but now we also bind the last parameter
 var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?");
 defer stmt.deinit();
 
-const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+const allocator = std.heap.page_allocator; // Use a suitable allocator
+
+const rows = try stmt.all(usize, allocator, .{}, .{
     .age_1 = 10,
     .age_2 = 20,
     .weight = false,
@@ -519,7 +523,7 @@ We can make sure the bind parameters have the right type if we rewrite the query
 var stmt = try db.prepare("SELECT id FROM user WHERE age > ? AND age < ? AND weight > ?{usize}");
 defer stmt.deinit();
 
-const rows = try stmt.all(usize, .{ .allocator = allocator }, .{
+const rows = try stmt.all(usize, allocator, .{}, .{
     .age_1 = 10,
     .age_2 = 20,
     .weight = false,
