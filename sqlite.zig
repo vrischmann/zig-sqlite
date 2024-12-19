@@ -810,30 +810,16 @@ pub const Db = struct {
     ///
     /// Exmaple: 'create table a(); create table b();'
     pub fn execMulti(self: *Self, query: []const u8, options: QueryOptions) !void {
-        var new_options = options;
-        var sql_tail_ptr: ?[*:0]const u8 = null;
-        new_options.sql_tail_ptr = &sql_tail_ptr;
+        var sql_tail: [*c]const u8 = query.ptr;
 
         while (true) {
-            // continuously prepare and execute (dynamically as there's no
-            // values to bind in this case)
-            var stmt: DynamicStatement = undefined;
-            if (sql_tail_ptr != null) {
-                const new_query = std.mem.span(sql_tail_ptr.?);
-                if (new_query.len == 0) break;
-                stmt = self.prepareDynamicWithDiags(new_query, new_options) catch |err| switch (err) {
-                    error.EmptyQuery => break,
-                    else => return err,
-                };
-            } else {
-                stmt = self.prepareDynamicWithDiags(query, new_options) catch |err| switch (err) {
-                    error.EmptyQuery => break,
-                    else => return err,
-                };
-            }
+            const new_query = std.mem.span(sql_tail);
+            if (new_query.len == 0) return;
 
+            var stmt = try DynamicStatement.prepareWithTail(self, new_query, options, 0, &sql_tail);
             defer stmt.deinit();
-            try stmt.exec(new_options, .{});
+
+            try stmt.exec(options, .{});
         }
     }
 
@@ -1030,11 +1016,6 @@ pub const Savepoint = struct {
 pub const QueryOptions = struct {
     /// if provided, diags will be populated in case of failures.
     diags: ?*Diagnostics = null,
-
-    /// if provided, sql_tail_ptr will point to the last uncompiled statement
-    /// in the prepare() call. this is useful for multiple-statements being
-    /// processed.
-    sql_tail_ptr: ?*?[*:0]const u8 = null,
 };
 
 /// Iterator allows iterating over a result set.
