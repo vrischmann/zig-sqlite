@@ -32,7 +32,7 @@ pub const ModuleContext = struct {
     allocator: mem.Allocator,
 };
 
-fn dupeToSQLiteString(s: []const u8) [*c]const u8 {
+fn dupeToSQLiteString(s: []const u8) [*c]u8 {
     var buffer: [*c]u8 = @ptrCast(c.sqlite3_malloc(@intCast(s.len + 1)));
 
     mem.copyForwards(u8, buffer[0..s.len], s);
@@ -730,7 +730,7 @@ pub fn VirtualTable(
             return c.SQLITE_ERROR;
         }
 
-        fn xConnect(db: ?*c.sqlite3, module_context_ptr: ?*anyopaque, argc: c_int, argv: [*c]const [*c]const u8, vtab: [*c][*c]c.sqlite3_vtab, err_str: [*c][*c]const u8) callconv(.C) c_int {
+        fn xConnect(db: ?*c.sqlite3, module_context_ptr: ?*anyopaque, argc: c_int, argv: [*c]const [*c]const u8, vtab: [*c][*c]c.sqlite3_vtab, err_str: [*c][*c]u8) callconv(.C) c_int {
             const module_context = getModuleContext(module_context_ptr);
 
             var arena = heap.ArenaAllocator.init(module_context.allocator);
