@@ -1568,6 +1568,10 @@ pub const DynamicStatement = struct {
     pub const PrepareError = error{EmptyQuery} || Error;
 
     fn prepare(db: *Db, query: []const u8, options: QueryOptions, flags: c_uint) PrepareError!Self {
+        return prepareWithTail(db, query, options, flags, null);
+    }
+
+    fn prepareWithTail(db: *Db, query: []const u8, options: QueryOptions, flags: c_uint, tail: ?*[*c]const u8) PrepareError!Self {
         var dummy_diags = Diagnostics{};
         var diags = options.diags orelse &dummy_diags;
         const stmt = blk: {
@@ -1578,7 +1582,7 @@ pub const DynamicStatement = struct {
                 @intCast(query.len),
                 flags,
                 &tmp,
-                options.sql_tail_ptr,
+                tail,
             );
             if (result != c.SQLITE_OK) {
                 diags.err = getLastDetailedErrorFromDb(db.db);
