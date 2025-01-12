@@ -1,4 +1,4 @@
-/*
+/* sqlite3ext.h edited by the zig-sqlite build script *//*
 ** 2006 June 7
 **
 ** The author disclaims copyright to this source code.  In place of
