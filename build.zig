@@ -117,7 +117,7 @@ pub fn build(b: *std.Build) !void {
     try flags.append("-std=c99");
 
     inline for (std.meta.fields(EnableOptions)) |field| {
-        const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse @as(*const bool, @ptrCast(field.default_value.?)).*;
+        const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse field.defaultValue().?;
 
         if (opt) {
             var buf: [field.name.len]u8 = undefined;
