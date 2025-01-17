@@ -50,12 +50,12 @@ fn isZigString(comptime T: type) bool {
         if (ptr.is_volatile or ptr.is_allowzero) break :blk false;
 
         // If it's already a slice, simple check.
-        if (ptr.size == .Slice) {
+        if (ptr.size == .slice) {
             break :blk ptr.child == u8;
         }
 
         // Otherwise check if it's an array type that coerces to slice.
-        if (ptr.size == .One) {
+        if (ptr.size == .one) {
             const child = @typeInfo(ptr.child);
             if (child == .array) {
                 const arr = &child.array;
@@ -880,7 +880,7 @@ pub const FunctionContext = struct {
     fn splitPtrTypes(comptime Type: type) SplitPtrTypes {
         switch (@typeInfo(Type)) {
             .pointer => |ptr_info| switch (ptr_info.size) {
-                .One => return SplitPtrTypes{
+                .one => return SplitPtrTypes{
                     .ValueType = ptr_info.child,
                     .PointerType = Type,
                 },
@@ -1211,14 +1211,13 @@ pub fn Iterator(comptime Type: type) type {
                         u8 => {
                             const size: usize = @intCast(c.sqlite3_column_bytes(self.stmt, i));
 
-                            if (arr.sentinel) |sentinel_ptr| {
+                            if (arr.sentinel()) |sentinel| {
                                 // An array with a sentinel need to be as big as the data, + 1 byte for the sentinel.
                                 if (size >= @as(usize, arr.len)) {
                                     return error.ArrayTooSmall;
                                 }
 
                                 // Set the sentinel in the result at the correct position.
-                                const sentinel = @as(*const arr.child, @ptrCast(sentinel_ptr)).*;
                                 ret[size] = sentinel;
                             } else if (size != arr.len) {
                                 // An array without a sentinel must have the exact same size as the data because we can't
@@ -1268,9 +1267,7 @@ pub fn Iterator(comptime Type: type) type {
         fn dupeWithSentinel(comptime SliceType: type, allocator: mem.Allocator, data: []const u8) !SliceType {
             switch (@typeInfo(SliceType)) {
                 .pointer => |ptr_info| {
-                    if (ptr_info.sentinel) |sentinel_ptr| {
-                        const sentinel = @as(*const ptr_info.child, @ptrCast(sentinel_ptr)).*;
-
+                    if (ptr_info.sentinel()) |sentinel| {
                         const slice = try allocator.alloc(u8, data.len + 1);
                         mem.copyForwards(u8, slice, data);
                         slice[data.len] = sentinel;
@@ -1347,13 +1344,13 @@ pub fn Iterator(comptime Type: type) type {
             switch (@typeInfo(PointerType)) {
                 .pointer => |ptr| {
                     switch (ptr.size) {
-                        .One => {
+                        .one => {
                             ret = try options.allocator.create(ptr.child);
                             errdefer options.allocator.destroy(ret);
 
                             ret.* = try self.readField(ptr.child, options, i);
                         },
-                        .Slice => switch (ptr.child) {
+                        .slice => switch (ptr.child) {
                             u8 => ret = try self.readBytes(PointerType, options.allocator, i, .Text),
                             else => @compileError("cannot read pointer of type " ++ @typeName(PointerType)),
                         },
@@ -1647,10 +1644,10 @@ pub const DynamicStatement = struct {
                     return convertResultToError(result);
                 },
                 .pointer => |ptr| switch (ptr.size) {
-                    .One => {
+                    .one => {
                         try self.bindField(ptr.child, options, field_name, i, field.*);
                     },
-                    .Slice => switch (ptr.child) {
+                    .slice => switch (ptr.child) {
                         u8 => {
                             // NOTE(vincent): The slice must live until after the prepared statement is finaliuzed, therefore we use SQLITE_STATIC to avoid a copy
                             const result = c.sqlite3_bind_text(self.stmt, column, field.ptr, @intCast(field.len), c.SQLITE_STATIC);
@@ -1779,7 +1776,7 @@ pub const DynamicStatement = struct {
             },
             .pointer => |PointerTypeInfo| {
                 switch (PointerTypeInfo.size) {
-                    .Slice => {
+                    .slice => {
                         for (values, 0..) |value_to_bind, index| {
                             try self.bindField(PointerTypeInfo.child, options, "unknown", @intCast(index), value_to_bind);
                         }
@@ -2679,8 +2676,7 @@ test "sqlite: read a single text value" {
                     .pointer => {
                         try testing.expectEqualStrings("Vincent", name.?);
                     },
-                    .array => |arr| if (arr.sentinel) |sentinel_ptr| {
-                        const sentinel = @as(*const arr.child, @ptrCast(sentinel_ptr)).*;
+                    .array => |arr| if (arr.sentinel()) |sentinel| {
                         const res = mem.sliceTo(&name.?, sentinel);
                         try testing.expectEqualStrings("Vincent", res);
                     } else {

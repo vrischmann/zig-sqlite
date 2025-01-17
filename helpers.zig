@@ -30,7 +30,7 @@ pub fn setResult(ctx: ?*c.sqlite3_context, result: anytype) void {
                 else => @compileError("cannot use a result of type " ++ @typeName(ResultType)),
             },
             .pointer => |ptr| switch (ptr.size) {
-                .Slice => switch (ptr.child) {
+                .slice => switch (ptr.child) {
                     u8 => c.sqlite3_result_text(ctx, result.ptr, @intCast(result.len), c.sqliteTransientAsDestructor()),
                     else => @compileError("cannot use a result of type " ++ @typeName(ResultType)),
                 },
@@ -67,7 +67,7 @@ pub fn setTypeFromValue(comptime ArgType: type, arg: *ArgType, sqlite_value: *c.
                 arg.* = value > 0;
             },
             .pointer => |ptr| switch (ptr.size) {
-                .Slice => switch (ptr.child) {
+                .slice => switch (ptr.child) {
                     u8 => arg.* = sliceFromValue(sqlite_value),
                     else => @compileError("cannot use an argument of type " ++ @typeName(ArgType)),
                 },
