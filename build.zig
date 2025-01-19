@@ -167,6 +167,38 @@ pub fn build(b: *std.Build) !void {
     const c_flags = flags.items;
 
     //
+    // Main library and module
+    //
+
+    const sqlite_lib, const sqlite_mod = blk: {
+        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with);
+
+        const mod = b.addModule("sqlite", .{
+            .root_source_file = b.path("sqlite.zig"),
+            .link_libc = true,
+        });
+        mod.addIncludePath(b.path("c"));
+        mod.addIncludePath(sqlite_dep.path("."));
+        mod.linkLibrary(lib);
+
+        break :blk .{ lib, mod };
+    };
+    _ = sqlite_lib;
+
+    const sqliteext_mod = blk: {
+        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
+
+        const mod = b.addModule("sqliteext", .{
+            .root_source_file = b.path("sqlite.zig"),
+            .link_libc = true,
+        });
+        mod.addIncludePath(b.path("c"));
+        mod.linkLibrary(lib);
+
+        break :blk mod;
+    };
+
+    //
     // Tests
     //
 
@@ -212,54 +244,19 @@ pub fn build(b: *std.Build) !void {
         test_step.dependOn(&run_tests.step);
     }
 
-    //
-    // Main library and module
-    //
+    // This builds an example shared library with the extension and a binary that tests it.
 
-    const sqlite_lib, const sqlite_mod = blk: {
-        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with);
+    const zigcrypto_install_artifact = addZigcrypto(b, sqliteext_mod, target, optimize);
+    test_step.dependOn(&zigcrypto_install_artifact.step);
 
-        const mod = b.addModule("sqlite", .{
-            .root_source_file = b.path("sqlite.zig"),
-            .link_libc = true,
-        });
-        mod.addIncludePath(b.path("c"));
-        mod.addIncludePath(sqlite_dep.path("."));
-        mod.linkLibrary(lib);
-
-        break :blk .{ lib, mod };
-    };
-    _ = sqlite_lib;
-
-    const sqliteext_mod = blk: {
-        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
-
-        const mod = b.addModule("sqliteext", .{
-            .root_source_file = b.path("sqlite.zig"),
-            .link_libc = true,
-        });
-        mod.addIncludePath(b.path("c"));
-        mod.linkLibrary(lib);
-
-        break :blk mod;
-    };
+    const zigcrypto_test_run = addZigcryptoTestRun(b, sqlite_mod, target, optimize);
+    test_step.dependOn(&zigcrypto_test_run.step);
 
     //
     // Tools
     //
 
     addPreprocessStep(b, sqlite_dep);
-
-    //
-    // Examples
-    //
-
-    // Loadable extension
-    //
-    // This builds an example shared library with the extension and a binary that tests it.
-
-    addZigcrypto(b, sqliteext_mod, target, optimize);
-    addZigcryptoTest(b, sqlite_mod, target, optimize);
 }
 
 fn addPreprocessStep(b: *std.Build, sqlite_dep: *std.Build.Dependency) void {
@@ -281,7 +278,7 @@ fn addPreprocessStep(b: *std.Build, sqlite_dep: *std.Build.Dependency) void {
     preprocess_headers.dependOn(&w.step);
 }
 
-fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.InstallArtifact {
     const exe = b.addSharedLibrary(.{
         .name = "zigcrypto",
         .root_source_file = b.path("examples/zigcrypto.zig"),
@@ -294,11 +291,10 @@ fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.
     const install_artifact = b.addInstallArtifact(exe, .{});
     install_artifact.step.dependOn(&exe.step);
 
-    const run_step = b.step("zigcrypto", "Build the 'zigcrypto' SQLite loadable extension");
-    run_step.dependOn(&install_artifact.step);
+    return install_artifact;
 }
 
-fn addZigcryptoTest(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+fn addZigcryptoTestRun(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.Run {
     const zigcrypto_test = b.addExecutable(.{
         .name = "zigcrypto-test",
         .root_source_file = b.path("examples/zigcrypto_test.zig"),
@@ -313,9 +309,7 @@ fn addZigcryptoTest(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Bu
     const run = b.addRunArtifact(zigcrypto_test);
     run.step.dependOn(&zigcrypto_test.step);
 
-    const runner_step = b.step("zigcrypto-test", "Build the 'zigcrypto' SQLite loadable extension runner");
-    runner_step.dependOn(&run.step);
-    runner_step.dependOn(&install.step);
+    return run;
 }
 
 // See https://www.sqlite.org/compile.html for flags
