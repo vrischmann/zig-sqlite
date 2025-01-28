@@ -185,7 +185,7 @@ pub fn build(b: *std.Build) !void {
 
         break :blk .{ lib, mod };
     };
-    _ = sqlite_lib;
+    b.installArtifact(sqlite_lib);
 
     const sqliteext_mod = blk: {
         const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
