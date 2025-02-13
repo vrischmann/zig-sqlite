@@ -1,7 +1,5 @@
 const std = @import("std");
 const debug = std.debug;
-const fmt = std.fmt;
-const heap = std.heap;
 const mem = std.mem;
 
 // This tool is used to preprocess the sqlite3 headers to make them usable to build loadable extensions.
@@ -155,14 +153,8 @@ const Processor = struct {
     }
 };
 
-fn preprocessSqlite3HeaderFile(gpa: mem.Allocator) !void {
-    var arena = heap.ArenaAllocator.init(gpa);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    //
-
-    const data = try readOriginalData(allocator, "c/sqlite3.h");
+pub fn sqlite3(allocator: mem.Allocator, input_path: []const u8, output_path: []const u8) !void {
+    const data = try readOriginalData(allocator, input_path);
 
     var processor = try Processor.init(allocator, data);
 
@@ -198,21 +190,17 @@ fn preprocessSqlite3HeaderFile(gpa: mem.Allocator) !void {
         processor.rangeDelete();
     }
 
-    // Write the result to the file
-    var output_file = try std.fs.cwd().createFile("./c/loadable-ext-sqlite3.h", .{ .mode = 0o0644 });
+    // Write the result
+
+    var output_file = try std.fs.cwd().createFile(output_path, .{ .mode = 0o0644 });
     defer output_file.close();
 
+    try output_file.writeAll("/* sqlite3.h edited by the zig-sqlite build script */\n");
     try processor.dump(output_file.writer());
 }
 
-fn preprocessSqlite3ExtHeaderFile(gpa: mem.Allocator) !void {
-    var arena = heap.ArenaAllocator.init(gpa);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    //
-
-    const data = try readOriginalData(allocator, "c/sqlite3ext.h");
+pub fn sqlite3ext(allocator: mem.Allocator, input_path: []const u8, output_path: []const u8) !void {
+    const data = try readOriginalData(allocator, input_path);
 
     var processor = try Processor.init(allocator, data);
 
@@ -238,17 +226,11 @@ fn preprocessSqlite3ExtHeaderFile(gpa: mem.Allocator) !void {
         processor.rangeDelete();
     }
 
-    // Write the result to the file
-    var output_file = try std.fs.cwd().createFile("./c/loadable-ext-sqlite3ext.h", .{ .mode = 0o0644 });
+    // Write the result
+
+    var output_file = try std.fs.cwd().createFile(output_path, .{ .mode = 0o0644 });
     defer output_file.close();
 
+    try output_file.writeAll("/* sqlite3ext.h edited by the zig-sqlite build script */\n");
     try processor.dump(output_file.writer());
-}
-
-pub fn main() !void {
-    var gpa = heap.GeneralPurposeAllocator(.{}){};
-    defer if (gpa.deinit() == .leak) debug.panic("leaks detected\n", .{});
-
-    try preprocessSqlite3HeaderFile(gpa.allocator());
-    try preprocessSqlite3ExtHeaderFile(gpa.allocator());
 }
