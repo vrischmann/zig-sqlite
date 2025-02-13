@@ -4051,8 +4051,8 @@ test "reuse same field twice in query string" {
 }
 
 test "fuzzing" {
-    const global = struct {
-        fn testOne(input: []const u8) anyerror!void {
+    const Context = struct {
+        fn testOne(_: @This(), input: []const u8) anyerror!void {
             var db = try Db.init(.{
                 .mode = .Memory,
                 .open_flags = .{
@@ -4114,5 +4114,5 @@ test "fuzzing" {
         }
     };
 
-    try testing.fuzz(global.testOne, .{});
+    try testing.fuzz(Context{}, Context.testOne, .{});
 }
