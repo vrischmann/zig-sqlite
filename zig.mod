@@ -7,4 +7,5 @@ c_include_dirs:
   - c
 c_source_files:
   - c/sqlite3.c
+  - c/workaround.c
 dependencies:
