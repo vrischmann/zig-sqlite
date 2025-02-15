@@ -9,3 +9,8 @@ c_source_files:
   - c/sqlite3.c
   - c/workaround.c
 dependencies:
+- src: https://sqlite.org/2025/sqlite-amalgamation-3480000.zip
+  c_include_dirs:
+    - sqlite-amalgamation-3480000
+  c_source_files:
+    - sqlite-amalgamation-3480000/sqlite3.c
