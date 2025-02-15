@@ -252,6 +252,7 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&zigcrypto_install_artifact.step);
 
     const zigcrypto_test_run = addZigcryptoTestRun(b, sqlite_mod, target, optimize);
+    zigcrypto_test_run.step.dependOn(&zigcrypto_install_artifact.step);
     test_step.dependOn(&zigcrypto_test_run.step);
 
     //
