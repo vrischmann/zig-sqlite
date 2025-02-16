@@ -1,8 +1,12 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const Step = std.Build.Step;
+const debug = std.debug;
+const heap = std.heap;
+const mem = std.mem;
 const ResolvedTarget = std.Build.ResolvedTarget;
 const Query = std.Target.Query;
+const builtin = @import("builtin");
+
+const Preprocessor = @import("build/Preprocessor.zig");
 
 fn getTarget(original_target: ResolvedTarget) ResolvedTarget {
     var tmp = original_target;
@@ -104,6 +108,31 @@ fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
     return null;
 }
 
+// This creates a SQLite static library from the SQLite dependency code.
+fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, sqlite_c: enum { with, without }) *std.Build.Step.Compile {
+    const lib = b.addStaticLibrary(.{
+        .name = "sqlite",
+        .target = target,
+        .optimize = optimize,
+    });
+
+    lib.addIncludePath(dep.path("."));
+    lib.addIncludePath(b.path("c"));
+    if (sqlite_c == .with) {
+        lib.addCSourceFile(.{
+            .file = dep.path("sqlite3.c"),
+            .flags = c_flags,
+        });
+    }
+    lib.addCSourceFile(.{
+        .file = b.path("c/workaround.c"),
+        .flags = c_flags,
+    });
+    lib.linkLibC();
+
+    return lib;
+}
+
 pub fn build(b: *std.Build) !void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
@@ -112,6 +141,14 @@ pub fn build(b: *std.Build) !void {
     const query = b.standardTargetOptionsQueryOnly(.{});
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
+
+    // Upstream dependency
+    const sqlite_dep = b.dependency("sqlite", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // Define C flags to use
 
     var flags = std.ArrayList([]const u8).init(b.allocator);
     defer flags.deinit();
@@ -131,50 +168,41 @@ pub fn build(b: *std.Build) !void {
 
     const c_flags = flags.items;
 
-    const sqlite_lib = b.addStaticLibrary(.{
-        .name = "sqlite",
-        .target = target,
-        .optimize = optimize,
-    });
+    //
+    // Main library and module
+    //
 
-    sqlite_lib.addIncludePath(b.path("c/"));
-    sqlite_lib.addCSourceFiles(.{
-        .files = &[_][]const u8{
-            "c/sqlite3.c",
-            "c/workaround.c",
-        },
-        .flags = c_flags,
-    });
-    sqlite_lib.linkLibC();
-    sqlite_lib.installHeader(b.path("c/sqlite3.h"), "sqlite3.h");
+    const sqlite_lib, const sqlite_mod = blk: {
+        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with);
 
+        const mod = b.addModule("sqlite", .{
+            .root_source_file = b.path("sqlite.zig"),
+            .link_libc = true,
+        });
+        mod.addIncludePath(b.path("c"));
+        mod.addIncludePath(sqlite_dep.path("."));
+        mod.linkLibrary(lib);
+
+        break :blk .{ lib, mod };
+    };
     b.installArtifact(sqlite_lib);
 
-    // Create the public 'sqlite' module to be exported
-    const sqlite_mod = b.addModule("sqlite", .{
-        .root_source_file = b.path("sqlite.zig"),
-        .link_libc = true,
-    });
-    sqlite_mod.addIncludePath(b.path("c/"));
-    sqlite_mod.linkLibrary(sqlite_lib);
+    const sqliteext_mod = blk: {
+        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
 
-    // Tool to preprocess the sqlite header files.
+        const mod = b.addModule("sqliteext", .{
+            .root_source_file = b.path("sqlite.zig"),
+            .link_libc = true,
+        });
+        mod.addIncludePath(b.path("c"));
+        mod.linkLibrary(lib);
+
+        break :blk mod;
+    };
+
     //
-    // Due to limitations of translate-c the standard header files can't be used for building loadable extensions
-    // so we have this tool which creates usable header files.
-
-    const preprocess_files_tool = b.addExecutable(.{
-        .name = "preprocess-files",
-        .root_source_file = b.path("tools/preprocess_files.zig"),
-        .target = getTarget(target),
-        .optimize = optimize,
-    });
-
-    // Add a top-level step to run the preprocess-files tool
-    const preprocess_files_run = b.step("preprocess-files", "Run the preprocess-files tool");
-
-    const preprocess_files_tool_run = b.addRunArtifact(preprocess_files_tool);
-    preprocess_files_run.dependOn(&preprocess_files_tool_run.step);
+    // Tests
+    //
 
     const test_targets = computeTestTargets(query.isNative(), ci) orelse &[_]TestTarget{.{
         .query = query,
@@ -195,19 +223,7 @@ pub fn build(b: *std.Build) !void {
             single_threaded_txt,
         });
 
-        const test_sqlite_lib = b.addStaticLibrary(.{
-            .name = "sqlite",
-            .target = cross_target,
-            .optimize = optimize,
-        });
-        test_sqlite_lib.addCSourceFiles(.{
-            .files = &[_][]const u8{
-                "c/sqlite3.c",
-                "c/workaround.c",
-            },
-            .flags = c_flags,
-        });
-        test_sqlite_lib.linkLibC();
+        const test_sqlite_lib = makeSQLiteLib(b, sqlite_dep, c_flags, cross_target, optimize, .with);
 
         const tests = b.addTest(.{
             .name = test_name,
@@ -217,6 +233,7 @@ pub fn build(b: *std.Build) !void {
             .single_threaded = test_target.single_threaded,
         });
         tests.addIncludePath(b.path("c"));
+        tests.addIncludePath(sqlite_dep.path("."));
         tests.linkLibrary(test_sqlite_lib);
 
         const tests_options = b.addOptions();
@@ -229,55 +246,119 @@ pub fn build(b: *std.Build) !void {
         test_step.dependOn(&run_tests.step);
     }
 
-    const lib = b.addStaticLibrary(.{
-        .name = "sqlite",
-        .target = getTarget(target),
-        .optimize = optimize,
-    });
-    lib.addCSourceFile(.{ .file = b.path("c/sqlite3.c"), .flags = c_flags });
-    lib.addIncludePath(b.path("c"));
-    lib.linkLibC();
-
-    //
-    // Examples
-    //
-
-    // Loadable extension
-    //
     // This builds an example shared library with the extension and a binary that tests it.
 
-    const zigcrypto_loadable_ext = b.addSharedLibrary(.{
+    const zigcrypto_install_artifact = addZigcrypto(b, sqliteext_mod, target, optimize);
+    test_step.dependOn(&zigcrypto_install_artifact.step);
+
+    const zigcrypto_test_run = addZigcryptoTestRun(b, sqlite_mod, target, optimize);
+    zigcrypto_test_run.step.dependOn(&zigcrypto_install_artifact.step);
+    test_step.dependOn(&zigcrypto_test_run.step);
+
+    //
+    // Tools
+    //
+
+    addPreprocessStep(b, sqlite_dep);
+}
+
+fn addPreprocessStep(b: *std.Build, sqlite_dep: *std.Build.Dependency) void {
+    var wf = b.addWriteFiles();
+
+    // Preprocessing step
+    const preprocess = PreprocessStep.create(b, .{
+        .source = sqlite_dep.path("."),
+        .target = wf.getDirectory(),
+    });
+    preprocess.step.dependOn(&wf.step);
+
+    const w = b.addUpdateSourceFiles();
+    w.addCopyFileToSource(preprocess.target.join(b.allocator, "loadable-ext-sqlite3.h") catch @panic("OOM"), "c/loadable-ext-sqlite3.h");
+    w.addCopyFileToSource(preprocess.target.join(b.allocator, "loadable-ext-sqlite3ext.h") catch @panic("OOM"), "c/loadable-ext-sqlite3ext.h");
+    w.step.dependOn(&preprocess.step);
+
+    const preprocess_headers = b.step("preprocess-headers", "Preprocess the headers for the loadable extensions");
+    preprocess_headers.dependOn(&w.step);
+}
+
+fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.InstallArtifact {
+    const exe = b.addSharedLibrary(.{
         .name = "zigcrypto",
         .root_source_file = b.path("examples/zigcrypto.zig"),
         .version = null,
         .target = getTarget(target),
         .optimize = optimize,
     });
-    zigcrypto_loadable_ext.addIncludePath(b.path("c"));
-    zigcrypto_loadable_ext.root_module.addImport("sqlite", sqlite_mod);
-    zigcrypto_loadable_ext.linkLibrary(lib);
+    exe.root_module.addImport("sqlite", sqlite_mod);
 
-    const install_zigcrypto_loadable_ext = b.addInstallArtifact(zigcrypto_loadable_ext, .{});
+    const install_artifact = b.addInstallArtifact(exe, .{});
+    install_artifact.step.dependOn(&exe.step);
 
+    return install_artifact;
+}
+
+fn addZigcryptoTestRun(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.Run {
     const zigcrypto_test = b.addExecutable(.{
         .name = "zigcrypto-test",
         .root_source_file = b.path("examples/zigcrypto_test.zig"),
         .target = getTarget(target),
         .optimize = optimize,
     });
-    zigcrypto_test.addIncludePath(b.path("c"));
     zigcrypto_test.root_module.addImport("sqlite", sqlite_mod);
-    zigcrypto_test.linkLibrary(lib);
 
-    const install_zigcrypto_test = b.addInstallArtifact(zigcrypto_test, .{});
+    const install = b.addInstallArtifact(zigcrypto_test, .{});
+    install.step.dependOn(&zigcrypto_test.step);
 
-    const zigcrypto_compile_run = b.step("zigcrypto", "Build the 'zigcrypto' SQLite loadable extension");
-    zigcrypto_compile_run.dependOn(&install_zigcrypto_loadable_ext.step);
-    zigcrypto_compile_run.dependOn(&install_zigcrypto_test.step);
+    const run = b.addRunArtifact(zigcrypto_test);
+    run.step.dependOn(&zigcrypto_test.step);
+
+    return run;
 }
 
 // See https://www.sqlite.org/compile.html for flags
 const EnableOptions = struct {
     // https://www.sqlite.org/fts5.html
     fts5: bool = false,
+};
+
+const PreprocessStep = struct {
+    const Config = struct {
+        source: std.Build.LazyPath,
+        target: std.Build.LazyPath,
+    };
+
+    step: std.Build.Step,
+
+    source: std.Build.LazyPath,
+    target: std.Build.LazyPath,
+
+    fn create(owner: *std.Build, config: Config) *PreprocessStep {
+        const step = owner.allocator.create(PreprocessStep) catch @panic("OOM");
+        step.* = .{
+            .step = std.Build.Step.init(.{
+                .id = std.Build.Step.Id.custom,
+                .name = "preprocess",
+                .owner = owner,
+                .makeFn = make,
+            }),
+            .source = config.source,
+            .target = config.target,
+        };
+
+        return step;
+    }
+
+    fn make(step: *std.Build.Step, _: std.Build.Step.MakeOptions) !void {
+        const ps: *PreprocessStep = @fieldParentPtr("step", step);
+        const owner = step.owner;
+
+        const sqlite3_h = try ps.source.path(owner, "sqlite3.h").getPath3(owner, step).toString(owner.allocator);
+        const sqlite3ext_h = try ps.source.path(owner, "sqlite3ext.h").getPath3(owner, step).toString(owner.allocator);
+
+        const loadable_sqlite3_h = try ps.target.path(owner, "loadable-ext-sqlite3.h").getPath3(owner, step).toString(owner.allocator);
+        const loadable_sqlite3ext_h = try ps.target.path(owner, "loadable-ext-sqlite3ext.h").getPath3(owner, step).toString(owner.allocator);
+
+        try Preprocessor.sqlite3(owner.allocator, sqlite3_h, loadable_sqlite3_h);
+        try Preprocessor.sqlite3ext(owner.allocator, sqlite3ext_h, loadable_sqlite3ext_h);
+    }
 };

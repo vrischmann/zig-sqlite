@@ -1,3 +1,4 @@
+/* sqlite3ext.h edited by the zig-sqlite build script */
 /*
 ** 2006 June 7
 **

@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const debug = std.debug;
 const mem = std.mem;
@@ -24,11 +25,16 @@ pub fn main() anyerror!void {
     }
 
     {
+        const extension_path = if (builtin.os.tag == .windows)
+            "./zig-out/bin/zigcrypto.dll"
+        else
+            "./zig-out/lib/libzigcrypto";
+
         var pzErrMsg: [*c]u8 = undefined;
-        const result = sqlite.c.sqlite3_load_extension(db.db, "./zig-out/lib/libzigcrypto", null, &pzErrMsg);
+        const result = sqlite.c.sqlite3_load_extension(db.db, extension_path, null, &pzErrMsg);
         if (result != sqlite.c.SQLITE_OK) {
             const err = sqlite.c.sqlite3_errstr(result);
-            std.debug.panic("unable to load extension, err: {s}, err message: {s}\n", .{ err, std.mem.sliceTo(pzErrMsg, 0) });
+            std.debug.panic("unable to load extension at path {s}, err: {s}, err message: {s}\n", .{ extension_path, err, std.mem.sliceTo(pzErrMsg, 0) });
         }
     }
 
