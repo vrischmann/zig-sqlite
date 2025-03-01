@@ -1,5 +1,6 @@
 .{
-    .name = "sqlite",
+    .name = .sqlite,
+    .fingerprint = 0xb8bb86826b7f6417,
     .version = "3.48.0",
     .dependencies = .{
         .sqlite = .{
