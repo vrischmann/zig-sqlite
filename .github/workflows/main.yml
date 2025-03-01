@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: goto-bus-stop/setup-zig@v2
+      - uses: mlugg/setup-zig@v1
         with:
           version: master
       - run: zig fmt --check *.zig
@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup zig
-        uses: goto-bus-stop/setup-zig@v2
+        uses: mlugg/setup-zig@v1
         with:
           version: master
 
