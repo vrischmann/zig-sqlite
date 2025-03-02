@@ -5,7 +5,7 @@
     .dependencies = .{
         .sqlite = .{
             .url = "https://sqlite.org/2025/sqlite-amalgamation-3480000.zip",
-            .hash = "1220972595d70da33d69d519392742482cb9762935cecb99924e31f3898d2a330861",
+            .hash = "N-V-__8AACpFpwCXJZXXDaM9adUZOSdCSCy5dik1zsuZkk4x",
         },
     },
     .paths = .{"."},
