@@ -1,6 +1,7 @@
 .{
     .name = .sqlite,
     .fingerprint = 0xb8bb86826b7f6417,
+    .minimum_zig_version = "0.14.0",
     .version = "3.48.0",
     .dependencies = .{
         .sqlite = .{
