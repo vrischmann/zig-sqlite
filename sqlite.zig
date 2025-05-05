@@ -2276,7 +2276,7 @@ const TestUser = struct {
 
     pub const Color = enum {
         red,
-        majenta,
+        magenta,
         violet,
         indigo,
         blue,
