@@ -562,7 +562,7 @@ There are a limited number of types allowed currently:
  * strings with `sqlite.Text`.
  * blobs with `sqlite.Blob`.
 
-It's probably possible to support arbitrary types if they can be marshaled to a sqlite type. This is something to investigate.
+It is probably possible to support arbitrary types if they can be marshaled to an SQLite type. This is something to investigate.
 
 **NOTE**: this is done at compile time and is quite CPU intensive, therefore it's possible you'll have to play with [@setEvalBranchQuota](https://ziglang.org/documentation/master/#setEvalBranchQuota) to make it compile.
 
@@ -616,7 +616,7 @@ Each input arguments in the function call in the statement is passed on to the r
 
 ## Aggregate functions
 
-You can define a aggregate function using `db.createAggregateFunction`:
+You can define an aggregate function using `db.createAggregateFunction`:
 ```zig
 const MyContext = struct {
     sum: u32,
@@ -647,5 +647,5 @@ const result = try db.one(usize, "SELECT mySum(nb) FROM foobar", .{}, .{});
 Each input arguments in the function call in the statement is passed on to the registered `step` function.
 The `finalize` function is called once at the end.
 
-The context (2nd argument of `createAggregateFunction`) can be whatever you want; both `step` and `finalize` function must
+The context (2nd argument of `createAggregateFunction`) can be whatever you want; both the `step` and `finalize` functions must
 have their first argument of the same type as the context.
