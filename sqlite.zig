@@ -557,7 +557,7 @@ pub const Db = struct {
     /// prepareDynamic prepares a dynamic statement for the `query` provided.
     ///
     /// The query will be directly sent to create statement without analysing.
-    /// That means such statements does not support comptime type-checking.
+    /// That means such statements do not support comptime type-checking.
     ///
     /// Dynamic statement supports host parameter names. See `DynamicStatement`.
     pub fn prepareDynamic(self: *Self, query: []const u8) DynamicStatement.PrepareError!DynamicStatement {
@@ -1810,7 +1810,7 @@ pub const DynamicStatement = struct {
     ///
     /// The `values` variable is used for the bind parameters. It must have as many fields as there are bind markers
     /// in the input query string.
-    /// The values will be binded depends on the numberic name when it's a tuple, or the
+    /// The values that will be bound depend on the numeric name when it's a tuple, or the
     /// string name when it's a normal structure.
     ///
     /// Possible errors:
@@ -1848,7 +1848,7 @@ pub const DynamicStatement = struct {
     ///
     /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
     /// in the input query string.
-    /// The values will be binded depends on the numberic name when it's a tuple, or the
+    /// The values that will be bound depend on the numberic name when it's a tuple, or the
     /// string name when it's a normal structure.
     ///
     /// The iterator _must not_ outlive the statement.
@@ -1881,7 +1881,7 @@ pub const DynamicStatement = struct {
     ///
     /// The `values` tuple is used for the bind parameters. It must have as many fields as there are bind markers
     /// in the input query string.
-    /// The values will be binded depends on the numberic name when it's a tuple, or the
+    /// The values will be bound depend on the numberic name when it's a tuple, or the
     /// string name when it's a normal structure.
     ///
     /// The iterator _must not_ outlive the statement.
@@ -2097,7 +2097,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
             }
 
             return self.dynamic().bind(options, values) catch |e| switch (e) {
-                errors.Error.SQLiteNotFound => unreachable, // impossible to have non-exists field
+                errors.Error.SQLiteNotFound => unreachable, // impossible to have non-existent field
                 else => e,
             };
         }
