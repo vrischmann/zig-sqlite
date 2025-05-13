@@ -1471,7 +1471,7 @@ pub fn Iterator(comptime Type: type) type {
                     inline .@"struct", .@"union" => |TI| {
                         if (TI.layout == .@"packed" and !@hasField(FieldType, "readField")) {
                             const Backing = @Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
-                            return @bitCast(try self.readInt(Backing, i));
+                            return @bitCast(self.readInt(Backing, i));
                         }
 
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
