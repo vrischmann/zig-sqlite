@@ -9,6 +9,7 @@ c_source_files:
   - c/workaround.c
 dependencies:
 - src: http https://sqlite.org/2025/sqlite-amalgamation-3480000.zip sha256-d9a15a42db7c78f88fe3d3c5945acce2f4bfe9e4da9f685cd19f6ea1d40aa884
+  license: blessing
   c_include_dirs:
     - sqlite-amalgamation-3480000
   c_source_files:
