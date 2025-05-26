@@ -5,8 +5,8 @@
     .version = "3.48.0",
     .dependencies = .{
         .sqlite = .{
-            .url = "https://sqlite.org/2025/sqlite-amalgamation-3480000.zip",
-            .hash = "N-V-__8AACpFpwCXJZXXDaM9adUZOSdCSCy5dik1zsuZkk4x",
+            .url = "https://www.sqlite.org/2025/sqlite-amalgamation-3490200.zip",
+            .hash = "N-V-__8AAH-mpwB7g3MnqYU-ooUBF1t99RP27dZ9addtMVXD",
         },
     },
     .paths = .{"."},
