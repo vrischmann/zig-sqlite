@@ -56,7 +56,7 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
             // This holds the starting character of the string while
             // state is .inside_string so that we know which type of
             // string we're exiting from
-            var string_starting_character = null;
+            var string_starting_character: ?u8 = null;
 
             var current_bind_marker_type: [256]u8 = undefined;
             var current_bind_marker_type_pos = 0;
