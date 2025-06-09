@@ -53,6 +53,11 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
             var pos = 0;
             var state = .start;
 
+            // This holds the starting character of the string while
+            // state is .inside_string so that we know which type of
+            // string we're exiting from
+            var string_starting_character: u8 = undefined;
+
             var current_bind_marker_type: [256]u8 = undefined;
             var current_bind_marker_type_pos = 0;
 
@@ -75,6 +80,7 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
                         },
                         '\'', '"', '[', '`' => {
                             state = .inside_string;
+                            string_starting_character = c;
                             buf[pos] = c;
                             pos += 1;
                         },
@@ -84,8 +90,23 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
                         },
                     },
                     .inside_string => switch (c) {
-                        '\'', '"', ']', '`' => {
-                            state = .start;
+                        '\'' => {
+                            if (string_starting_character == '\'') state = .start;
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                        '"' => {
+                            if (string_starting_character == '"') state = .start;
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                        ']' => {
+                            if (string_starting_character == '[') state = .start;
+                            buf[pos] = c;
+                            pos += 1;
+                        },
+                        '`' => {
+                            if (string_starting_character == '`') state = .start;
                             buf[pos] = c;
                             pos += 1;
                         },
@@ -430,6 +451,11 @@ test "parsed query: bind marker character inside string" {
             .query = "SELECT json_extract(metadata, '$.name') AS name FROM foobar WHERE name = $name{text}",
             .exp_bind_markers = 1,
             .exp = "SELECT json_extract(metadata, '$.name') AS name FROM foobar WHERE name = $name",
+        },
+        .{
+            .query = "SELECT json_extract(metadata, '$[0]') AS name FROM foobar",
+            .exp_bind_markers = 0,
+            .exp = "SELECT json_extract(metadata, '$[0]') AS name FROM foobar",
         },
     };
 
