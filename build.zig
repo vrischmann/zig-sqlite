@@ -110,10 +110,13 @@ fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
 
 // This creates a SQLite static library from the SQLite dependency code.
 fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, sqlite_c: enum { with, without }) *std.Build.Step.Compile {
-    const lib = b.addStaticLibrary(.{
+    const lib = b.addLibrary(.{
         .name = "sqlite",
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+        }),
+        .linkage = .static,
     });
 
     lib.addIncludePath(dep.path("."));
@@ -227,10 +230,12 @@ pub fn build(b: *std.Build) !void {
 
         const tests = b.addTest(.{
             .name = test_name,
-            .target = cross_target,
-            .optimize = optimize,
-            .root_source_file = b.path("sqlite.zig"),
-            .single_threaded = test_target.single_threaded,
+            .root_module = b.createModule(.{
+                .target = cross_target,
+                .optimize = optimize,
+                .root_source_file = b.path("sqlite.zig"),
+                .single_threaded = test_target.single_threaded,
+            }),
         });
         tests.addIncludePath(b.path("c"));
         tests.addIncludePath(sqlite_dep.path("."));
@@ -282,12 +287,15 @@ fn addPreprocessStep(b: *std.Build, sqlite_dep: *std.Build.Dependency) void {
 }
 
 fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.InstallArtifact {
-    const exe = b.addSharedLibrary(.{
+    const exe = b.addLibrary(.{
         .name = "zigcrypto",
-        .root_source_file = b.path("examples/zigcrypto.zig"),
+        .root_module = b.addModule("zigcrypto", .{
+            .root_source_file = b.path("examples/zigcrypto.zig"),
+            .target = getTarget(target),
+            .optimize = optimize,
+        }),
         .version = null,
-        .target = getTarget(target),
-        .optimize = optimize,
+        .linkage = .dynamic,
     });
     exe.root_module.addImport("sqlite", sqlite_mod);
 
@@ -300,9 +308,11 @@ fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.
 fn addZigcryptoTestRun(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.Run {
     const zigcrypto_test = b.addExecutable(.{
         .name = "zigcrypto-test",
-        .root_source_file = b.path("examples/zigcrypto_test.zig"),
-        .target = getTarget(target),
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/zigcrypto_test.zig"),
+            .target = getTarget(target),
+            .optimize = optimize,
+        }),
     });
     zigcrypto_test.root_module.addImport("sqlite", sqlite_mod);
 

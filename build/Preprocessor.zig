@@ -28,9 +28,7 @@ fn readOriginalData(allocator: mem.Allocator, path: []const u8) ![]const u8 {
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
-    var reader = file.reader();
-
-    const data = reader.readAllAlloc(allocator, 1024 * 1024);
+    const data = try file.readToEndAlloc(allocator, 1024 * 1024);
     return data;
 }
 
@@ -196,7 +194,9 @@ pub fn sqlite3(allocator: mem.Allocator, input_path: []const u8, output_path: []
     defer output_file.close();
 
     try output_file.writeAll("/* sqlite3.h edited by the zig-sqlite build script */\n");
-    try processor.dump(output_file.writer());
+    var buf: [64]u8 = undefined;
+    var output_writer = output_file.writer(&buf);
+    try processor.dump(&output_writer.interface);
 }
 
 pub fn sqlite3ext(allocator: mem.Allocator, input_path: []const u8, output_path: []const u8) !void {
@@ -232,5 +232,7 @@ pub fn sqlite3ext(allocator: mem.Allocator, input_path: []const u8, output_path:
     defer output_file.close();
 
     try output_file.writeAll("/* sqlite3ext.h edited by the zig-sqlite build script */\n");
-    try processor.dump(output_file.writer());
+    var buf: [64]u8 = undefined;
+    var output_writer = output_file.writer(&buf);
+    try processor.dump(&output_writer.interface);
 }
