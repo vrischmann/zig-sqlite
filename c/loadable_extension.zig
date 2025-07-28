@@ -1,9 +1,7 @@
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("loadable-ext-sqlite3ext.h");
     @cInclude("workaround.h");
 });
-
-pub usingnamespace c;
 
 pub var sqlite3_api: [*c]c.sqlite3_api_routines = null;
 
