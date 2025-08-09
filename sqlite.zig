@@ -132,7 +132,7 @@ pub const Blob = struct {
         }
     }
 
-    pub const Reader = io.Reader(*Self, errors.Error, read);
+    pub const Reader = io.GenericReader(*Self, errors.Error, read);
 
     /// reader returns a io.Reader.
     pub fn reader(self: *Self) Reader {
@@ -164,7 +164,7 @@ pub const Blob = struct {
         return tmp_buffer.len;
     }
 
-    pub const Writer = io.Writer(*Self, Error, write);
+    pub const Writer = io.GenericWriter(*Self, Error, write);
 
     /// writer returns a io.Writer.
     pub fn writer(self: *Self) Writer {
@@ -261,14 +261,14 @@ pub const Diagnostics = struct {
     message: []const u8 = "",
     err: ?DetailedError = null,
 
-    pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+    pub fn format(self: @This(), writer: anytype) !void {
         if (self.err) |err| {
             if (self.message.len > 0) {
-                _ = try writer.print("{{message: {s}, detailed error: {s}}}", .{ self.message, err });
+                _ = try writer.print("{{message: {s}, detailed error: {f}}}", .{ self.message, err });
                 return;
             }
 
-            _ = try err.format(fmt, options, writer);
+            _ = try err.format(writer);
             return;
         }
 
@@ -704,7 +704,7 @@ pub const Db = struct {
             user_ctx,
             null, // xFunc
             struct {
-                fn xStep(ctx: ?*c.sqlite3_context, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.C) void {
+                fn xStep(ctx: ?*c.sqlite3_context, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.c) void {
                     debug.assert(argc == real_args_len);
 
                     const sqlite_args = argv[0..real_args_len];
@@ -728,7 +728,7 @@ pub const Db = struct {
                 }
             }.xStep,
             struct {
-                fn xFinal(ctx: ?*c.sqlite3_context) callconv(.C) void {
+                fn xFinal(ctx: ?*c.sqlite3_context) callconv(.c) void {
                     var args: std.meta.ArgsTuple(@TypeOf(finalize_func)) = undefined;
 
                     // Pass the function context
@@ -780,7 +780,7 @@ pub const Db = struct {
             flags,
             null,
             struct {
-                fn xFunc(ctx: ?*c.sqlite3_context, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.C) void {
+                fn xFunc(ctx: ?*c.sqlite3_context, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.c) void {
                     debug.assert(argc == fn_info.params.len);
 
                     const sqlite_args = argv[0..fn_info.params.len];
@@ -955,7 +955,7 @@ pub const Savepoint = struct {
 
         // From DynamiStatement
         EmptyQuery,
-    } || std.fmt.AllocPrintError || Error;
+    } || std.mem.Allocator.Error || Error;
 
     fn init(db: *Db, name: []const u8) InitError!Self {
         if (name.len < 1) return error.SavepointNameTooShort;
@@ -993,7 +993,7 @@ pub const Savepoint = struct {
     pub fn commit(self: *Self) void {
         self.commit_stmt.exec(.{}, .{}) catch |err| {
             const detailed_error = self.db.getDetailedError();
-            logger.err("unable to release savepoint, error: {}, message: {s}", .{ err, detailed_error });
+            logger.err("unable to release savepoint, error: {}, message: {f}", .{ err, detailed_error });
         };
         self.committed = true;
     }
@@ -1008,7 +1008,7 @@ pub const Savepoint = struct {
 
         self.rollback_stmt.exec(.{}, .{}) catch |err| {
             const detailed_error = self.db.getDetailedError();
-            std.debug.panic("unable to rollback transaction, error: {}, message: {s}\n", .{ err, detailed_error });
+            std.debug.panic("unable to rollback transaction, error: {}, message: {f}\n", .{ err, detailed_error });
         };
     }
 };
@@ -1589,7 +1589,7 @@ pub const DynamicStatement = struct {
         const result = c.sqlite3_finalize(self.stmt);
         if (result != c.SQLITE_OK) {
             const detailed_error = getLastDetailedErrorFromDb(self.db);
-            logger.err("unable to finalize prepared statement, result: {}, detailed error: {}", .{ result, detailed_error });
+            logger.err("unable to finalize prepared statement, result: {}, detailed error: {f}", .{ result, detailed_error });
         }
     }
 
@@ -1598,12 +1598,12 @@ pub const DynamicStatement = struct {
         const result = c.sqlite3_clear_bindings(self.stmt);
         if (result != c.SQLITE_OK) {
             const detailed_error = getLastDetailedErrorFromDb(self.db);
-            logger.err("unable to clear prepared statement bindings, result: {}, detailed error: {}", .{ result, detailed_error });
+            logger.err("unable to clear prepared statement bindings, result: {}, detailed error: {f}", .{ result, detailed_error });
         }
         const result2 = c.sqlite3_reset(self.stmt);
         if (result2 != c.SQLITE_OK) {
             const detailed_error = getLastDetailedErrorFromDb(self.db);
-            logger.err("unable to reset prepared statement, result: {}, detailed error: {}", .{ result2, detailed_error });
+            logger.err("unable to reset prepared statement, result: {}, detailed error: {f}", .{ result2, detailed_error });
         }
     }
 
@@ -3223,7 +3223,7 @@ test "sqlite: diagnostics format" {
 
     inline for (testCases) |tc| {
         var buf: [1024]u8 = undefined;
-        const str = try std.fmt.bufPrint(&buf, "my diagnostics: {s}", .{tc.input});
+        const str = try std.fmt.bufPrint(&buf, "my diagnostics: {f}", .{tc.input});
 
         try testing.expectEqualStrings(tc.exp, str);
     }
@@ -3390,7 +3390,8 @@ const MyData = struct {
     const BaseType = []const u8;
 
     pub fn bindField(self: MyData, allocator: mem.Allocator) !BaseType {
-        return try std.fmt.allocPrint(allocator, "{}", .{std.fmt.fmtSliceHexLower(&self.data)});
+        const num = std.mem.bytesAsValue(u128, &self.data);
+        return try std.fmt.allocPrint(allocator, "{s}", .{std.fmt.hex(num.*)});
     }
 
     pub fn readField(alloc: mem.Allocator, value: BaseType) !MyData {
@@ -3797,7 +3798,7 @@ test "sqlite: create aggregate function with no aggregate context" {
         .{ .diags = &diags },
         .{},
     ) catch |err| {
-        debug.print("err: {}\n", .{diags});
+        debug.print("err: {f}\n", .{diags});
         return err;
     };
 
@@ -3858,7 +3859,7 @@ test "sqlite: create aggregate function with an aggregate context" {
         .{ .diags = &diags },
         .{},
     ) catch |err| {
-        debug.print("err: {}\n", .{diags});
+        debug.print("err: {f}\n", .{diags});
         return err;
     };
 

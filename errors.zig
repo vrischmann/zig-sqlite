@@ -276,10 +276,7 @@ pub const DetailedError = struct {
     near: i32,
     message: []const u8,
 
-    pub fn format(self: @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-
+    pub fn format(self: @This(), writer: anytype) !void {
         _ = try writer.print("{{code: {}, near: {d}, message: {s}}}", .{ self.code, self.near, self.message });
     }
 };
