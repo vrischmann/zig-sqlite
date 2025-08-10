@@ -176,33 +176,33 @@ pub fn build(b: *std.Build) !void {
     // Main library and module
     //
 
-    const sqlite_lib, const sqlite_mod = blk: {
-        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with);
-
-        const mod = b.addModule("sqlite", .{
-            .root_source_file = b.path("sqlite.zig"),
-            .link_libc = true,
-        });
-        mod.addIncludePath(b.path("c"));
-        mod.addIncludePath(sqlite_dep.path("."));
-        mod.linkLibrary(lib);
-
-        break :blk .{ lib, mod };
-    };
-    b.installArtifact(sqlite_lib);
-
-    const sqliteext_mod = blk: {
-        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
-
-        const mod = b.addModule("sqliteext", .{
-            .root_source_file = b.path("sqlite.zig"),
-            .link_libc = true,
-        });
-        mod.addIncludePath(b.path("c"));
-        mod.linkLibrary(lib);
-
-        break :blk mod;
-    };
+    //\ const sqlite_lib, const sqlite_mod = blk: {
+    //\     const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with);
+    //\
+    //\     const mod = b.addModule("sqlite", .{
+    //\         .root_source_file = b.path("sqlite.zig"),
+    //\         .link_libc = true,
+    //\     });
+    //\     mod.addIncludePath(b.path("c"));
+    //\     mod.addIncludePath(sqlite_dep.path("."));
+    //\     mod.linkLibrary(lib);
+    //\
+    //\     break :blk .{ lib, mod };
+    //\ };
+    //\ b.installArtifact(sqlite_lib);
+    //\
+    //\ const sqliteext_mod = blk: {
+    //\     const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
+    //\
+    //\     const mod = b.addModule("sqliteext", .{
+    //\         .root_source_file = b.path("sqlite.zig"),
+    //\         .link_libc = true,
+    //\     });
+    //\     mod.addIncludePath(b.path("c"));
+    //\     mod.linkLibrary(lib);
+    //\
+    //\     break :blk mod;
+    //\ };
 
     //
     // Tests
@@ -256,12 +256,12 @@ pub fn build(b: *std.Build) !void {
 
     // This builds an example shared library with the extension and a binary that tests it.
 
-    const zigcrypto_install_artifact = addZigcrypto(b, sqliteext_mod, target, optimize);
-    test_step.dependOn(&zigcrypto_install_artifact.step);
-
-    const zigcrypto_test_run = addZigcryptoTestRun(b, sqlite_mod, target, optimize);
-    zigcrypto_test_run.step.dependOn(&zigcrypto_install_artifact.step);
-    test_step.dependOn(&zigcrypto_test_run.step);
+    //\ const zigcrypto_install_artifact = addZigcrypto(b, sqliteext_mod, target, optimize);
+    //\ test_step.dependOn(&zigcrypto_install_artifact.step);
+    //\
+    //\ const zigcrypto_test_run = addZigcryptoTestRun(b, sqlite_mod, target, optimize);
+    //\ zigcrypto_test_run.step.dependOn(&zigcrypto_install_artifact.step);
+    //\ test_step.dependOn(&zigcrypto_test_run.step);
 
     //
     // Tools
