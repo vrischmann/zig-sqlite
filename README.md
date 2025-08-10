@@ -19,8 +19,6 @@ If you use this library, expect to have to make changes when you update the code
 
 The plan is to support releases once Zig 1.0 is released but this can still change.
 
-So your mileage may vary if you try to use `zig-sqlite`.
-
 # Table of contents
 
 <!--toc:start-->
