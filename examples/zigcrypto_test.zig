@@ -41,14 +41,14 @@ pub fn main() anyerror!void {
     var diags = sqlite.Diagnostics{};
 
     const blake3_digest = db.oneAlloc([]const u8, allocator, "SELECT hex(blake3('foobar'))", .{ .diags = &diags }, .{}) catch |err| {
-        debug.print("unable to get blake3 hash, err: {!}, diags: {s}\n", .{ err, diags });
+        debug.print("unable to get blake3 hash, err: {}, diags: {f}\n", .{ err, diags });
         return err;
     };
     debug.assert(blake3_digest != null);
     debug.assert(mem.eql(u8, "AA51DCD43D5C6C5203EE16906FD6B35DB298B9B2E1DE3FCE81811D4806B76B7D", blake3_digest.?));
 
     const sha3_digest = db.oneAlloc([]const u8, allocator, "SELECT hex(sha3_512('foobar'))", .{ .diags = &diags }, .{}) catch |err| {
-        debug.print("unable to get sha3 hash, err: {!}, diags: {s}\n", .{ err, diags });
+        debug.print("unable to get sha3 hash, err: {}, diags: {f}\n", .{ err, diags });
         return err;
     };
     debug.assert(sha3_digest != null);

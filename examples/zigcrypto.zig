@@ -39,7 +39,7 @@ fn createAllFunctions(db: *sqlite.Db) !void {
     );
 }
 
-pub export fn sqlite3_zigcrypto_init(raw_db: *c.sqlite3, err_msg: [*c][*c]u8, api: *c.sqlite3_api_routines) callconv(.C) c_int {
+pub export fn sqlite3_zigcrypto_init(raw_db: *c.sqlite3, err_msg: [*c][*c]u8, api: *c.sqlite3_api_routines) callconv(.c) c_int {
     _ = err_msg;
 
     c.sqlite3_api = api;

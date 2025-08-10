@@ -50,7 +50,7 @@ pub const VTabDiagnostics = struct {
     error_message: []const u8 = "unknown error",
 
     pub fn setErrorMessage(self: *Self, comptime format_string: []const u8, values: anytype) void {
-        self.error_message = fmt.allocPrint(self.allocator, format_string, values) catch |err| switch (err) {
+        self.error_message = fmt.allocPrintSentinel(self.allocator, format_string, values, 0) catch |err| switch (err) {
             error.OutOfMemory => "can't set diagnostic message, out of memory",
         };
     }
@@ -717,7 +717,7 @@ pub fn VirtualTable(
             return try State.init(module_context, table);
         }
 
-        fn xCreate(db: ?*c.sqlite3, module_context_ptr: ?*anyopaque, argc: c_int, argv: [*c]const [*c]const u8, vtab: [*c][*c]c.sqlite3_vtab, err_str: [*c][*c]const u8) callconv(.C) c_int {
+        fn xCreate(db: ?*c.sqlite3, module_context_ptr: ?*anyopaque, argc: c_int, argv: [*c]const [*c]const u8, vtab: [*c][*c]c.sqlite3_vtab, err_str: [*c][*c]const u8) callconv(.c) c_int {
             _ = db;
             _ = module_context_ptr;
             _ = argc;
@@ -730,7 +730,7 @@ pub fn VirtualTable(
             return c.SQLITE_ERROR;
         }
 
-        fn xConnect(db: ?*c.sqlite3, module_context_ptr: ?*anyopaque, argc: c_int, argv: [*c]const [*c]const u8, vtab: [*c][*c]c.sqlite3_vtab, err_str: [*c][*c]u8) callconv(.C) c_int {
+        fn xConnect(db: ?*c.sqlite3, module_context_ptr: ?*anyopaque, argc: c_int, argv: [*c]const [*c]const u8, vtab: [*c][*c]c.sqlite3_vtab, err_str: [*c][*c]u8) callconv(.c) c_int {
             const module_context = getModuleContext(module_context_ptr);
 
             var arena = heap.ArenaAllocator.init(module_context.allocator);
@@ -761,7 +761,7 @@ pub fn VirtualTable(
             return c.SQLITE_OK;
         }
 
-        fn xBestIndex(vtab: [*c]c.sqlite3_vtab, index_info_ptr: [*c]c.sqlite3_index_info) callconv(.C) c_int {
+        fn xBestIndex(vtab: [*c]c.sqlite3_vtab, index_info_ptr: [*c]c.sqlite3_index_info) callconv(.c) c_int {
             const index_info: *c.sqlite3_index_info = index_info_ptr orelse unreachable;
 
             //
@@ -775,20 +775,20 @@ pub fn VirtualTable(
             // Create an index builder and let the user build the index.
 
             var builder = BestIndexBuilder.init(arena.allocator(), index_info) catch |err| {
-                logger.err("unable to create best index builder, err: {!}", .{err});
+                logger.err("unable to create best index builder, err: {}", .{err});
                 return c.SQLITE_ERROR;
             };
 
             var diags = VTabDiagnostics{ .allocator = arena.allocator() };
             state.table.buildBestIndex(&diags, &builder) catch |err| {
-                logger.err("unable to build best index, err: {!}", .{err});
+                logger.err("unable to build best index, err: {}", .{err});
                 return c.SQLITE_ERROR;
             };
 
             return c.SQLITE_OK;
         }
 
-        fn xDisconnect(vtab: [*c]c.sqlite3_vtab) callconv(.C) c_int {
+        fn xDisconnect(vtab: [*c]c.sqlite3_vtab) callconv(.c) c_int {
             const nullable_state: ?*State = @fieldParentPtr("vtab", vtab);
             const state = nullable_state orelse unreachable;
 
@@ -797,7 +797,7 @@ pub fn VirtualTable(
             return c.SQLITE_OK;
         }
 
-        fn xDestroy(vtab: [*c]c.sqlite3_vtab) callconv(.C) c_int {
+        fn xDestroy(vtab: [*c]c.sqlite3_vtab) callconv(.c) c_int {
             _ = vtab;
 
             debug.print("xDestroy\n", .{});
@@ -805,12 +805,12 @@ pub fn VirtualTable(
             return c.SQLITE_ERROR;
         }
 
-        fn xOpen(vtab: [*c]c.sqlite3_vtab, vtab_cursor: [*c][*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
+        fn xOpen(vtab: [*c]c.sqlite3_vtab, vtab_cursor: [*c][*c]c.sqlite3_vtab_cursor) callconv(.c) c_int {
             const nullable_state: ?*State = @fieldParentPtr("vtab", vtab);
             const state = nullable_state orelse unreachable;
 
             const cursor_state = CursorState.init(state.module_context, state.table) catch |err| {
-                logger.err("unable to create cursor state, err: {!}", .{err});
+                logger.err("unable to create cursor state, err: {}", .{err});
                 return c.SQLITE_ERROR;
             };
             vtab_cursor.* = @ptrCast(cursor_state);
@@ -818,7 +818,7 @@ pub fn VirtualTable(
             return c.SQLITE_OK;
         }
 
-        fn xClose(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
+        fn xClose(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.c) c_int {
             const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
             const cursor_state = nullable_cursor_state orelse unreachable;
 
@@ -827,7 +827,7 @@ pub fn VirtualTable(
             return c.SQLITE_OK;
         }
 
-        fn xEof(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
+        fn xEof(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.c) c_int {
             const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
             const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
@@ -865,7 +865,7 @@ pub fn VirtualTable(
             return res;
         }
 
-        fn xFilter(vtab_cursor: [*c]c.sqlite3_vtab_cursor, idx_num: c_int, idx_str: [*c]const u8, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.C) c_int {
+        fn xFilter(vtab_cursor: [*c]c.sqlite3_vtab_cursor, idx_num: c_int, idx_str: [*c]const u8, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.c) c_int {
             const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
             const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
@@ -878,7 +878,7 @@ pub fn VirtualTable(
             const id = IndexIdentifier.fromC(idx_num, idx_str);
 
             const args = filterArgsFromCPointer(arena.allocator(), argc, argv) catch |err| {
-                logger.err("unable to create filter args, err: {!}", .{err});
+                logger.err("unable to create filter args, err: {}", .{err});
                 return c.SQLITE_ERROR;
             };
 
@@ -891,7 +891,7 @@ pub fn VirtualTable(
             return c.SQLITE_OK;
         }
 
-        fn xNext(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.C) c_int {
+        fn xNext(vtab_cursor: [*c]c.sqlite3_vtab_cursor) callconv(.c) c_int {
             const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
             const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
@@ -910,7 +910,7 @@ pub fn VirtualTable(
             return c.SQLITE_OK;
         }
 
-        fn xColumn(vtab_cursor: [*c]c.sqlite3_vtab_cursor, ctx: ?*c.sqlite3_context, n: c_int) callconv(.C) c_int {
+        fn xColumn(vtab_cursor: [*c]c.sqlite3_vtab_cursor, ctx: ?*c.sqlite3_context, n: c_int) callconv(.c) c_int {
             const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
             const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
@@ -954,7 +954,7 @@ pub fn VirtualTable(
             return c.SQLITE_OK;
         }
 
-        fn xRowid(vtab_cursor: [*c]c.sqlite3_vtab_cursor, row_id_ptr: [*c]c.sqlite3_int64) callconv(.C) c_int {
+        fn xRowid(vtab_cursor: [*c]c.sqlite3_vtab_cursor, row_id_ptr: [*c]c.sqlite3_int64) callconv(.c) c_int {
             const nullable_cursor_state: ?*CursorState = @fieldParentPtr("vtab_cursor", vtab_cursor);
             const cursor_state = nullable_cursor_state orelse unreachable;
             const cursor = cursor_state.cursor;
@@ -1011,7 +1011,7 @@ const TestVirtualTable = struct {
                             n = fmt.parseInt(usize, kv.value, 10) catch |err| {
                                 switch (err) {
                                     error.InvalidCharacter => diags.setErrorMessage("not a number: {s}", .{kv.value}),
-                                    else => diags.setErrorMessage("got error while parsing value {s}: {!}", .{ kv.value, err }),
+                                    else => diags.setErrorMessage("got error while parsing value {s}: {}", .{ kv.value, err }),
                                 }
                                 return err;
                             };
@@ -1297,7 +1297,7 @@ test "parse module arguments" {
 
     const args = try allocator.alloc([*c]const u8, 20);
     for (args, 0..) |*arg, i| {
-        const tmp = try fmt.allocPrintZ(allocator, "arg={d}", .{i});
+        const tmp = try fmt.allocPrintSentinel(allocator, "arg={d}", .{i}, 0);
         arg.* = @ptrCast(tmp);
     }
 
