@@ -13,7 +13,11 @@ If you use this library, expect to have to make changes when you update the code
 
 # Zig release support
 
-`zig-sqlite` only tracks Zig master (as can be found [here](https://ziglang.org/download/)). The plan is to support releases once Zig 1.0 is released but this can still change.
+`zig-sqlite` follows Zig's release structure:
+- `master` tracks Zig master
+- `zig-0.14.0` tracks Zig 0.14.0
+
+The plan is to support releases once Zig 1.0 is released but this can still change.
 
 So your mileage may vary if you try to use `zig-sqlite`.
 
