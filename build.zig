@@ -154,9 +154,9 @@ pub fn build(b: *std.Build) !void {
 
     // Define C flags to use
 
-    var flags = std.ArrayList([]const u8).init(b.allocator);
-    defer flags.deinit();
-    try flags.append("-std=c99");
+    var flags: std.ArrayList([]const u8) = .{};
+    defer flags.deinit(b.allocator);
+    try flags.append(b.allocator, "-std=c99");
 
     inline for (std.meta.fields(EnableOptions)) |field| {
         const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse field.defaultValue().?;
@@ -166,7 +166,7 @@ pub fn build(b: *std.Build) !void {
             const name = std.ascii.upperString(&buf, field.name);
             const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_ENABLE_{s}", .{name});
 
-            try flags.append(flag);
+            try flags.append(b.allocator, flag);
         }
     }
 
