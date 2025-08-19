@@ -210,7 +210,7 @@ pub const BestIndexBuilder = struct {
         const res = Self{
             .allocator = allocator,
             .index_info = index_info,
-            .id_str_buffer = std.ArrayList(u8).init(allocator),
+            .id_str_buffer = .empty,
             .constraints = try allocator.alloc(Constraint, @intCast(index_info.nConstraint)),
             .columns_used = @intCast(index_info.colUsed),
             .id = .{},
@@ -1070,7 +1070,7 @@ const TestVirtualTable = struct {
         _ = self;
         _ = diags;
 
-        var id_str_writer = builder.id_str_buffer.writer();
+        var id_str_writer = builder.id_str_buffer.writer(builder.allocator);
 
         var argv_index: i32 = 0;
         for (builder.constraints) |*constraint| {
@@ -1084,7 +1084,7 @@ const TestVirtualTable = struct {
 
         //
 
-        builder.id.str = try builder.id_str_buffer.toOwnedSlice();
+        builder.id.str = try builder.id_str_buffer.toOwnedSlice(builder.allocator);
         builder.estimated_cost = 200;
         builder.estimated_rows = 200;
 
