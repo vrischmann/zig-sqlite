@@ -15,7 +15,7 @@ If you use this library, expect to have to make changes when you update the code
 
 `zig-sqlite` follows Zig's release structure:
 - [master](https://github.com/vrischmann/zig-sqlite) tracks Zig master
-- [zig-0.14.0](https://github.com/vrischmann/zig-sqlite/tree/zig-0.14.0) tracks Zig 0.14.0
+- [zig-0.15.1](https://github.com/vrischmann/zig-sqlite/tree/zig-0.15.1) tracks Zig 0.15.1
 
 The plan is to support releases once Zig 1.0 is released but this can still change.
 
