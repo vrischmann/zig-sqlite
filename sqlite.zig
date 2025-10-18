@@ -1969,7 +1969,7 @@ pub const DynamicStatement = struct {
 
         var rows: std.ArrayList(Type) = .{};
         while (try iter.nextAlloc(allocator, options)) |row| {
-            try rows.append(row);
+            try rows.append(allocator, row);
         }
 
         return rows.toOwnedSlice(allocator);
