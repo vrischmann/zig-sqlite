@@ -1972,7 +1972,7 @@ pub const DynamicStatement = struct {
             try rows.append(row);
         }
 
-        return rows.toOwnedSlice();
+        return rows.toOwnedSlice(allocator);
     }
 };
 
