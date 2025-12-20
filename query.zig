@@ -161,21 +161,8 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
                     .bind_marker_type => switch (c) {
                         '}' => {
                             state = .start;
-
                             const type_info_string = current_bind_marker_type[0..current_bind_marker_type_pos];
-                            // Handles optional types
-                            const typ = if (type_info_string[0] == '?') blk: {
-                                const child_type = ParseType(type_info_string[1..]);
-                                break :blk @Type(std.builtin.Type{
-                                    .optional = .{
-                                        .child = child_type,
-                                    },
-                                });
-                            } else blk: {
-                                break :blk ParseType(type_info_string);
-                            };
-
-                            tmp_bind_markers[nb_tmp_bind_markers].typed = typ;
+                            tmp_bind_markers[nb_tmp_bind_markers].typed = ParseType(type_info_string);
                             nb_tmp_bind_markers += 1;
                         },
                         else => {
@@ -222,18 +209,18 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
 fn ParseType(comptime type_info: []const u8) type {
     if (type_info.len <= 0) @compileError("invalid type info " ++ type_info);
 
+    if (type_info[0] == '?') {
+        const parsed_type = ParseType(type_info[1..]);
+        return ?parsed_type;
+    }
+
     // Integer
     if (mem.eql(u8, "usize", type_info)) return usize;
     if (mem.eql(u8, "isize", type_info)) return isize;
 
     if (type_info[0] == 'u' or type_info[0] == 'i') {
-        return @Type(std.builtin.Type{
-            .int = std.builtin.Type.Int{
-                .signedness = if (type_info[0] == 'i') .signed else .unsigned,
-                .bits = std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
-                    @compileError("invalid type info " ++ type_info);
-                },
-            },
+        return @Int(if (type_info[0] == 'i') .signed else .unsigned, std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
+            @compileError("invalid type info " ++ type_info);
         });
     }
 
