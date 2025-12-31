@@ -2944,24 +2944,23 @@ test "sqlite: optional" {
         try testing.expectEqual(true, row.?.is_published.?);
     }
 
-    // TODO enable
-    // {
-    //     const data: ?[]const u8 = "hello";
-    //     try db.exec("INSERT INTO article(author_id, data) VALUES(?, :data{?[]const u8})", .{}, .{
-    //         .author_id = 20,
-    //         .dhe = data,
-    //     });
+    {
+        const data: ?[]const u8 = "hello";
+        try db.exec("INSERT INTO article(author_id, data) VALUES(?, :data{?[]const u8})", .{}, .{
+            .author_id = 20,
+            .dhe = data,
+        });
 
-    //     const row = try db.oneAlloc(
-    //         []const u8,
-    //         arena.allocator(),
-    //         "SELECT data FROM article WHERE author_id = ?",
-    //         .{},
-    //         .{ .author_id = 20 },
-    //     );
-    //     try testing.expect(row != null);
-    //     try testing.expectEqualStrings(data.?, row.?);
-    // }
+        const row = try db.oneAlloc(
+            []const u8,
+            arena.allocator(),
+            "SELECT data FROM article WHERE author_id = ?",
+            .{},
+            .{ .author_id = 20 },
+        );
+        try testing.expect(row != null);
+        try testing.expectEqualStrings(data.?, row.?);
+    }
 }
 
 test "sqlite: statement reset" {
