@@ -1070,15 +1070,13 @@ const TestVirtualTable = struct {
         _ = self;
         _ = diags;
 
-        var id_str_writer = builder.id_str_buffer.writer(builder.allocator);
-
         var argv_index: i32 = 0;
         for (builder.constraints) |*constraint| {
             if (constraint.op == .eq) {
                 argv_index += 1;
                 constraint.usage.argv_index = argv_index;
 
-                try id_str_writer.print("={d:<6}", .{constraint.column});
+                try builder.id_str_buffer.print(builder.allocator, "={d:<6}", .{constraint.column});
             }
         }
 

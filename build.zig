@@ -5,6 +5,7 @@ const mem = std.mem;
 const ResolvedTarget = std.Build.ResolvedTarget;
 const Query = std.Target.Query;
 const builtin = @import("builtin");
+const Io = std.Io;
 
 const Preprocessor = @import("build/Preprocessor.zig");
 
@@ -145,6 +146,8 @@ pub fn build(b: *std.Build) !void {
     const query = b.standardTargetOptionsQueryOnly(.{});
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
+    var threaded = Io.Threaded.init_single_threaded;
+    const io = threaded.io();
 
     // Upstream dependency
     const sqlite_dep = b.dependency("sqlite", .{
@@ -268,16 +271,17 @@ pub fn build(b: *std.Build) !void {
     // Tools
     //
 
-    addPreprocessStep(b, sqlite_dep);
+    addPreprocessStep(b, io, sqlite_dep);
 }
 
-fn addPreprocessStep(b: *std.Build, sqlite_dep: *std.Build.Dependency) void {
+fn addPreprocessStep(b: *std.Build, io: Io, sqlite_dep: *std.Build.Dependency) void {
     var wf = b.addWriteFiles();
 
     // Preprocessing step
     const preprocess = PreprocessStep.create(b, .{
         .source = sqlite_dep.path("."),
         .target = wf.getDirectory(),
+        .io = io,
     });
     preprocess.step.dependOn(&wf.step);
 
@@ -341,12 +345,14 @@ const PreprocessStep = struct {
     const Config = struct {
         source: std.Build.LazyPath,
         target: std.Build.LazyPath,
+        io: Io,
     };
 
     step: std.Build.Step,
 
     source: std.Build.LazyPath,
     target: std.Build.LazyPath,
+    io: Io,
 
     fn create(owner: *std.Build, config: Config) *PreprocessStep {
         const step = owner.allocator.create(PreprocessStep) catch @panic("OOM");
@@ -359,6 +365,7 @@ const PreprocessStep = struct {
             }),
             .source = config.source,
             .target = config.target,
+            .io = config.io,
         };
 
         return step;
@@ -374,7 +381,7 @@ const PreprocessStep = struct {
         const loadable_sqlite3_h = try ps.target.path(owner, "loadable-ext-sqlite3.h").getPath3(owner, step).toString(owner.allocator);
         const loadable_sqlite3ext_h = try ps.target.path(owner, "loadable-ext-sqlite3ext.h").getPath3(owner, step).toString(owner.allocator);
 
-        try Preprocessor.sqlite3(owner.allocator, sqlite3_h, loadable_sqlite3_h);
-        try Preprocessor.sqlite3ext(owner.allocator, sqlite3ext_h, loadable_sqlite3ext_h);
+        try Preprocessor.sqlite3(owner.allocator, ps.io, sqlite3_h, loadable_sqlite3_h);
+        try Preprocessor.sqlite3ext(owner.allocator, ps.io, sqlite3ext_h, loadable_sqlite3ext_h);
     }
 };

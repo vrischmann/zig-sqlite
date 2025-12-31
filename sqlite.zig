@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const build_options = @import("build_options");
 const debug = std.debug;
 const heap = std.heap;
-const io = std.io;
+const Io = std.Io;
 const mem = std.mem;
 const testing = std.testing;
 
@@ -116,7 +116,7 @@ pub const Blob = struct {
         }
     };
 
-    // Used when reading or binding data.
+    // TODO remove
     data: []const u8,
 
     // Used for incremental i/o.
@@ -132,16 +132,9 @@ pub const Blob = struct {
         }
     }
 
-    pub const Reader = io.GenericReader(*Self, errors.Error, read);
-
-    /// reader returns a io.Reader.
-    pub fn reader(self: *Self) Reader {
-        return .{ .context = self };
-    }
-
-    fn read(self: *Self, buffer: []u8) Error!usize {
+    pub fn read_from_db(self: *Self, buffer: []u8) Error![]u8 {
         if (self.offset >= self.size) {
-            return 0;
+            return "";
         }
 
         const tmp_buffer = blk: {
@@ -161,17 +154,10 @@ pub const Blob = struct {
 
         self.offset += @intCast(tmp_buffer.len);
 
-        return tmp_buffer.len;
+        return tmp_buffer;
     }
 
-    pub const Writer = io.GenericWriter(*Self, Error, write);
-
-    /// writer returns a io.Writer.
-    pub fn writer(self: *Self) Writer {
-        return .{ .context = self };
-    }
-
-    fn write(self: *Self, data: []const u8) Error!usize {
+    pub fn write_data_to_db(self: *Self, data: []const u8) Error!void {
         const result = c.sqlite3_blob_write(
             self.handle,
             data.ptr,
@@ -183,8 +169,6 @@ pub const Blob = struct {
         }
 
         self.offset += @intCast(data.len);
-
-        return data.len;
     }
 
     /// Reset the offset used for reading and writing.
@@ -1470,7 +1454,7 @@ pub fn Iterator(comptime Type: type) type {
                     },
                     inline .@"struct", .@"union" => |TI| {
                         if (TI.layout == .@"packed" and !@hasField(FieldType, "readField")) {
-                            const Backing = @Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
+                            const Backing = @TypeOf(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
                             return @bitCast(self.readInt(Backing, i));
                         }
 
@@ -1701,7 +1685,7 @@ pub const DynamicStatement = struct {
                 },
                 .@"union" => |info| {
                     if (info.layout == .@"packed") {
-                        const Backing = @Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
+                        const Backing = @TypeOf(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
                         try self.bindField(Backing, options, field_name, i, @as(Backing, @bitCast(field)));
                         return;
                     }
@@ -3091,10 +3075,6 @@ test "sqlite: statement iterator" {
 }
 
 test "sqlite: blob open, reopen" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
     var db = try getTestDb();
     defer db.deinit();
 
@@ -3120,14 +3100,14 @@ test "sqlite: blob open, reopen" {
 
     {
         // Write the first blob data
-        var blob_writer = blob.writer();
-        try blob_writer.writeAll(blob_data1);
-        try blob_writer.writeAll(blob_data1);
+        try blob.write_data_to_db(blob_data1);
+        try blob.write_data_to_db(blob_data1);
 
         blob.reset();
 
-        var blob_reader = blob.reader();
-        const data = try blob_reader.readAllAlloc(allocator, 8192);
+        var read_buff: [8192]u8 = undefined;
+
+        const data = try blob.read_from_db(&read_buff);
 
         try testing.expectEqualSlices(u8, blob_data1 ** 2, data);
     }
@@ -3137,14 +3117,14 @@ test "sqlite: blob open, reopen" {
 
     {
         // Write the second blob data
-        var blob_writer = blob.writer();
-        try blob_writer.writeAll(blob_data2);
-        try blob_writer.writeAll(blob_data2);
+        try blob.write_data_to_db(blob_data2);
+        try blob.write_data_to_db(blob_data2);
 
         blob.reset();
 
-        var blob_reader = blob.reader();
-        const data = try blob_reader.readAllAlloc(allocator, 8192);
+        var read_buff: [8192]u8 = undefined;
+
+        const data = try blob.read_from_db(&read_buff);
 
         try testing.expectEqualSlices(u8, blob_data2 ** 2, data);
     }
@@ -3749,7 +3729,7 @@ test "sqlite: create aggregate function with no aggregate context" {
     var db = try getTestDb();
     defer db.deinit();
 
-    var rand = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+    var rand = std.Random.DefaultPrng.init(@intCast((try std.time.Instant.now()).timestamp.nsec));
 
     // Create an aggregate function working with a MyContext
 
@@ -3810,7 +3790,7 @@ test "sqlite: create aggregate function with an aggregate context" {
     var db = try getTestDb();
     defer db.deinit();
 
-    var rand = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+    var rand = std.Random.DefaultPrng.init(@intCast((try std.time.Instant.now()).timestamp.nsec));
 
     try db.createAggregateFunction(
         "mySum",
