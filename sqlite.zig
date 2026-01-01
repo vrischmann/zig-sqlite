@@ -116,7 +116,7 @@ pub const Blob = struct {
         }
     };
 
-    // TODO remove
+    // TODO may be worth while to remove with the new reader and writer updates
     data: []const u8,
 
     // Used for incremental i/o.
