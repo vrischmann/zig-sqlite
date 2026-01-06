@@ -3729,8 +3729,9 @@ test "sqlite: create aggregate function with no aggregate context" {
     var db = try getTestDb();
     defer db.deinit();
 
-    const instant = std.time.Instant.now() catch .{ .timestamp = 2048 };
-    var rand = std.Random.DefaultPrng.init(@intCast(instant.timestamp));
+    const clock = std.Io.Clock.boot;
+    const timestamp = clock.now(std.testing.io) catch std.Io.Timestamp.zero;
+    var rand = std.Random.DefaultPrng.init(@intCast(timestamp.toMilliseconds()));
 
     // Create an aggregate function working with a MyContext
 
@@ -3791,8 +3792,9 @@ test "sqlite: create aggregate function with an aggregate context" {
     var db = try getTestDb();
     defer db.deinit();
 
-    const instant = std.time.Instant.now() catch .{ .timestamp = 2048 };
-    var rand = std.Random.DefaultPrng.init(@intCast(instant.timestamp));
+    const clock = std.Io.Clock.boot;
+    const timestamp = clock.now(std.testing.io) catch std.Io.Timestamp.zero;
+    var rand = std.Random.DefaultPrng.init(@intCast(timestamp.toMilliseconds()));
 
     try db.createAggregateFunction(
         "mySum",
