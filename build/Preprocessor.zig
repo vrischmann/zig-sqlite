@@ -24,8 +24,10 @@ const mem = std.mem;
 // This works but it requires fairly extensive modifications of both sqlite3.h and sqlite3ext.h which is time consuming to do manually;
 // this tool is intended to automate all these modifications.
 
-fn readOriginalData(allocator: mem.Allocator, path: []const u8) ![]const u8 {
-    var file = try std.fs.cwd().openFile(path, .{});
+fn readOriginalData(allocator: mem.Allocator, io: std.Io, path: []const u8) ![]const u8 {
+    const cwd: std.Io.Dir = .cwd();
+
+    var file = try cwd.openFile(io, path, .{});
     defer file.close();
     var buf: [1024]u8 = undefined;
     var reader = file.reader(&buf);
@@ -153,8 +155,8 @@ const Processor = struct {
     }
 };
 
-pub fn sqlite3(allocator: mem.Allocator, input_path: []const u8, output_path: []const u8) !void {
-    const data = try readOriginalData(allocator, input_path);
+pub fn sqlite3(allocator: mem.Allocator, io: std.Io, input_path: []const u8, output_path: []const u8) !void {
+    const data = try readOriginalData(allocator, io, input_path);
 
     var processor = try Processor.init(allocator, data);
 

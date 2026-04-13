@@ -115,23 +115,24 @@ fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []c
         .optimize = optimize,
         .link_libc = true,
     });
-    const lib = b.addLibrary(.{
-        .name = "sqlite",
-        .linkage = .static,
-        .root_module = mod,
-    });
+    mod.addIncludePath(dep.path("."));
+    mod.addIncludePath(b.path("c"));
 
-    lib.addIncludePath(dep.path("."));
-    lib.addIncludePath(b.path("c"));
     if (sqlite_c == .with) {
-        lib.addCSourceFile(.{
+        mod.addCSourceFile(.{
             .file = dep.path("sqlite3.c"),
             .flags = c_flags,
         });
     }
-    lib.addCSourceFile(.{
+    mod.addCSourceFile(.{
         .file = b.path("c/workaround.c"),
         .flags = c_flags,
+    });
+
+    const lib = b.addLibrary(.{
+        .name = "sqlite",
+        .linkage = .static,
+        .root_module = mod,
     });
 
     return lib;
@@ -154,7 +155,7 @@ pub fn build(b: *std.Build) !void {
 
     // Define C flags to use
 
-    var flags: std.ArrayList([]const u8) = .{};
+    var flags: std.ArrayList([]const u8) = .empty;
     defer flags.deinit(b.allocator);
     try flags.append(b.allocator, "-std=c99");
 
@@ -237,14 +238,14 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("sqlite.zig"),
             .single_threaded = test_target.single_threaded,
         });
+        mod.addIncludePath(b.path("c"));
+        mod.addIncludePath(sqlite_dep.path("."));
+        mod.linkLibrary(test_sqlite_lib);
 
         const tests = b.addTest(.{
             .name = test_name,
             .root_module = mod,
         });
-        tests.addIncludePath(b.path("c"));
-        tests.addIncludePath(sqlite_dep.path("."));
-        tests.linkLibrary(test_sqlite_lib);
 
         const tests_options = b.addOptions();
         tests.root_module.addImport("build_options", tests_options.createModule());
@@ -374,7 +375,7 @@ const PreprocessStep = struct {
         const loadable_sqlite3_h = try ps.target.path(owner, "loadable-ext-sqlite3.h").getPath3(owner, step).toString(owner.allocator);
         const loadable_sqlite3ext_h = try ps.target.path(owner, "loadable-ext-sqlite3ext.h").getPath3(owner, step).toString(owner.allocator);
 
-        try Preprocessor.sqlite3(owner.allocator, sqlite3_h, loadable_sqlite3_h);
-        try Preprocessor.sqlite3ext(owner.allocator, sqlite3ext_h, loadable_sqlite3ext_h);
+        try Preprocessor.sqlite3(owner.allocator, owner.graph.io, sqlite3_h, loadable_sqlite3_h);
+        try Preprocessor.sqlite3ext(owner.allocator, owner.graph.io, sqlite3ext_h, loadable_sqlite3ext_h);
     }
 };
