@@ -28,9 +28,9 @@ fn readOriginalData(allocator: mem.Allocator, io: std.Io, path: []const u8) ![]c
     const cwd: std.Io.Dir = .cwd();
 
     var file = try cwd.openFile(io, path, .{});
-    defer file.close();
+    defer file.close(io);
     var buf: [1024]u8 = undefined;
-    var reader = file.reader(&buf);
+    var reader = file.reader(io, &buf);
 
     const data = reader.interface.readAlloc(allocator, 1024 * 1024);
     return data;
@@ -194,17 +194,19 @@ pub fn sqlite3(allocator: mem.Allocator, io: std.Io, input_path: []const u8, out
 
     // Write the result
 
-    var output_file = try std.fs.cwd().createFile(output_path, .{ .mode = 0o0644 });
-    defer output_file.close();
+    const cwd: std.Io.Dir = .cwd();
 
-    try output_file.writeAll("/* sqlite3.h edited by the zig-sqlite build script */\n");
+    var output_file = try cwd.createFile(io, output_path, .{ .permissions = .default_file });
+    defer output_file.close(io);
+
+    try output_file.writeStreamingAll(io, "/* sqlite3.h edited by the zig-sqlite build script */\n");
     var buf: [1024]u8 = undefined;
-    var out_writer = output_file.writer(&buf);
+    var out_writer = output_file.writer(io, &buf);
     try processor.dump(&out_writer);
 }
 
-pub fn sqlite3ext(allocator: mem.Allocator, input_path: []const u8, output_path: []const u8) !void {
-    const data = try readOriginalData(allocator, input_path);
+pub fn sqlite3ext(allocator: mem.Allocator, io: std.Io, input_path: []const u8, output_path: []const u8) !void {
+    const data = try readOriginalData(allocator, io, input_path);
 
     var processor = try Processor.init(allocator, data);
 
@@ -232,11 +234,13 @@ pub fn sqlite3ext(allocator: mem.Allocator, input_path: []const u8, output_path:
 
     // Write the result
 
-    var output_file = try std.fs.cwd().createFile(output_path, .{ .mode = 0o0644 });
-    defer output_file.close();
+    const cwd: std.Io.Dir = .cwd();
 
-    try output_file.writeAll("/* sqlite3ext.h edited by the zig-sqlite build script */\n");
+    var output_file = try cwd.createFile(io, output_path, .{ .permissions = .default_file });
+    defer output_file.close(io);
+
+    try output_file.writeStreamingAll(io, "/* sqlite3ext.h edited by the zig-sqlite build script */\n");
     var buf: [1024]u8 = undefined;
-    var out_writer = output_file.writer(&buf);
+    var out_writer = output_file.writer(io, &buf);
     try processor.dump(&out_writer);
 }
