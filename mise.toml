@@ -1,2 +1,2 @@
 [tools]
-zig = "master"
+zig = "0.15.2"
