@@ -169,6 +169,13 @@ pub fn build(b: *std.Build) !void {
             try flags.append(b.allocator, flag);
         }
     }
+    switch (b.option(u2, "threadsafe", "Set SQLITE_THREADSAFE to 0, 1, or 2") orelse 3) {
+        0, 1, 2 => |n| {
+            const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_THREADSAFE={d}", .{n});
+            try flags.append(b.allocator, flag);
+        },
+        else => {},
+    }
 
     const c_flags = flags.items;
 
