@@ -168,11 +168,7 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
                             // Handles optional types
                             const typ = if (type_info_string[0] == '?') blk: {
                                 const child_type = ParseType(type_info_string[1..]);
-                                break :blk @TypeOf(std.builtin.Type{
-                                    .optional = .{
-                                        .child = child_type,
-                                    },
-                                });
+                                break :blk ?child_type;
                             } else blk: {
                                 break :blk ParseType(type_info_string);
                             };
@@ -321,6 +317,10 @@ test "parsed query: bind markers types" {
             .{
                 .query = "foobar " ++ prefix ++ "{?[]const u8}",
                 .expected_marker = .{ .typed = ?[]const u8 },
+            },
+            .{
+                .query = "foobar " ++ prefix ++ "{[]const u8}",
+                .expected_marker = .{ .typed = []const u8 },
             },
         };
 

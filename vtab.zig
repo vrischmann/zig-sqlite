@@ -1172,7 +1172,7 @@ const TestVirtualTableCursor = struct {
             // 3 chars for the '=' marker
             // 6 chars because we format all columns in a 6 char wide string
             const col_str = id[pos + 1 .. pos + 1 + 6];
-            const col = try fmt.parseInt(i32, mem.trimRight(u8, col_str, " "), 10);
+            const col = try fmt.parseInt(i32, mem.trimEnd(u8, col_str, " "), 10);
 
             id = id[pos + 1 + 6 ..];
 

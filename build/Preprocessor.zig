@@ -193,13 +193,14 @@ pub fn sqlite3(allocator: mem.Allocator, io: Io, input_path: []const u8, output_
 
     // Write the result
 
-    var output_file = try std.fs.cwd().createFile(output_path, .{ .mode = 0o0644 });
-    defer output_file.close();
+    var output_file = try Io.Dir.cwd().createFile(io, output_path, .{});
+    defer output_file.close(io);
 
-    try output_file.writeAll("/* sqlite3.h edited by the zig-sqlite build script */\n");
-    var buf: [1024]u8 = undefined;
-    var out_writer = output_file.writer(&buf);
-    try processor.dump(&out_writer);
+    var write_buff: [1028]u8 = undefined;
+
+    var w = output_file.writer(io, &write_buff);
+
+    try w.interface.writeAll("/* sqlite3.h edited by the zig-sqlite build script */\n");
 }
 
 pub fn sqlite3ext(allocator: mem.Allocator, io: Io, input_path: []const u8, output_path: []const u8) !void {
@@ -231,11 +232,10 @@ pub fn sqlite3ext(allocator: mem.Allocator, io: Io, input_path: []const u8, outp
 
     // Write the result
 
-    var output_file = try std.fs.cwd().createFile(output_path, .{ .mode = 0o0644 });
-    defer output_file.close();
+    var output_file = try Io.Dir.cwd().createFile(io, output_path, .{});
+    defer output_file.close(io);
 
-    try output_file.writeAll("/* sqlite3ext.h edited by the zig-sqlite build script */\n");
-    var buf: [1024]u8 = undefined;
-    var out_writer = output_file.writer(&buf);
-    try processor.dump(&out_writer);
+    var write_buff: [1028]u8 = undefined;
+    var w = output_file.writer(io, &write_buff);
+    try w.interface.writeAll("/* sqlite3ext.h edited by the zig-sqlite build script */\n");
 }
