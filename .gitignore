@@ -7,3 +7,4 @@ core.*
 /qemu*.core
 /fuzz/outputs
 .DS_Store
+/zig-pkg
