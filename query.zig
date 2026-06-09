@@ -32,11 +32,12 @@ pub fn ParsedQuery(comptime tmp_query: []const u8) type {
         const Self = @This();
 
         const result = parse();
+        const result_query = result.query[0..Self.result.query_len].*;
 
         pub const bind_markers = result.bind_markers[0..result.bind_markers_len];
 
         pub fn getQuery() []const u8 {
-            return Self.result.query[0..Self.result.query_len];
+            return &result_query;
         }
 
         const ParsedQueryResult = struct {

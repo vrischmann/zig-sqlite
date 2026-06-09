@@ -1454,7 +1454,7 @@ pub fn Iterator(comptime Type: type) type {
                     },
                     inline .@"struct", .@"union" => |TI| {
                         if (TI.layout == .@"packed" and !@hasField(FieldType, "readField")) {
-                            const Backing = @TypeOf(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
+                            const Backing = @Int(.signedness, @bitSizeOf(FieldType));
                             return @bitCast(self.readInt(Backing, i));
                         }
 
@@ -1685,7 +1685,7 @@ pub const DynamicStatement = struct {
                 },
                 .@"union" => |info| {
                     if (info.layout == .@"packed") {
-                        const Backing = @TypeOf(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(FieldType) } });
+                        const Backing = @Int(.unsigned, @bitSizeOf(FieldType));
                         try self.bindField(Backing, options, field_name, i, @as(Backing, @bitCast(field)));
                         return;
                     }
@@ -2241,7 +2241,7 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
         pub fn all(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
             var iter = try self.iteratorAlloc(Type, allocator, values);
 
-            var rows: std.ArrayList(Type) = .{};
+            var rows: std.ArrayList(Type) = .empty;
             while (try iter.nextAlloc(allocator, options)) |row| {
                 try rows.append(allocator, row);
             }
@@ -3004,7 +3004,7 @@ test "sqlite: statement iterator" {
     var stmt = try db.prepare("INSERT INTO user(name, id, age, weight, favorite_color) VALUES(?{[]const u8}, ?{usize}, ?{usize}, ?{f32}, ?{[]const u8})");
     defer stmt.deinit();
 
-    var expected_rows: std.ArrayList(TestUser) = .{};
+    var expected_rows: std.ArrayList(TestUser) = .empty;
     var i: usize = 0;
     while (i < 20) : (i += 1) {
         const name = try std.fmt.allocPrint(allocator, "Vincent {d}", .{i});
@@ -3031,7 +3031,7 @@ test "sqlite: statement iterator" {
 
         var iter = try stmt2.iterator(RowType, .{});
 
-        var rows: std.ArrayList(RowType) = .{};
+        var rows: std.ArrayList(RowType) = .empty;
         while (try iter.next(.{})) |row| {
             try rows.append(allocator, row);
         }
@@ -3058,7 +3058,7 @@ test "sqlite: statement iterator" {
 
         var iter = try stmt2.iterator(RowType, .{});
 
-        var rows: std.ArrayList(RowType) = .{};
+        var rows: std.ArrayList(RowType) = .empty;
         while (try iter.nextAlloc(allocator, .{})) |row| {
             try rows.append(allocator, row);
         }
@@ -3439,7 +3439,7 @@ test "sqlite: bind runtime slice" {
     const allocator = arena.allocator();
 
     // creating array list on heap so that it's deemed runtime size
-    var list: std.ArrayList([]const u8) = .{};
+    var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
     try list.append(allocator, "this is some data");
     const args = try list.toOwnedSlice(allocator);
@@ -3730,7 +3730,7 @@ test "sqlite: create aggregate function with no aggregate context" {
     defer db.deinit();
 
     const clock = std.Io.Clock.boot;
-    const timestamp = clock.now(std.testing.io) catch std.Io.Timestamp.zero;
+    const timestamp = clock.now(std.testing.io);
     var rand = std.Random.DefaultPrng.init(@intCast(timestamp.toMilliseconds()));
 
     // Create an aggregate function working with a MyContext
@@ -3793,7 +3793,7 @@ test "sqlite: create aggregate function with an aggregate context" {
     defer db.deinit();
 
     const clock = std.Io.Clock.boot;
-    const timestamp = clock.now(std.testing.io) catch std.Io.Timestamp.zero;
+    const timestamp = clock.now(std.testing.io);
     var rand = std.Random.DefaultPrng.init(@intCast(timestamp.toMilliseconds()));
 
     try db.createAggregateFunction(
@@ -3861,7 +3861,7 @@ test "sqlite: empty slice" {
     defer db.deinit();
     try addTestData(&db);
 
-    var list: std.ArrayList(u8) = .{};
+    var list: std.ArrayList(u8) = .empty;
     const ptr = try list.toOwnedSlice(allocator);
 
     try db.exec("INSERT INTO article(author_id, data) VALUES(?, ?)", .{}, .{ 1, ptr });
@@ -4038,7 +4038,7 @@ test "reuse same field twice in query string" {
 
 test "fuzzing" {
     const Context = struct {
-        fn testOne(_: @This(), input: []const u8) anyerror!void {
+        fn testOne(_: @This(), smith: *testing.Smith) anyerror!void {
             var db = try Db.init(.{
                 .mode = .Memory,
                 .open_flags = .{
@@ -4049,6 +4049,11 @@ test "fuzzing" {
             defer db.deinit();
 
             try db.exec("CREATE TABLE test(id integer primary key, name text, data blob)", .{}, .{});
+
+            const input = try testing.allocator.alloc(u8, 200);
+            defer testing.allocator.free(input);
+
+            smith.bytes(input);
 
             db.execDynamic(input, .{}, .{}) catch |err| switch (err) {
                 error.SQLiteError => return,

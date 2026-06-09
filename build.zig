@@ -157,7 +157,7 @@ pub fn build(b: *std.Build) !void {
 
     // Define C flags to use
 
-    var flags: std.ArrayList([]const u8) = .{};
+    var flags: std.ArrayList([]const u8) = .empty;
     defer flags.deinit(b.allocator);
     try flags.append(b.allocator, "-std=c99");
 
