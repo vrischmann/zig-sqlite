@@ -5,6 +5,7 @@ const mem = std.mem;
 const ResolvedTarget = std.Build.ResolvedTarget;
 const Query = std.Target.Query;
 const builtin = @import("builtin");
+const Io = std.Io;
 
 const Preprocessor = @import("build/Preprocessor.zig");
 
@@ -121,15 +122,15 @@ fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []c
         .root_module = mod,
     });
 
-    lib.addIncludePath(dep.path("."));
-    lib.addIncludePath(b.path("c"));
+    lib.root_module.addIncludePath(dep.path("."));
+    lib.root_module.addIncludePath(b.path("c"));
     if (sqlite_c == .with) {
-        lib.addCSourceFile(.{
+        lib.root_module.addCSourceFile(.{
             .file = dep.path("sqlite3.c"),
             .flags = c_flags,
         });
     }
-    lib.addCSourceFile(.{
+    lib.root_module.addCSourceFile(.{
         .file = b.path("c/workaround.c"),
         .flags = c_flags,
     });
@@ -145,6 +146,8 @@ pub fn build(b: *std.Build) !void {
     const query = b.standardTargetOptionsQueryOnly(.{});
     const target = b.resolveTargetQuery(query);
     const optimize = b.standardOptimizeOption(.{});
+    var threaded = Io.Threaded.init_single_threaded;
+    const io = threaded.io();
 
     // Upstream dependency
     const sqlite_dep = b.dependency("sqlite", .{
@@ -154,7 +157,7 @@ pub fn build(b: *std.Build) !void {
 
     // Define C flags to use
 
-    var flags: std.ArrayList([]const u8) = .{};
+    var flags: std.ArrayList([]const u8) = .empty;
     defer flags.deinit(b.allocator);
     try flags.append(b.allocator, "-std=c99");
 
@@ -242,9 +245,9 @@ pub fn build(b: *std.Build) !void {
             .name = test_name,
             .root_module = mod,
         });
-        tests.addIncludePath(b.path("c"));
-        tests.addIncludePath(sqlite_dep.path("."));
-        tests.linkLibrary(test_sqlite_lib);
+        tests.root_module.addIncludePath(b.path("c"));
+        tests.root_module.addIncludePath(sqlite_dep.path("."));
+        tests.root_module.linkLibrary(test_sqlite_lib);
 
         const tests_options = b.addOptions();
         tests.root_module.addImport("build_options", tests_options.createModule());
@@ -268,16 +271,17 @@ pub fn build(b: *std.Build) !void {
     // Tools
     //
 
-    addPreprocessStep(b, sqlite_dep);
+    addPreprocessStep(b, io, sqlite_dep);
 }
 
-fn addPreprocessStep(b: *std.Build, sqlite_dep: *std.Build.Dependency) void {
+fn addPreprocessStep(b: *std.Build, io: Io, sqlite_dep: *std.Build.Dependency) void {
     var wf = b.addWriteFiles();
 
     // Preprocessing step
     const preprocess = PreprocessStep.create(b, .{
         .source = sqlite_dep.path("."),
         .target = wf.getDirectory(),
+        .io = io,
     });
     preprocess.step.dependOn(&wf.step);
 
@@ -341,12 +345,14 @@ const PreprocessStep = struct {
     const Config = struct {
         source: std.Build.LazyPath,
         target: std.Build.LazyPath,
+        io: Io,
     };
 
     step: std.Build.Step,
 
     source: std.Build.LazyPath,
     target: std.Build.LazyPath,
+    io: Io,
 
     fn create(owner: *std.Build, config: Config) *PreprocessStep {
         const step = owner.allocator.create(PreprocessStep) catch @panic("OOM");
@@ -359,6 +365,7 @@ const PreprocessStep = struct {
             }),
             .source = config.source,
             .target = config.target,
+            .io = config.io,
         };
 
         return step;
@@ -374,7 +381,7 @@ const PreprocessStep = struct {
         const loadable_sqlite3_h = try ps.target.path(owner, "loadable-ext-sqlite3.h").getPath3(owner, step).toString(owner.allocator);
         const loadable_sqlite3ext_h = try ps.target.path(owner, "loadable-ext-sqlite3ext.h").getPath3(owner, step).toString(owner.allocator);
 
-        try Preprocessor.sqlite3(owner.allocator, sqlite3_h, loadable_sqlite3_h);
-        try Preprocessor.sqlite3ext(owner.allocator, sqlite3ext_h, loadable_sqlite3ext_h);
+        try Preprocessor.sqlite3(owner.allocator, ps.io, sqlite3_h, loadable_sqlite3_h);
+        try Preprocessor.sqlite3ext(owner.allocator, ps.io, sqlite3ext_h, loadable_sqlite3ext_h);
     }
 };
