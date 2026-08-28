@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        zig_version: ["0.16.0", "0.17.0"]
+        zig_version: ["0.16.0", "master"]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-latest, macos-latest]
-        zig_version: ["0.16.0", "0.17.0"]
+        zig_version: ["0.16.0", "master"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -34,6 +34,8 @@ jobs:
         uses: mlugg/setup-zig@v2
         with:
           version: ${{ matrix.zig_version }}
+          use-cache: true
+          cache-size-limit: 2048
 
       - name: Install qemu
         if: ${{ matrix.os == 'ubuntu-24.04' }}
