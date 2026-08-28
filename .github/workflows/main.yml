@@ -13,7 +13,7 @@ jobs:
         zig_version: ["0.16.0", "0.17.0"]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: ./.github/actions/checkout
       - uses: ./.github/actions/setup-zig
         with:
           version: ${{ matrix.zig_version }}
@@ -28,7 +28,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: ./.github/actions/checkout
 
       - name: Setup zig
         uses: ./.github/actions/setup-zig
