@@ -161,7 +161,7 @@ pub fn build(b: *std.Build) !void {
     defer flags.deinit(b.allocator);
     try flags.append(b.allocator, "-std=c99");
 
-    inline for (std.meta.fields(EnableOptions)) |field| {
+    inline for (@typeInfo(EnableOptions).@"struct".fields) |field| {
         const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse field.defaultValue().?;
 
         if (opt) {
