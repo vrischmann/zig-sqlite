@@ -1,8 +1,8 @@
 .{
     .name = .sqlite,
     .fingerprint = 0xb8bb86826b7f6417,
-    .minimum_zig_version = "0.14.0",
-    .version = "3.48.0",
+    .minimum_zig_version = "0.16.0",
+    .version = "3.49.2",
     .dependencies = .{
         .sqlite = .{
             .url = "https://www.sqlite.org/2025/sqlite-amalgamation-3490200.zip",

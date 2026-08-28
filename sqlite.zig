@@ -4038,7 +4038,7 @@ test "reuse same field twice in query string" {
 
 test "fuzzing" {
     const Context = struct {
-        fn testOne(_: @This(), smith: *testing.Smith) anyerror!void {
+        fn testOne(_: @This(), input: []const u8) anyerror!void {
             var db = try Db.init(.{
                 .mode = .Memory,
                 .open_flags = .{
@@ -4049,11 +4049,6 @@ test "fuzzing" {
             defer db.deinit();
 
             try db.exec("CREATE TABLE test(id integer primary key, name text, data blob)", .{}, .{});
-
-            const input = try testing.allocator.alloc(u8, 200);
-            defer testing.allocator.free(input);
-
-            smith.bytes(input);
 
             db.execDynamic(input, .{}, .{}) catch |err| switch (err) {
                 error.SQLiteError => return,
