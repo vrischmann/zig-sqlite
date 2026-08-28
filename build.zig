@@ -110,8 +110,9 @@ fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
 }
 
 // This creates a SQLite static library from the SQLite dependency code.
-fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, sqlite_c: enum { with, without }) *std.Build.Step.Compile {
-    const mod = b.addModule("lib-sqlite", .{
+fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, sqlite_c: enum { with, without }, module_suffix: []const u8) !*std.Build.Step.Compile {
+    const mod_name = try std.fmt.allocPrint(b.allocator, "lib-sqlite-{s}{s}", .{ module_suffix, if (sqlite_c == .with) "-with" else "-without" });
+    const mod = b.addModule(mod_name, .{
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -161,15 +162,34 @@ pub fn build(b: *std.Build) !void {
     defer flags.deinit(b.allocator);
     try flags.append(b.allocator, "-std=c99");
 
-    inline for (@typeInfo(EnableOptions).@"struct".fields) |field| {
-        const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse field.defaultValue().?;
+    if (builtin.zig_version.minor <= 16) {
+        // Zig 0.16 and earlier
+        inline for (@typeInfo(EnableOptions).@"struct".fields) |field| {
+            const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse field.defaultValue().?;
 
-        if (opt) {
-            var buf: [field.name.len]u8 = undefined;
-            const name = std.ascii.upperString(&buf, field.name);
-            const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_ENABLE_{s}", .{name});
+            if (opt) {
+                var buf: [field.name.len]u8 = undefined;
+                const name = std.ascii.upperString(&buf, field.name);
+                const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_ENABLE_{s}", .{name});
 
-            try flags.append(b.allocator, flag);
+                try flags.append(b.allocator, flag);
+            }
+        }
+    } else {
+        // Zig 0.17+
+        const s = @typeInfo(EnableOptions).@"struct";
+        var i: usize = 0;
+        inline for (s.field_names) |name| {
+            const opt = b.option(bool, name, "Enable " ++ name) orelse false;
+
+            if (opt) {
+                var buf: [name.len]u8 = undefined;
+                const upper_name = std.ascii.upperString(&buf, name);
+                const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_ENABLE_{s}", .{upper_name});
+
+                try flags.append(b.allocator, flag);
+            }
+            i += 1;
         }
     }
 
@@ -181,7 +201,7 @@ pub fn build(b: *std.Build) !void {
 
     // const sqlite_lib, const sqlite_mod = blk: {
     const sqlite_lib, _ = blk: {
-        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with);
+        const lib = try makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with, "main");
 
         const mod = b.addModule("sqlite", .{
             .root_source_file = b.path("sqlite.zig"),
@@ -197,7 +217,7 @@ pub fn build(b: *std.Build) !void {
 
     // const sqliteext_mod = blk: {
     _ = blk: {
-        const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
+        const lib = try makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without, "ext");
 
         const mod = b.addModule("sqliteext", .{
             .root_source_file = b.path("sqlite.zig"),
@@ -232,7 +252,7 @@ pub fn build(b: *std.Build) !void {
             single_threaded_txt,
         });
 
-        const test_sqlite_lib = makeSQLiteLib(b, sqlite_dep, c_flags, cross_target, optimize, .with);
+        const test_sqlite_lib = try makeSQLiteLib(b, sqlite_dep, c_flags, cross_target, optimize, .with, test_name);
 
         const mod = b.addModule(test_name, .{
             .target = cross_target,
@@ -271,7 +291,10 @@ pub fn build(b: *std.Build) !void {
     // Tools
     //
 
-    addPreprocessStep(b, io, sqlite_dep);
+    // Preprocess step only works in Zig 0.16 and earlier (uses custom step API)
+    if (builtin.zig_version.minor <= 16) {
+        addPreprocessStep(b, io, sqlite_dep);
+    }
 }
 
 fn addPreprocessStep(b: *std.Build, io: Io, sqlite_dep: *std.Build.Dependency) void {

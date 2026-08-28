@@ -1080,7 +1080,7 @@ pub fn Iterator(comptime Type: type) type {
 
                     if (@typeInfo(Type.BaseType) == .int) {
                         const inner_value = try self.readField(Type.BaseType, options, 0);
-                        return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
+                        return @fromBackingInt(@intCast(@as(TI.tag_type, @intCast(inner_value))));
                     }
 
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
@@ -1164,7 +1164,7 @@ pub fn Iterator(comptime Type: type) type {
                         return std.meta.stringToEnum(Type, inner_value) orelse unreachable;
                     }
                     if (@typeInfo(Type.BaseType) == .int) {
-                        return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
+                        return @fromBackingInt(@intCast(@as(TI.tag_type, @intCast(inner_value))));
                     }
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
@@ -1448,7 +1448,7 @@ pub fn Iterator(comptime Type: type) type {
                             return std.meta.stringToEnum(FieldType, inner_value) orelse FieldType.default;
                         }
                         if (@typeInfo(FieldType.BaseType) == .int) {
-                            return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
+                            return @fromBackingInt(@intCast(@as(TI.tag_type, @intCast(inner_value))));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
@@ -1665,7 +1665,7 @@ pub const DynamicStatement = struct {
                     if (comptime isZigString(FieldType.BaseType)) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
                     } else if (@typeInfo(FieldType.BaseType) == .int) {
-                        try self.bindField(FieldType.BaseType, options, field_name, i, @intFromEnum(field));
+                        try self.bindField(FieldType.BaseType, options, field_name, i, @backingInt(field));
                     } else {
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
                     }
@@ -3109,7 +3109,12 @@ test "sqlite: blob open, reopen" {
 
         const data = try blob.read_from_db(&read_buff);
 
-        try testing.expectEqualSlices(u8, blob_data1 ** 2, data);
+        // Expected: blob_data1 concatenated with itself
+        var expected: [blob_data1.len * 2]u8 = undefined;
+        std.mem.copyForwards(u8, expected[0..blob_data1.len], blob_data1);
+        std.mem.copyForwards(u8, expected[blob_data1.len..], blob_data1);
+
+        try testing.expectEqualSlices(u8, &expected, data);
     }
 
     // Reopen the blob in the second row
@@ -3126,7 +3131,12 @@ test "sqlite: blob open, reopen" {
 
         const data = try blob.read_from_db(&read_buff);
 
-        try testing.expectEqualSlices(u8, blob_data2 ** 2, data);
+        // Expected: blob_data2 concatenated with itself
+        var expected: [blob_data2.len * 2]u8 = undefined;
+        std.mem.copyForwards(u8, expected[0..blob_data2.len], blob_data2);
+        std.mem.copyForwards(u8, expected[blob_data2.len..], blob_data2);
+
+        try testing.expectEqualSlices(u8, &expected, data);
     }
 
     try blob.close();
@@ -3377,7 +3387,10 @@ const MyData = struct {
     pub fn readField(alloc: mem.Allocator, value: BaseType) !MyData {
         _ = alloc;
 
-        var result = [_]u8{0} ** 16;
+        var result: [16]u8 = undefined;
+        for (&result) |*elem| {
+            elem.* = 0;
+        }
         var i: usize = 0;
         while (i < result.len) : (i += 1) {
             const j = i * 2;
@@ -4038,7 +4051,7 @@ test "reuse same field twice in query string" {
 
 test "fuzzing" {
     const Context = struct {
-        fn testOne(_: @This(), input: []const u8) anyerror!void {
+        fn testOne(_: @This(), smith: *testing.Smith) anyerror!void {
             var db = try Db.init(.{
                 .mode = .Memory,
                 .open_flags = .{
@@ -4049,6 +4062,11 @@ test "fuzzing" {
             defer db.deinit();
 
             try db.exec("CREATE TABLE test(id integer primary key, name text, data blob)", .{}, .{});
+
+            const input = try testing.allocator.alloc(u8, 200);
+            defer testing.allocator.free(input);
+
+            smith.bytes(input);
 
             db.execDynamic(input, .{}, .{}) catch |err| switch (err) {
                 error.SQLiteError => return,
