@@ -1080,7 +1080,7 @@ pub fn Iterator(comptime Type: type) type {
 
                     if (@typeInfo(Type.BaseType) == .int) {
                         const inner_value = try self.readField(Type.BaseType, options, 0);
-                        return @fromBackingInt(@intCast(@as(TI.tag_type, @intCast(inner_value))));
+                        return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
                     }
 
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
@@ -1164,7 +1164,7 @@ pub fn Iterator(comptime Type: type) type {
                         return std.meta.stringToEnum(Type, inner_value) orelse unreachable;
                     }
                     if (@typeInfo(Type.BaseType) == .int) {
-                        return @fromBackingInt(@intCast(@as(TI.tag_type, @intCast(inner_value))));
+                        return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
                     }
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
@@ -1438,7 +1438,7 @@ pub fn Iterator(comptime Type: type) type {
                     .array => try self.readArray(FieldType, i),
                     .pointer => try self.readPointer(FieldType, options, i),
                     .optional => try self.readOptional(FieldType, options, i),
-                    .@"enum" => |TI| {
+                    .@"enum" => {
                         const inner_value = try self.readField(FieldType.BaseType, options, i);
 
                         if (comptime isZigString(FieldType.BaseType)) {
@@ -1448,7 +1448,7 @@ pub fn Iterator(comptime Type: type) type {
                             return std.meta.stringToEnum(FieldType, inner_value) orelse FieldType.default;
                         }
                         if (@typeInfo(FieldType.BaseType) == .int) {
-                            return @fromBackingInt(@intCast(@as(TI.tag_type, @intCast(inner_value))));
+                            return @enumFromInt(@as(FieldType.BaseType, @intCast(inner_value)));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
                     },
@@ -1665,7 +1665,7 @@ pub const DynamicStatement = struct {
                     if (comptime isZigString(FieldType.BaseType)) {
                         try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
                     } else if (@typeInfo(FieldType.BaseType) == .int) {
-                        try self.bindField(FieldType.BaseType, options, field_name, i, @backingInt(field));
+                        try self.bindField(FieldType.BaseType, options, field_name, i, @intFromEnum(field));
                     } else {
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
                     }
