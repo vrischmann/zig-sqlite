@@ -178,7 +178,6 @@ pub fn build(b: *std.Build) !void {
     } else {
         // Zig 0.17+
         const s = @typeInfo(EnableOptions).@"struct";
-        var i: usize = 0;
         inline for (s.field_names) |name| {
             const opt = b.option(bool, name, "Enable " ++ name) orelse false;
 
@@ -189,7 +188,6 @@ pub fn build(b: *std.Build) !void {
 
                 try flags.append(b.allocator, flag);
             }
-            i += 1;
         }
     }
 
