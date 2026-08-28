@@ -651,3 +651,4 @@ The `finalize` function is called once at the end.
 
 The context (2nd argument of `createAggregateFunction`) can be whatever you want; both the `step` and `finalize` functions must
 have their first argument of the same type as the context.
+
