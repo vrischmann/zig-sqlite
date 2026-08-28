@@ -4,8 +4,6 @@ on:
   create:
   push:
     branches: master
-    paths:
-      - '**.zig'
   pull_request:
   schedule:
     - cron: "0 13 * * *"
