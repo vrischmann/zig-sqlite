@@ -1,0 +1,176 @@
+name: 'Setup Zig Compiler (Direct Download)'
+description: 'Download and install Zig compiler directly from ziglang.org'
+inputs:
+  version:
+    description: 'Version of Zig compiler (e.g., "0.16.0" or "master")'
+    required: true
+    default: '0.16.0'
+runs:
+  using: 'composite'
+  steps:
+    - name: Download and install Zig (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        ZIG_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        # Determine platform
+        case "${{ runner.os }}" in
+          Linux)
+            PLATFORM="x86_64-linux"
+            EXT="tar.xz"
+            ;;
+          macOS)
+            PLATFORM="x86_64-macos"
+            EXT="tar.xz"
+            ;;
+          *)
+            echo "Unsupported OS: ${{ runner.os }}"
+            exit 1
+            ;;
+        esac
+
+        # Resolve version and URL
+        if [ "${ZIG_VERSION}" = "master" ]; then
+          # Fetch the actual master version from index.json
+          echo "Resolving master version from ziglang.org..."
+          INDEX_JSON=$(curl -sL https://ziglang.org/download/index.json)
+          MASTER_VERSION=$(echo "$INDEX_JSON" | grep -o '"version": *"[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$MASTER_VERSION" ]; then
+            echo "Failed to resolve master version"
+            exit 1
+          fi
+          echo "Resolved master to: $MASTER_VERSION"
+          ZIG_VERSION="$MASTER_VERSION"
+        fi
+
+        FILENAME="zig-${PLATFORM}-${ZIG_VERSION}.${EXT}"
+
+        # Determine URL based on version
+        if echo "${ZIG_VERSION}" | grep -q -- '-dev\.'; then
+          # Dev builds are at ziglang.org/builds/
+          URL="https://ziglang.org/builds/${FILENAME}"
+        else
+          # Release builds are at ziglang.org/download/{version}/
+          URL="https://ziglang.org/download/${ZIG_VERSION}/${FILENAME}"
+        fi
+
+        echo "Downloading Zig ${ZIG_VERSION} for ${PLATFORM} from ${URL}"
+
+        # Create temp directory
+        TEMP_DIR=$(mktemp -d)
+        cd "${TEMP_DIR}"
+
+        # Download with retry
+        for i in 1 2 3; do
+          if curl -fL -o "${FILENAME}" "${URL}"; then
+            echo "Download successful"
+            break
+          fi
+          echo "Download attempt $i failed, retrying..."
+          sleep 5
+        done
+
+        if [ ! -f "${FILENAME}" ]; then
+          echo "Failed to download after 3 attempts"
+          exit 1
+        fi
+
+        # Extract
+        if [ "${EXT}" = "tar.xz" ]; then
+          tar -xf "${FILENAME}"
+          ZIG_DIR="zig-${PLATFORM}-${ZIG_VERSION}"
+        else
+          unzip -q "${FILENAME}"
+          ZIG_DIR="zig-${PLATFORM}-${ZIG_VERSION}"
+        fi
+
+        # Add to PATH
+        ZIG_BIN="${TEMP_DIR}/${ZIG_DIR}"
+        echo "${ZIG_BIN}" >> $GITHUB_PATH
+
+        # Verify
+        "${ZIG_BIN}/zig" version
+
+        # Cache the installation directory for reuse
+        echo "ZIG_INSTALL_DIR=${ZIG_BIN}" >> $GITHUB_ENV
+
+    - name: Download and install Zig (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        ZIG_VERSION: ${{ inputs.version }}
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        $PLATFORM = "x86_64-windows"
+        $EXT = "zip"
+
+        # Resolve version and URL
+        if ("${env:ZIG_VERSION}" -eq "master") {
+          # Fetch the actual master version from index.json
+          Write-Host "Resolving master version from ziglang.org..."
+          $INDEX_JSON = Invoke-WebRequest -Uri "https://ziglang.org/download/index.json" -UseBasicParsing | Select-Object -ExpandProperty Content
+          $MASTER_VERSION = ($INDEX_JSON | ConvertFrom-Json).master.version
+          if (-not $MASTER_VERSION) {
+            Write-Error "Failed to resolve master version"
+            exit 1
+          }
+          Write-Host "Resolved master to: $MASTER_VERSION"
+          $env:ZIG_VERSION = $MASTER_VERSION
+        }
+
+        $FILENAME = "zig-${PLATFORM}-${env:ZIG_VERSION}.${EXT}"
+
+        # Determine URL based on version
+        if ($env:ZIG_VERSION -match '-dev\.') {
+          # Dev builds are at ziglang.org/builds/
+          $URL = "https://ziglang.org/builds/${FILENAME}"
+        } else {
+          # Release builds are at ziglang.org/download/{version}/
+          $URL = "https://ziglang.org/download/${env:ZIG_VERSION}/${FILENAME}"
+        }
+
+        Write-Host "Downloading Zig ${env:ZIG_VERSION} for ${PLATFORM} from ${URL}"
+
+        # Create temp directory
+        $TEMP_DIR = [System.IO.Path]::GetTempPath() + "zig-" + [System.Guid]::NewGuid()
+        New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
+        Set-Location $TEMP_DIR
+
+        # Download with retry
+        for ($i = 1; $i -le 3; $i++) {
+          try {
+            Invoke-WebRequest -Uri $URL -OutFile $FILENAME -ErrorAction Stop
+            Write-Host "Download successful"
+            break
+          } catch {
+            Write-Host "Download attempt $i failed: $_"
+            if ($i -eq 3) { throw $_ }
+            Start-Sleep -Seconds 5
+          }
+        }
+
+        if (-not (Test-Path $FILENAME)) {
+          Write-Error "Failed to download after 3 attempts"
+          exit 1
+        }
+
+        # Extract
+        Expand-Archive -Path $FILENAME -DestinationPath "." -Force
+        $ZIG_DIR = "zig-${PLATFORM}-${env:ZIG_VERSION}"
+
+        # Add to PATH for current session
+        $ZIG_BIN = Join-Path $TEMP_DIR $ZIG_DIR
+        $env:Path = $ZIG_BIN + ";" + $env:Path
+
+        # Add to GITHUB_PATH file for subsequent steps
+        $ZIG_BIN | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+        # Verify
+        & "${ZIG_BIN}\zig.exe" version
+
+        # Cache the installation directory for reuse
+        "ZIG_INSTALL_DIR=${ZIG_BIN}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
