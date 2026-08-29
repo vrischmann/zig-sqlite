@@ -23,6 +23,7 @@ const getTestDb = @import("test.zig").getTestDb;
 pub const vtab = @import("vtab.zig");
 
 const helpers = @import("helpers.zig");
+const compat = @import("compat.zig");
 
 test {
     _ = @import("vtab.zig");
@@ -47,7 +48,7 @@ fn isZigString(comptime T: type) bool {
 
         const ptr = &info.pointer;
         // Check for CV qualifiers that would prevent coerction to []const u8
-        if (ptr.is_volatile or ptr.is_allowzero) break :blk false;
+        if (compat.ptrIsVolatile(ptr) or compat.ptrIsAllowzero(ptr)) break :blk false;
 
         // If it's already a slice, simple check.
         if (ptr.size == .slice) {
@@ -656,25 +657,25 @@ pub const Db = struct {
             else => @compileError("cannot use func, expecting a function"),
         };
         if (step_fn_info.is_generic) @compileError("step function can't be generic");
-        if (step_fn_info.is_var_args) @compileError("step function can't be variadic");
+        if (comptime compat.fnIsVarArgs(step_fn_info)) @compileError("step function can't be variadic");
 
         const finalize_fn_info = switch (@typeInfo(@TypeOf(finalize_func))) {
             .@"fn" => |fn_info| fn_info,
             else => @compileError("cannot use func, expecting a function"),
         };
-        if (finalize_fn_info.params.len != 1) @compileError("finalize function must take exactly one argument");
+        if (comptime compat.fnParamCount(finalize_fn_info) != 1) @compileError("finalize function must take exactly one argument");
         if (finalize_fn_info.is_generic) @compileError("finalize function can't be generic");
-        if (finalize_fn_info.is_var_args) @compileError("finalize function can't be variadic");
+        if (comptime compat.fnIsVarArgs(finalize_fn_info)) @compileError("finalize function can't be variadic");
 
-        if (step_fn_info.params[0].type.? != finalize_fn_info.params[0].type.?) {
+        if (comptime compat.fnParamType(step_fn_info, 0).? != compat.fnParamType(finalize_fn_info, 0).?) {
             @compileError("both step and finalize functions must have the same first argument and it must be a FunctionContext");
         }
-        if (step_fn_info.params[0].type.? != FunctionContext) {
+        if (comptime compat.fnParamType(step_fn_info, 0).? != FunctionContext) {
             @compileError("both step and finalize functions must have a first argument of type FunctionContext");
         }
 
         // subtract the context argument
-        const real_args_len = step_fn_info.params.len - 1;
+        const real_args_len = comptime compat.fnParamCount(step_fn_info) - 1;
 
         //
 
@@ -701,10 +702,9 @@ pub const Db = struct {
                     comptime var i: usize = 0;
                     inline while (i < real_args_len) : (i += 1) {
                         // Remember the firt argument is always the function context
-                        const arg = step_fn_info.params[i + 1];
                         const arg_ptr = &args[i + 1];
 
-                        const ArgType = arg.type.?;
+                        const ArgType = compat.fnParamType(step_fn_info, i + 1).?;
                         helpers.setTypeFromValue(ArgType, arg_ptr, sqlite_args[i].?);
                     }
 
@@ -749,7 +749,7 @@ pub const Db = struct {
             else => @compileError("expecting a function"),
         };
         if (fn_info.is_generic) @compileError("function can't be generic");
-        if (fn_info.is_var_args) @compileError("function can't be variadic");
+        if (comptime compat.fnIsVarArgs(fn_info)) @compileError("function can't be variadic");
 
         const ArgTuple = std.meta.ArgsTuple(Type);
 
@@ -760,18 +760,18 @@ pub const Db = struct {
         const result = c.sqlite3_create_function_v2(
             self.db,
             func_name,
-            fn_info.params.len,
+            @intCast(compat.fnParamCount(fn_info)),
             flags,
             null,
             struct {
                 fn xFunc(ctx: ?*c.sqlite3_context, argc: c_int, argv: [*c]?*c.sqlite3_value) callconv(.c) void {
-                    debug.assert(argc == fn_info.params.len);
+                    debug.assert(argc == compat.fnParamCount(fn_info));
 
-                    const sqlite_args = argv[0..fn_info.params.len];
+                    const sqlite_args = argv[0..compat.fnParamCount(fn_info)];
 
                     var fn_args: ArgTuple = undefined;
-                    inline for (fn_info.params, 0..) |arg, i| {
-                        const ArgType = arg.type.?;
+                    inline for (comptime compat.fnParamTypes(fn_info), 0..) |arg_type, i| {
+                        const ArgType = arg_type.?;
                         helpers.setTypeFromValue(ArgType, &fn_args[i], sqlite_args[i].?);
                     }
 
@@ -1086,7 +1086,7 @@ pub fn Iterator(comptime Type: type) type {
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
                 .@"struct" => {
-                    std.debug.assert(columns == TypeInfo.@"struct".fields.len);
+                    std.debug.assert(columns == comptime compat.structFieldNames(Type).len);
                     return try self.readStruct(options);
                 },
                 else => @compileError("cannot read into type " ++ @typeName(Type) ++ " ; if dynamic memory allocation is required use nextAlloc or oneAlloc"),
@@ -1169,7 +1169,7 @@ pub fn Iterator(comptime Type: type) type {
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
                 },
                 .@"struct" => {
-                    std.debug.assert(columns == TypeInfo.@"struct".fields.len);
+                    std.debug.assert(columns == comptime compat.structFieldNames(Type).len);
                     return try self.readStruct(.{
                         .allocator = allocator,
                     });
@@ -1399,12 +1399,12 @@ pub fn Iterator(comptime Type: type) type {
 
             var value: Type = undefined;
 
-            inline for (@typeInfo(Type).@"struct".fields, 0..) |field, _i| {
+            inline for (comptime compat.structFieldNames(Type), comptime compat.structFieldTypes(Type), 0..) |field_name, field_type, _i| {
                 const i = @as(usize, _i);
 
-                const ret = try self.readField(field.type, options, i);
+                const ret = try self.readField(field_type, options, i);
 
-                @field(value, field.name) = ret;
+                @field(value, field_name) = ret;
             }
 
             return value;
@@ -1690,16 +1690,19 @@ pub const DynamicStatement = struct {
                         return;
                     }
                     if (info.tag_type) |UnionTagType| {
-                        inline for (info.fields) |u_field| {
+                        inline for (
+                            comptime compat.unionFieldNames(FieldType),
+                            comptime compat.unionFieldTypes(FieldType),
+                        ) |u_field_name, u_field_type| {
                             // This wasn't entirely obvious when I saw code like this elsewhere, it works because of type coercion.
                             // See https://ziglang.org/documentation/master/#Type-Coercion-unions-and-enums
                             const field_tag: std.meta.Tag(FieldType) = field;
-                            const this_tag: std.meta.Tag(FieldType) = @field(UnionTagType, u_field.name);
+                            const this_tag: std.meta.Tag(FieldType) = @field(UnionTagType, u_field_name);
 
                             if (field_tag == this_tag) {
-                                const field_value = @field(field, u_field.name);
+                                const field_value = @field(field, u_field_name);
 
-                                try self.bindField(u_field.type, options, u_field.name, i, field_value);
+                                try self.bindField(u_field_type, options, u_field_name, i, field_value);
                             }
                         }
                     } else {
@@ -1746,15 +1749,19 @@ pub const DynamicStatement = struct {
         const Type = @TypeOf(values);
 
         switch (@typeInfo(Type)) {
-            .@"struct" => |StructTypeInfo| {
-                inline for (StructTypeInfo.fields, 0..) |struct_field, struct_field_i| {
-                    const field_value = @field(values, struct_field.name);
+            .@"struct" => {
+                inline for (
+                    comptime compat.structFieldNames(Type),
+                    comptime compat.structFieldTypes(Type),
+                    0..,
+                ) |field_name, field_type, struct_field_i| {
+                    const field_value = @field(values, field_name);
 
-                    const i = sqlite3BindParameterIndex(self.stmt, struct_field.name);
+                    const i = sqlite3BindParameterIndex(self.stmt, field_name);
                     if (i >= 0) {
-                        try self.bindField(struct_field.type, options, struct_field.name, i, field_value);
+                        try self.bindField(field_type, options, field_name, i, field_value);
                     } else {
-                        try self.bindField(struct_field.type, options, struct_field.name, struct_field_i, field_value);
+                        try self.bindField(field_type, options, field_name, struct_field_i, field_value);
                     }
                 }
             },
@@ -2042,11 +2049,12 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
                 @compileError("options passed to Statement.bind must be a struct (DynamicStatement supports runtime slices)");
             }
 
-            const StructTypeInfo = @typeInfo(StructType).@"struct";
+            const StructFieldNames = comptime compat.structFieldNames(StructType);
+            const StructFieldTypes = comptime compat.structFieldTypes(StructType);
 
             comptime marker_len_check: {
-                if (query.bind_markers.len != StructTypeInfo.fields.len) {
-                    if (query.bind_markers.len > StructTypeInfo.fields.len) {
+                if (query.bind_markers.len != StructFieldNames.len) {
+                    if (query.bind_markers.len > StructFieldNames.len) {
                         var found_markers = 0;
                         for (query.bind_markers) |bind_marker| {
                             if (bind_marker.name) |name| {
@@ -2061,21 +2069,21 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
                     }
                     @compileError(std.fmt.comptimePrint("expected {d} bind parameters but got {d}", .{
                         query.bind_markers.len,
-                        StructTypeInfo.fields.len,
+                        StructFieldNames.len,
                     }));
                 }
             }
 
-            inline for (StructTypeInfo.fields, 0..) |struct_field, _i| {
+            inline for (StructFieldNames, StructFieldTypes, 0..) |_, struct_field_type, _i| {
                 const bind_marker = query.bind_markers[_i];
                 if (bind_marker.typed) |typ| {
-                    const FieldTypeInfo = @typeInfo(struct_field.type);
+                    const FieldTypeInfo = @typeInfo(struct_field_type);
                     switch (FieldTypeInfo) {
                         .@"struct", .@"enum", .@"union" => comptime assertMarkerType(
-                            if (@hasDecl(struct_field.type, "BaseType")) struct_field.type.BaseType else struct_field.type,
+                            if (@hasDecl(struct_field_type, "BaseType")) struct_field_type.BaseType else struct_field_type,
                             typ,
                         ),
-                        else => comptime assertMarkerType(struct_field.type, typ),
+                        else => comptime assertMarkerType(struct_field_type, typ),
                     }
                 }
             }

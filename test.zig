@@ -4,6 +4,7 @@ const mem = std.mem;
 const testing = std.testing;
 
 const Db = @import("sqlite.zig").Db;
+const compat = @import("compat.zig");
 
 pub fn getTestDb() !Db {
     var buf: [1024]u8 = undefined;
@@ -31,7 +32,7 @@ fn tmpDbPath(allocator: mem.Allocator) ![:0]const u8 {
     });
     defer allocator.free(path);
 
-    return allocator.dupeZ(u8, path);
+    return compat.dupeZ(allocator, u8, path);
 }
 
 fn dbMode(allocator: mem.Allocator) Db.Mode {
@@ -39,7 +40,7 @@ fn dbMode(allocator: mem.Allocator) Db.Mode {
         break :blk .{ .Memory = {} };
     } else blk: {
         if (build_options.dbfile) |dbfile| {
-            return .{ .File = allocator.dupeZ(u8, dbfile) catch unreachable };
+            return .{ .File = compat.dupeZ(allocator, u8, dbfile) catch unreachable };
         }
 
         const path = tmpDbPath(allocator) catch unreachable;

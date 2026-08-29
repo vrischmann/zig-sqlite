@@ -10,6 +10,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # 0.16 fmt cannot parse @fromBackingInt/@backingInt (0.17-renamed builtins) and
+        # 0.17 fmt rewrites @enumFromInt/@intFromEnum to those new names, so no single
+        # source can satisfy both formatters; lint with 0.16.0 only.
         zig_version: ["0.16.0"]
     runs-on: ubuntu-24.04
     steps:
@@ -24,10 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-latest, macos-latest]
-        zig_version: ["0.16.0"]
-        include:
-          - os: ubuntu-24.04
-            zig_version: "master"
+        zig_version: ["0.16.0", "master"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -48,10 +48,11 @@ jobs:
       - name: Run Tests in memory
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         run: |
-          mkdir -p $ZIG_GLOBAL_CACHE_DIR/tmp
+          mkdir -p "$ZIG_GLOBAL_CACHE_DIR/tmp"
           zig build test -Dci=true -Din_memory=true --summary all -fqemu -fwine
       - name: Run Tests in memory
         if: ${{ matrix.os != 'ubuntu-24.04' }}
+        shell: bash
         run: |
-          mkdir -p $ZIG_GLOBAL_CACHE_DIR/tmp
+          mkdir -p "$ZIG_GLOBAL_CACHE_DIR/tmp"
           zig build test -Dci=true -Din_memory=true --summary all
