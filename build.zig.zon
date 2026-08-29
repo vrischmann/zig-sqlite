@@ -2,11 +2,11 @@
     .name = .sqlite,
     .fingerprint = 0xb8bb86826b7f6417,
     .minimum_zig_version = "0.16.0",
-    .version = "3.49.2",
+    .version = "3.53.4",
     .dependencies = .{
         .sqlite = .{
-            .url = "https://www.sqlite.org/2025/sqlite-amalgamation-3490200.zip",
-            .hash = "N-V-__8AAH-mpwB7g3MnqYU-ooUBF1t99RP27dZ9addtMVXD",
+            .url = "https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip",
+            .hash = "N-V-__8AAE0xkQBMZEkob7f2c_O_Ds3NJOHw4Ve1AvBUIM-I",
         },
     },
     .paths = .{"."},

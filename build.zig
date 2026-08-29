@@ -193,6 +193,31 @@ pub fn build(b: *std.Build) !void {
 
     const c_flags = flags.items;
 
+    // Preprocess step generates loadable-ext-sqlite3.h and loadable-ext-sqlite3ext.h
+    const preprocess = PreprocessStep.create(b, .{
+        .source = sqlite_dep.path("."),
+        .target = b.path("c"),
+        .io = io,
+    });
+    preprocess.step.dependOn(&b.addWriteFiles().step);
+
+    // C bindings via translate-c (works for both Zig 0.16 and 0.17+)
+    const c_bindings = b.addTranslateC(.{
+        .root_source_file = b.path("c/c_bindings.c"),
+        .target = target,
+        .optimize = optimize,
+    });
+    c_bindings.addIncludePath(b.path("c"));
+    c_bindings.step.dependOn(&preprocess.step);
+
+    const c_bindings_ext = b.addTranslateC(.{
+        .root_source_file = b.path("c/c_bindings_ext.c"),
+        .target = target,
+        .optimize = optimize,
+    });
+    c_bindings_ext.addIncludePath(b.path("c"));
+    c_bindings_ext.step.dependOn(&preprocess.step);
+
     //
     // Main library and module
     //
@@ -205,8 +230,7 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("sqlite.zig"),
             .link_libc = true,
         });
-        mod.addIncludePath(b.path("c"));
-        mod.addIncludePath(sqlite_dep.path("."));
+        mod.addImport("c_bindings", c_bindings.createModule());
         mod.linkLibrary(lib);
 
         break :blk .{ lib, mod };
@@ -221,7 +245,7 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("sqlite.zig"),
             .link_libc = true,
         });
-        mod.addIncludePath(b.path("c"));
+        mod.addImport("c_bindings", c_bindings_ext.createModule());
         mod.linkLibrary(lib);
 
         break :blk mod;
@@ -252,6 +276,15 @@ pub fn build(b: *std.Build) !void {
 
         const test_sqlite_lib = try makeSQLiteLib(b, sqlite_dep, c_flags, cross_target, optimize, .with, test_name);
 
+        // Per-target C bindings
+        const test_c_bindings = b.addTranslateC(.{
+            .root_source_file = b.path("c/c_bindings.c"),
+            .target = cross_target,
+            .optimize = optimize,
+        });
+        test_c_bindings.addIncludePath(sqlite_dep.path("."));
+        test_c_bindings.addIncludePath(b.path("c"));
+
         const mod = b.addModule(test_name, .{
             .target = cross_target,
             .optimize = optimize,
@@ -263,8 +296,7 @@ pub fn build(b: *std.Build) !void {
             .name = test_name,
             .root_module = mod,
         });
-        tests.root_module.addIncludePath(b.path("c"));
-        tests.root_module.addIncludePath(sqlite_dep.path("."));
+        tests.root_module.addImport("c_bindings", test_c_bindings.createModule());
         tests.root_module.linkLibrary(test_sqlite_lib);
 
         const tests_options = b.addOptions();
@@ -289,30 +321,31 @@ pub fn build(b: *std.Build) !void {
     // Tools
     //
 
-    // Preprocess step only works in Zig 0.16 and earlier (uses custom step API)
-    if (builtin.zig_version.minor <= 16) {
-        addPreprocessStep(b, io, sqlite_dep);
-    }
+    // Preprocess step generates loadable-ext-sqlite3.h and loadable-ext-sqlite3ext.h
+    // Works for both Zig 0.16 and 0.17+
+    _ = addPreprocessStep(b, io, sqlite_dep);
 }
 
-fn addPreprocessStep(b: *std.Build, io: Io, sqlite_dep: *std.Build.Dependency) void {
+fn addPreprocessStep(b: *std.Build, io: Io, sqlite_dep: *std.Build.Dependency) std.Build.Step {
     var wf = b.addWriteFiles();
 
     // Preprocessing step
     const preprocess = PreprocessStep.create(b, .{
         .source = sqlite_dep.path("."),
-        .target = wf.getDirectory(),
+        .target = b.path("c"),
         .io = io,
     });
     preprocess.step.dependOn(&wf.step);
 
     const w = b.addUpdateSourceFiles();
-    w.addCopyFileToSource(preprocess.target.join(b.allocator, "loadable-ext-sqlite3.h") catch @panic("OOM"), "c/loadable-ext-sqlite3.h");
-    w.addCopyFileToSource(preprocess.target.join(b.allocator, "loadable-ext-sqlite3ext.h") catch @panic("OOM"), "c/loadable-ext-sqlite3ext.h");
+    w.addCopyFileToSource(b.path("c/loadable-ext-sqlite3.h"), "c/loadable-ext-sqlite3.h");
+    w.addCopyFileToSource(b.path("c/loadable-ext-sqlite3ext.h"), "c/loadable-ext-sqlite3ext.h");
     w.step.dependOn(&preprocess.step);
 
     const preprocess_headers = b.step("preprocess-headers", "Preprocess the headers for the loadable extensions");
     preprocess_headers.dependOn(&w.step);
+
+    return preprocess.step;
 }
 
 fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.InstallArtifact {
@@ -378,8 +411,8 @@ const PreprocessStep = struct {
     fn create(owner: *std.Build, config: Config) *PreprocessStep {
         const step = owner.allocator.create(PreprocessStep) catch @panic("OOM");
         step.* = .{
-            .step = std.Build.Step.init(.{
-                .id = std.Build.Step.Id.custom,
+.step = std.Build.Step.init(.{
+                .tag = if (builtin.zig_version.minor <= 16) std.Build.Step.Id.custom else .translate_c,
                 .name = "preprocess",
                 .owner = owner,
                 .makeFn = make,
