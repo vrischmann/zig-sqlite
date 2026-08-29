@@ -10,14 +10,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        zig_version: ["0.16.0", "master"]
+        zig_version: ["0.16.0"]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ matrix.zig_version }}
-      - run: zig fmt --check *.zig
+      - run: zig fmt --check *.zig c/*.zig build.zig
 
   test-in-memory:
     strategy:
