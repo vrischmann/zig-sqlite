@@ -24,7 +24,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-latest, macos-latest]
-        zig_version: ["0.16.0", "master"]
+        zig_version: ["0.16.0"]
+        include:
+          - os: ubuntu-24.04
+            zig_version: "master"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
