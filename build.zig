@@ -322,7 +322,7 @@ pub fn build(b: *std.Build) !void {
     // Tools
     //
 
-// Preprocess step generates loadable-ext-sqlite3.h and loadable-ext-sqlite3ext.h
+    // Preprocess step generates loadable-ext-sqlite3.h and loadable-ext-sqlite3ext.h
     // Works for Zig 0.16 (0.17+ requires different approach)
     if (builtin.zig_version.minor <= 16) {
         _ = addPreprocessStep(b, io, sqlite_dep);
@@ -414,19 +414,19 @@ const PreprocessStep = struct {
     fn create(owner: *std.Build, config: Config) *PreprocessStep {
         const step = owner.allocator.create(PreprocessStep) catch @panic("OOM");
         step.* = .{
-.step = if (builtin.zig_version.minor <= 16)
-    std.Build.Step.init(.{
-        .id = std.Build.Step.Id.custom,
-        .name = "preprocess",
-        .owner = owner,
-        .makeFn = make,
-    })
-else
-    std.Build.Step.init(.{
-        .tag = .translate_c,
-        .name = "preprocess",
-        .owner = owner,
-    }),
+            .step = if (builtin.zig_version.minor <= 16)
+                std.Build.Step.init(.{
+                    .id = std.Build.Step.Id.custom,
+                    .name = "preprocess",
+                    .owner = owner,
+                    .makeFn = make,
+                })
+            else
+                std.Build.Step.init(.{
+                    .tag = .translate_c,
+                    .name = "preprocess",
+                    .owner = owner,
+                }),
             .source = config.source,
             .target = config.target,
             .io = config.io,
