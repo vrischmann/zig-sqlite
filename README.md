@@ -1,5 +1,8 @@
 # zig-sqlite
 
+[![CI](https://github.com/samooth/zig-sqlite/actions/workflows/main.yml/badge.svg)](https://github.com/samooth/zig-sqlite/actions/workflows/main.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 This package is a thin wrapper around [sqlite](https://sqlite.org/index.html)'s C API.
 
 _Maintainer note_: I'm currently on a break working with Zig and don't intend to work on new features for zig-sqlite.
