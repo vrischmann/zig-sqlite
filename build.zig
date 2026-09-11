@@ -173,6 +173,43 @@ pub fn build(b: *std.Build) !void {
         }
     }
 
+    inline for (std.meta.fields(BoolFeatureOptions)) |field| {
+        comptime var buf: [field.name.len]u8 = undefined;
+        const name = comptime std.ascii.upperString(&buf, field.name);
+        const opt = b.option(bool, field.name, "Set SQLITE_" ++ name);
+
+        if (opt) |v| {
+            const flag_value = if (v) "1" else "0";
+            const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_" ++ name ++ "={s}", .{flag_value});
+
+            try flags.append(b.allocator, flag);
+        }
+    }
+
+    inline for (std.meta.fields(DefineFeatureOptions)) |field| {
+        comptime var buf: [field.name.len]u8 = undefined;
+        const name = comptime std.ascii.upperString(&buf, field.name);
+        const opt = b.option(bool, field.name, "Set SQLITE_" ++ name) orelse false;
+
+        if (opt) {
+            const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_" ++ name, .{});
+
+            try flags.append(b.allocator, flag);
+        }
+    }
+
+    inline for (std.meta.fields(IntFeatureOptions)) |field| {
+        comptime var buf: [field.name.len]u8 = undefined;
+        const name = comptime std.ascii.upperString(&buf, field.name);
+        const opt = b.option(field.type, field.name, "Set SQLITE_" ++ name);
+
+        if (opt) |v| {
+            const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_" ++ name ++ "={}", .{v});
+
+            try flags.append(b.allocator, flag);
+        }
+    }
+
     const c_flags = flags.items;
 
     //
@@ -337,8 +374,67 @@ fn addZigcryptoTestRun(b: *std.Build, sqlite_mod: *std.Build.Module, target: std
 
 // See https://www.sqlite.org/compile.html for flags
 const EnableOptions = struct {
+    api_armor: bool = false,
+    atomic_write: bool = false,
+    batch_atomic_write: bool = false,
+    carray: bool = false,
+    column_metadata: bool = false,
+    dbpage_vtab: bool = false,
+    dbstat_vtab: bool = false,
+    explain_comments: bool = false,
     // https://www.sqlite.org/fts5.html
     fts5: bool = false,
+    geopoly: bool = false,
+    hidden_columns: bool = false,
+    icu: bool = false,
+    math_functions: bool = false,
+    memsys3: bool = false,
+    memsys5: bool = false,
+    null_trim: bool = false,
+    offset_sql_func: bool = false,
+    percentile: bool = false,
+    preupdate_hook: bool = false,
+    RBU: bool = false,
+    rtree: bool = false,
+    session: bool = false,
+    sorter_reference: bool = false,
+    stmtvtab: bool = false,
+    stat4: bool = false,
+};
+
+/// `false` = won't be defined
+/// `true` = will be defined
+const DefineFeatureOptions = enum {
+    like_doesnt_match_blobs,
+    omit_decltype,
+    omit_deprecated,
+    omit_progress_callback,
+    omit_shared_cache,
+    omit_autoinit,
+    use_alloca,
+    zero_malloc,
+    debug,
+    memdebug,
+    win32_malloc,
+    win32_heap_create,
+    win32_malloc_validate,
+};
+
+/// - `null` = default
+/// - `true` = `1`
+/// - `false` = `0`
+const BoolFeatureOptions = enum {
+    default_memstatus,
+    strict_subtype,
+    os_other,
+};
+
+/// The compile-time options with an int argument.
+const IntFeatureOptions = struct {
+    DQS: std.math.IntFittingRange(0, 3),
+    threadsafe: std.math.IntFittingRange(0, 2),
+    default_wal_synchronous: std.math.IntFittingRange(0, 3),
+    max_expr_depth: c_int,
 };
 
 const PreprocessStep = struct {
