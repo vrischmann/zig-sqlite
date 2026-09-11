@@ -53,6 +53,7 @@ The plan is to support releases once Zig 1.0 is released but this can still chan
 - [User defined SQL functions](#user-defined-sql-functions)
   - [Scalar functions](#scalar-functions)
   - [Aggregate functions](#aggregate-functions)
+- [Setting Compile-time Options](#setting-compile-time-options)
 <!--toc:end-->
 
 # Requirements
@@ -87,6 +88,9 @@ const sqlite = b.dependency("sqlite", .{
 });
 exe.root_module.addImport("sqlite", sqlite.module("sqlite"));
 ```
+
+If you'd like to use specific features that can only be accessed by setting
+compile-time options (like FTS5, R*Tree), you can define them here as build options. See [Setting Compile-time Options](#setting-compile-time-options) for instructions.
 
 # Usage
 
@@ -650,3 +654,39 @@ The `finalize` function is called once at the end.
 
 The context (2nd argument of `createAggregateFunction`) can be whatever you want; both the `step` and `finalize` functions must
 have their first argument of the same type as the context.
+
+# Setting Compile-time Options
+
+SQLite compile-time options are added as build options for customizing the SQLite source code.
+
+```zig
+// This is an example of a recommended config.
+const sqlite = b.dependency("sqlite", .{
+    .target = target,
+    .optimize = optimize,
+    .default_memstatus = 0,
+    .omit_deprecated = true,
+    .DQS = 0,
+    .null_trim = true,
+    .like_doesnt_match_blobs = true,
+    .omit_shared_cache = true,
+    .omit_autoinit = true,
+    .default_wal_synchronous = 1,
+    .strict_subtype = optimize == .Debug,
+    .api_armor = optimize == .Debug,
+    .max_expr_depth = if (optimize != .Debug) 0 else 1000,
+    .use_alloca = switch(target.result.os.tag) {
+        .linux, .windows => true,
+        else => false,
+    },
+});
+```
+
+The options are shortened for easier reading. You can check them by running `zig build --help` in this project. Mostly they follow the rules below.
+
+- Upper-cases are converted into lower-cases, unless the word is already shortened, like "DQS" for "double-quoted strings"
+- `SQLITE_ENABLE_` is trimmed. For example, `SQLITE_ENABLE_API_ARMOR` translates to `api_armor`.
+- Otherwise, `SQLITE_` is trimmed. For example, `SQLITE_ZERO_MALLOC` translates to `zero_malloc`.
+- If the option doesn't receive argument, or receives 0 or 1, it's defined as `bool`.
+  - If the option only accepts `1`, it's defined as `u1`; a int must be used as the argument.
+- "Not recommended", "No-op" and "Deprecated" options are not added as build options.
