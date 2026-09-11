@@ -1951,7 +1951,7 @@ pub const DynamicStatement = struct {
     pub fn all(self: *Self, comptime Type: type, allocator: mem.Allocator, options: QueryOptions, values: anytype) ![]Type {
         var iter = try self.iteratorAlloc(Type, allocator, values);
 
-        var rows: std.ArrayList(Type) = .{};
+        var rows: std.ArrayList(Type) = .empty;
         while (try iter.nextAlloc(allocator, options)) |row| {
             try rows.append(allocator, row);
         }
@@ -3556,6 +3556,24 @@ test "sqlite: oneDynamic" {
         try testing.expect(id != null);
         try testing.expectEqual(@as(usize, 20), id.?);
     }
+}
+
+test "sqlite: dynamic statement all" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var db = try getTestDb();
+    defer db.deinit();
+    try addTestData(&db);
+
+    var stmt = try db.prepareDynamic("SELECT id FROM user WHERE age = ?");
+    defer stmt.deinit();
+
+    const rows = try stmt.all(usize, allocator, .{}, .{ .age = 33 });
+    defer allocator.free(rows);
+    try testing.expectEqual(@as(usize, 1), rows.len);
+    try testing.expectEqual(@as(usize, 20), rows[0]);
 }
 
 test "sqlite: one with all named parameters" {
