@@ -367,6 +367,16 @@ struct sqlite3_api_routines {
   /* Version 3.44.0 and later */
   void *(*get_clientdata)(sqlite3*,const char*);
   int (*set_clientdata)(sqlite3*, const char*, void*, void(*)(void*));
+  /* Version 3.50.0 and later */
+  int (*setlk_timeout)(sqlite3*,int,int);
+  /* Version 3.51.0 and later */
+  int (*set_errmsg)(sqlite3*,int,const char*);
+  int (*db_status64)(sqlite3*,int,sqlite3_int64*,sqlite3_int64*,int);
+  /* Version 3.52.0 and later */
+  void (*str_truncate)(sqlite3_str*,int);
+  void (*str_free)(sqlite3_str*);
+  int (*carray_bind)(sqlite3_stmt*,int,void*,int,int,void(*)(void*));
+  int (*carray_bind_v2)(sqlite3_stmt*,int,void*,int,int,void(*)(void*),void*);
 };
 
 /*
@@ -427,6 +437,9 @@ typedef int (*sqlite3_loadext_entry)(
 /* Version 3.41.0 and later */
 /* Version 3.43.0 and later */
 /* Version 3.44.0 and later */
+/* Version 3.50.0 and later */
+/* Version 3.51.0 and later */
+/* Version 3.52.0 and later */
 #endif /* !defined(SQLITE_CORE) && !defined(SQLITE_OMIT_LOAD_EXTENSION) */
 
 #if !defined(SQLITE_CORE) && !defined(SQLITE_OMIT_LOAD_EXTENSION)
