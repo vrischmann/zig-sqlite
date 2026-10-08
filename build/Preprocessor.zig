@@ -19,7 +19,7 @@ const Io = std.Io;
 // And even if the sqlite3_api is defined before, the generated code fails to compile because the functions are defined as consts and
 // can only reference comptime stuff, however sqlite3_api is a runtime variable.
 //
-// The only viable option is to completely reomve the original function definitions and redefine all functions in Zig which forward
+// The only viable option is to completely remove the original function definitions and redefine all functions in Zig which forward
 // calls to the sqlite3_api object.
 //
 // This works but it requires fairly extensive modifications of both sqlite3.h and sqlite3ext.h which is time consuming to do manually;
@@ -31,8 +31,7 @@ fn readOriginalData(allocator: mem.Allocator, io: Io, path: []const u8) ![]const
     var buf: [1024]u8 = undefined;
     var reader = file.reader(io, &buf);
 
-    const data = reader.interface.readAlloc(allocator, 1024 * 1024);
-    return data;
+    return reader.interface.allocRemaining(allocator, .limited(16 * 1024 * 1024));
 }
 
 const Processor = struct {
@@ -201,6 +200,8 @@ pub fn sqlite3(allocator: mem.Allocator, io: Io, input_path: []const u8, output_
     var w = output_file.writer(io, &write_buff);
 
     try w.interface.writeAll("/* sqlite3.h edited by the zig-sqlite build script */\n");
+    try processor.dump(&w);
+    try w.interface.flush();
 }
 
 pub fn sqlite3ext(allocator: mem.Allocator, io: Io, input_path: []const u8, output_path: []const u8) !void {
@@ -238,4 +239,19 @@ pub fn sqlite3ext(allocator: mem.Allocator, io: Io, input_path: []const u8, outp
     var write_buff: [1028]u8 = undefined;
     var w = output_file.writer(io, &write_buff);
     try w.interface.writeAll("/* sqlite3ext.h edited by the zig-sqlite build script */\n");
+    try processor.dump(&w);
+    try w.interface.flush();
+}
+
+/// Usage: preprocess <sqlite3.h> <sqlite3ext.h> <out loadable-ext-sqlite3.h> <out loadable-ext-sqlite3ext.h>
+pub fn main(init: std.process.Init) !void {
+    const arena = init.arena.allocator();
+    const args = try init.minimal.args.toSlice(arena);
+    if (args.len != 5) {
+        std.log.err("usage: {s} <sqlite3.h> <sqlite3ext.h> <out sqlite3.h> <out sqlite3ext.h>", .{args[0]});
+        std.process.exit(1);
+    }
+
+    try sqlite3(arena, init.io, args[1], args[3]);
+    try sqlite3ext(arena, init.io, args[2], args[4]);
 }
