@@ -1,8 +1,3 @@
-const std = @import("std");
-const debug = std.debug;
-const mem = std.mem;
-const Io = std.Io;
-
 // This tool is used to preprocess the sqlite3 headers to make them usable to build loadable extensions.
 //
 // Due to limitations of `zig translate-c` (used by @cImport) the code produced by @cImport'ing the sqlite3ext.h header is unusable.
@@ -25,14 +20,13 @@ const Io = std.Io;
 // This works but it requires fairly extensive modifications of both sqlite3.h and sqlite3ext.h which is time consuming to do manually;
 // this tool is intended to automate all these modifications.
 
-fn readOriginalData(allocator: mem.Allocator, io: Io, path: []const u8) ![]const u8 {
-    var file = try Io.Dir.cwd().openFile(io, path, .{});
-    defer file.close(io);
-    var buf: [1024]u8 = undefined;
-    var reader = file.reader(io, &buf);
+const std = @import("std");
+const debug = std.debug;
+const mem = std.mem;
+const Io = std.Io;
 
-    const data = reader.interface.readAlloc(allocator, 1024 * 1024);
-    return data;
+fn readOriginalData(allocator: mem.Allocator, io: Io, path: []const u8) ![]const u8 {
+    return Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
 }
 
 const Processor = struct {
@@ -138,15 +132,8 @@ const Processor = struct {
                     pos = rr.end;
                 },
             }
-
-            // debug.print("excluded range: start={d} end={d} slice=\"{s}\"\n", .{
-            //     range.start,
-            //     range.end,
-            //     processor.data[range.start..range.end],
-            // });
         }
 
-        // Finally append the remaining data in the buffer (the last range will probably not be the end of the file)
         if (pos < self.data.len) {
             const remaining_data = self.data[pos..];
             try writer.interface.writeAll(remaining_data);
@@ -156,32 +143,24 @@ const Processor = struct {
 
 pub fn sqlite3(allocator: mem.Allocator, io: Io, input_path: []const u8, output_path: []const u8) !void {
     const data = try readOriginalData(allocator, io, input_path);
+    defer allocator.free(data);
 
     var processor = try Processor.init(allocator, data);
+    defer processor.ranges.deinit(allocator);
 
     while (true) {
-        // Everything function definition is declared with SQLITE_API.
-        // Stop the loop if there's none in the remaining data.
         if (!processor.skipUntil("SQLITE_API ")) break;
 
-        // If the byte just before is not a LN it's not a function definition.
-        // There are a couple instances where SQLITE_API appears in a comment.
         const previous_byte = processor.previousByte() orelse 0;
         if (previous_byte != '\n') {
             processor.consume("SQLITE_API ");
             continue;
         }
 
-        // Now we assume we're at the start of a function definition.
-        //
-        // We keep track of every function definition by marking its start and end position in the data.
-
         processor.rangeStart();
 
         processor.consume("SQLITE_API ");
         if (processor.startsWith("SQLITE_EXTERN ")) {
-            // This is not a function definition, ignore it.
-            // try processor.unmark();
             continue;
         }
 
@@ -191,24 +170,23 @@ pub fn sqlite3(allocator: mem.Allocator, io: Io, input_path: []const u8, output_
         processor.rangeDelete();
     }
 
-    // Write the result
-
     var output_file = try Io.Dir.cwd().createFile(io, output_path, .{});
     defer output_file.close(io);
 
     var write_buff: [1028]u8 = undefined;
-
     var w = output_file.writer(io, &write_buff);
 
     try w.interface.writeAll("/* sqlite3.h edited by the zig-sqlite build script */\n");
+    try processor.dump(&w);
+    try w.interface.flush();
 }
 
 pub fn sqlite3ext(allocator: mem.Allocator, io: Io, input_path: []const u8, output_path: []const u8) !void {
     const data = try readOriginalData(allocator, io, input_path);
+    defer allocator.free(data);
 
     var processor = try Processor.init(allocator, data);
-
-    // Replace the include line
+    defer processor.ranges.deinit(allocator);
 
     debug.assert(processor.skipUntil("#include \"sqlite3.h\""));
 
@@ -216,13 +194,10 @@ pub fn sqlite3ext(allocator: mem.Allocator, io: Io, input_path: []const u8, outp
     processor.consume("#include \"sqlite3.h\"");
     processor.rangeReplace("#include \"loadable-ext-sqlite3.h\"");
 
-    // Delete all #define macros
-
     while (true) {
         if (!processor.skipUntil("#define sqlite3_")) break;
 
         processor.rangeStart();
-
         processor.consume("#define sqlite3_");
         _ = processor.skipUntil("\n");
         processor.consume("\n");
@@ -230,12 +205,13 @@ pub fn sqlite3ext(allocator: mem.Allocator, io: Io, input_path: []const u8, outp
         processor.rangeDelete();
     }
 
-    // Write the result
-
     var output_file = try Io.Dir.cwd().createFile(io, output_path, .{});
     defer output_file.close(io);
 
     var write_buff: [1028]u8 = undefined;
     var w = output_file.writer(io, &write_buff);
+
     try w.interface.writeAll("/* sqlite3ext.h edited by the zig-sqlite build script */\n");
+    try processor.dump(&w);
+    try w.interface.flush();
 }

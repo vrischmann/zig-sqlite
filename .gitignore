@@ -8,3 +8,5 @@ core.*
 /fuzz/outputs
 .DS_Store
 /zig-pkg
+# Host binary built by the build script (the preprocessor)
+/zig-sqlite-preprocess
