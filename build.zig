@@ -5,6 +5,7 @@ const mem = std.mem;
 const ResolvedTarget = std.Build.ResolvedTarget;
 const Query = std.Target.Query;
 const builtin = @import("builtin");
+const Translator = @import("translate_c").Translator;
 
 fn getTarget(original_target: ResolvedTarget) ResolvedTarget {
     var tmp = original_target;
@@ -106,16 +107,22 @@ fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
     return null;
 }
 
+/// Translates `header` (which includes sqlite3.h) with the translate-c package,
+/// which replaces `@cImport` and the deprecated `std.Build.addTranslateC`.
 fn translateSQLite(b: *std.Build, dep: *std.Build.Dependency, header: []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
-    const translate_c = b.addTranslateC(.{
-        .root_source_file = b.path(header),
+    const translate_c = b.dependency("translate_c", .{});
+    const t: Translator = .init(translate_c, .{
+        .c_source_file = b.path(header),
         .target = target,
         .optimize = optimize,
+        // Struct fields default to zero, as with @cImport, so struct literals such as
+        // vtab.zig's sqlite3_module compile against every SQLite version.
+        .default_init = true,
     });
-    translate_c.addIncludePath(dep.path("."));
-    translate_c.addIncludePath(b.path("c"));
+    t.addIncludePath(dep.path("."));
+    t.addIncludePath(b.path("c"));
 
-    return translate_c.createModule();
+    return t.mod;
 }
 
 // This creates a SQLite static library from the SQLite dependency code.
