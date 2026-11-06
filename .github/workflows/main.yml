@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - master
-      - 'zig-0.1*'
+      - zig-0.16
     paths:
       - '**.zig'
   pull_request:
