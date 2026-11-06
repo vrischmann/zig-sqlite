@@ -37,6 +37,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # use-cache defaults to true, so setup-zig restores and saves the Zig
+      # cache itself. It also repoints ZIG_GLOBAL_CACHE_DIR and
+      # ZIG_LOCAL_CACHE_DIR at .zig-cache, which is why the test steps below
+      # can rely on that variable being set.
       - name: Setup zig
         uses: mlugg/setup-zig@v2
         with:
@@ -46,15 +50,6 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         run: |
           sudo apt-get update -y && sudo apt-get install -y qemu-user-binfmt
-
-      - name: Restore cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            zig-cache
-            ~/.cache/zig
-          key: ${{ runner.os }}-${{ matrix.os }}-zig-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-${{ matrix.os }}-zig-
 
       - name: Run Tests in memory
         if: ${{ matrix.os == 'ubuntu-24.04' }}
