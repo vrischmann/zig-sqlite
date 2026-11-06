@@ -56,6 +56,17 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.os }}-zig-${{ github.sha }}
           restore-keys: ${{ runner.os }}-${{ matrix.os }}-zig-
 
+      # Zig 0.16.0 writes zip downloads to <global cache>/tmp/<random>.zip
+      # without creating tmp first (ziglang/zig#31964), so the fetch fails on
+      # a cold cache. The mkdir below covers Linux and macOS, but this job's
+      # default shell on Windows is PowerShell, where $ZIG_GLOBAL_CACHE_DIR is
+      # unset and the path collapses to D:\tmp. Create it explicitly here.
+      # Fixed upstream in 0.17.0, so this step only belongs on this branch.
+      - name: Create Zig global cache tmp directory
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path (Join-Path $env:ZIG_GLOBAL_CACHE_DIR 'tmp') | Out-Null
+
       - name: Run Tests in memory
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         run: |
