@@ -39,8 +39,8 @@ jobs:
 
       # use-cache defaults to true, so setup-zig restores and saves the Zig
       # cache itself. It also repoints ZIG_GLOBAL_CACHE_DIR and
-      # ZIG_LOCAL_CACHE_DIR at .zig-cache, which is why the test steps below
-      # can rely on that variable being set.
+      # ZIG_LOCAL_CACHE_DIR at .zig-cache, which is where the cache lives on
+      # the runner rather than in ~/.cache/zig.
       - name: Setup zig
         uses: mlugg/setup-zig@v2
         with:
@@ -53,11 +53,8 @@ jobs:
 
       - name: Run Tests in memory
         if: ${{ matrix.os == 'ubuntu-24.04' }}
-        run: |
-          mkdir -p $ZIG_GLOBAL_CACHE_DIR/tmp
-          zig build test -Dci=true -Din_memory=true --summary all -fqemu -fwine
+        run: zig build test -Dci=true -Din_memory=true --summary all -fqemu -fwine
+
       - name: Run Tests in memory
         if: ${{ matrix.os != 'ubuntu-24.04' }}
-        run: |
-          mkdir -p $ZIG_GLOBAL_CACHE_DIR/tmp
-          zig build test -Dci=true -Din_memory=true --summary all
+        run: zig build test -Dci=true -Din_memory=true --summary all
