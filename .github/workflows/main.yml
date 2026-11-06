@@ -3,7 +3,9 @@ name: CI
 on:
   create:
   push:
-    branches: master
+    branches:
+      - master
+      - 'zig-0.1*'
     paths:
       - '**.zig'
   pull_request:
