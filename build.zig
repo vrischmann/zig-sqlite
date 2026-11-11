@@ -110,7 +110,10 @@ fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
 /// Translates `header` (which includes sqlite3.h) with the translate-c package,
 /// which replaces `@cImport` and the deprecated `std.Build.addTranslateC`.
 fn translateSQLite(b: *std.Build, dep: *std.Build.Dependency, header: []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
-    const translate_c = b.dependency("translate_c", .{});
+    const translate_c = b.dependency("translate_c", .{
+        .target = b.graph.host,
+        .optimize = optimize,
+    });
     const t: Translator = .init(translate_c, .{
         .c_source_file = b.path(header),
         .target = target,
